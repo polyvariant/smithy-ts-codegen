@@ -649,13 +649,13 @@ object TsCodegenPlugin {
     "`" + final_ + "`"
   }
 
-  /** Member names of `shape` that are bound to a non-body HTTP location
-    * (`@httpHeader`, `@httpPrefixHeaders`, `@httpQuery`, `@httpLabel`,
-    * `@httpResponseCode`). These live outside the JSON body, so they must be
-    * excluded when parsing/serializing a structure's body — otherwise a required
-    * header/label/etc. member would be (wrongly) demanded of the body payload.
-    * `@httpPayload` is deliberately not here: it *replaces* the body wholesale
-    * and is handled by dedicated call-site logic. */
+  /** Member names of `shape` that are bound to a non-body HTTP location (`@httpHeader`,
+    * `@httpPrefixHeaders`, `@httpQuery`, `@httpLabel`, `@httpResponseCode`). These live outside the
+    * JSON body, so they must be excluded when parsing/serializing a structure's body — otherwise a
+    * required header/label/etc. member would be (wrongly) demanded of the body payload.
+    * `@httpPayload` is deliberately not here: it *replaces* the body wholesale and is handled by
+    * dedicated call-site logic.
+    */
   private def httpBodyExcludedMembers(shape: StructureShape): Set[String] =
     shape
       .getAllMembers
@@ -671,8 +671,9 @@ object TsCodegenPlugin {
       }
       .toSet
 
-  /** A Zod expression for `shape`'s body: its full schema with any HTTP-bound
-    * (non-body) members omitted. */
+  /** A Zod expression for `shape`'s body: its full schema with any HTTP-bound (non-body) members
+    * omitted.
+    */
   private def bodySchemaExpr(shape: StructureShape): String = {
     val excluded = httpBodyExcludedMembers(shape)
     val base = s"${shape.getId.getName}Schema"
@@ -684,11 +685,11 @@ object TsCodegenPlugin {
     }
   }
 
-  /** Emits the `return ...` for a successful (2xx) response: parses the JSON
-    * body against the output's body schema (HTTP-bound members omitted) and, when
-    * the output has non-body bindings, re-hydrates those members from the
-    * response headers / status before validating the whole object against the
-    * full output schema. */
+  /** Emits the `return ...` for a successful (2xx) response: parses the JSON body against the
+    * output's body schema (HTTP-bound members omitted) and, when the output has non-body bindings,
+    * re-hydrates those members from the response headers / status before validating the whole
+    * object against the full output schema.
+    */
   private def writeResponseParse(w: TsWriter, model: Model, output: StructureShape): Unit = {
     if (output.getId.toString == "smithy.api#Unit") {
       w.line("return undefined")
@@ -706,8 +707,7 @@ object TsCodegenPlugin {
         case Some((memberName, m)) =>
           val target = model.expectShape(m.getTarget)
           s"{ ${memberName}: ${inlineSchemaExpr(target)}.parse(res.body) }"
-        case None =>
-          s"${bodySchemaExpr(output)}.parse(res.body)"
+        case None => s"${bodySchemaExpr(output)}.parse(res.body)"
       }
 
     if (headerMembers.isEmpty && responseCodeMembers.isEmpty) {

@@ -167,8 +167,12 @@ class TsCodegenPluginTest extends munit.FunSuite {
         """|$version: "2"
            |namespace test
            |
-           |structure Node {
-           |  next: Node
+           |structure A {
+           |  b: B
+           |}
+           |
+           |structure B {
+           |  a: A
            |}
            |""".stripMargin
       )
