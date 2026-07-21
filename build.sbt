@@ -11,7 +11,10 @@ ThisBuild / githubWorkflowPublishTargetBranches := Seq(
 )
 
 ThisBuild / scalaVersion := "3.3.8"
+// Publish JDK 11-compatible bytecode, but run CI on JDK 17: newer scala-steward
+// releases (the `validate-repo-config` CI job) ship JDK 17 class files.
 ThisBuild / tlJdkRelease := Some(11)
+ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("17"))
 ThisBuild / tlFatalWarnings := false
 ThisBuild / resolvers += Resolver.sonatypeCentralSnapshots
 
