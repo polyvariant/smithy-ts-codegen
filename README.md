@@ -50,6 +50,33 @@ Settings:
   referenced data shapes are still emitted; only the operations and the client class are
   dropped. Use this for services you hand-roll (streaming, custom routing, …).
 
+### From sbt (recommended)
+
+Add the sbt plugin (`project/plugins.sbt`):
+
+```scala
+addSbtPlugin("org.polyvariant" % "sbt-smithy-ts-codegen" % "<version>")
+```
+
+Enable it on a project and point it at your smithy sources:
+
+```scala
+enablePlugins(SmithyTsCodegenPlugin)
+
+tsCodegenSmithyDirs := Seq(baseDirectory.value / "src" / "main" / "smithy")
+tsCodegenOutputFile := baseDirectory.value / "src" / "generated.ts"
+tsCodegenExcludeServices := Seq("myorg.auth#AuthService")
+```
+
+then run `tsCodegen`. The plugin resolves the `smithy-ts-codegen-cli` artifact (at the plugin's
+own version) with coursier and runs it in a forked JVM, so nothing about your project's Scala
+version affects the codegen. Settings:
+
+- `tsCodegenSmithyDirs` — dirs scanned for `*.smithy` / `*.json` (default `src/main/smithy`).
+- `tsCodegenOutputFile` — where to write the TypeScript (default `target/generated.ts`).
+- `tsCodegenExcludeServices` — service shape ids to skip (see above).
+- `tsCodegenVersion` — override the codegen version to resolve (defaults to the plugin's own).
+
 ### Programmatically (`TsCodegenPlugin.generate`)
 
 The core is a pure function from a loaded `software.amazon.smithy.model.Model` to a `String`:
@@ -62,17 +89,17 @@ val model: Model = ???
 val ts: String = TsCodegenPlugin.generate(model, excludeServices = Set.empty)
 ```
 
-### From a build (forked JVM)
+### From any build (forked JVM)
 
-`TsCodegenMain` is a thin CLI wrapper that assembles a model from `.smithy`/`.json` sources and
-writes the output file. Run it with the plugin on the classpath:
+The `smithy-ts-codegen-cli` artifact's `org.polyvariant.smithy.ts.cli.Main` assembles a model
+from `.smithy`/`.json` sources and writes the output file. Run it with the CLI (and its deps) on
+the classpath:
 
 ```
-TsCodegenMain <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)>]
+Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)>]
 ```
 
-This is convenient to drive from sbt (or any build) as a forked `java` process so the plugin is
-discovered via the smithy-build SPI.
+This is what the sbt plugin forks; the smithy-build plugin is discovered via the SPI.
 
 ## Conventions & limits
 

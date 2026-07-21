@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.polyvariant.smithy.ts
+package org.polyvariant.smithy.ts.cli
 
 import software.amazon.smithy.build.SmithyBuild
 import software.amazon.smithy.build.model.SmithyBuildConfig
@@ -27,11 +27,11 @@ import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import scala.jdk.CollectionConverters.*
 
-/** Drives [[TsCodegenPlugin]] programmatically. Intended to be invoked from a build via a forked
-  * `java` process so the plugin lives on the JVM's classpath (and is discovered via the
-  * smithy-build SPI).
+/** CLI entry point that drives the `smithy-ts-codegen` smithy-build plugin. Intended to be invoked
+  * from a build via a forked `java` process so the plugin lives on the JVM's classpath (and is
+  * discovered via the smithy-build SPI).
   *
-  * Usage: `TsCodegenMain <smithyDirs> <outFile> [<excludeServices>]`
+  * Usage: `Main <smithyDirs> <outFile> [<excludeServices>]`
   *
   *   - `smithyDirs` — `File.pathSeparator`-joined list of directories containing `.smithy` sources.
   *     Files matching `*.smithy` or `*.json` are loaded into one model.
@@ -41,7 +41,7 @@ import scala.jdk.CollectionConverters.*
   *     (`namespace#Name`) that the plugin should not emit clients for. Their referenced data shapes
   *     are still emitted.
   */
-object TsCodegenMain {
+object Main {
 
   def main(args: Array[String]): Unit =
     args.toList match {
@@ -57,7 +57,7 @@ object TsCodegenMain {
         Console
           .err
           .println(
-            "usage: TsCodegenMain <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)>]"
+            "usage: Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)>]"
           )
         sys.exit(2)
     }
@@ -86,7 +86,7 @@ object TsCodegenMain {
       // it to SmithyBuild. `registerSources(dir)` does not populate the model
       // reliably across smithy versions.
       val assembler = new ModelAssembler()
-      assembler.discoverModels(classOf[TsCodegenMain.type].getClassLoader)
+      assembler.discoverModels(classOf[Main.type].getClassLoader)
       smithyDirs.foreach { dir =>
         if (!Files.exists(dir))
           sys.error(s"smithy source directory does not exist: $dir")
@@ -100,7 +100,7 @@ object TsCodegenMain {
       val model = assembler.assemble().unwrap()
 
       val build = SmithyBuild
-        .create(classOf[TsCodegenMain.type].getClassLoader)
+        .create(classOf[Main.type].getClassLoader)
         .config(config)
         .outputDirectory(tmp)
         .model(model)

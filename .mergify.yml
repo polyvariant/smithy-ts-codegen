@@ -15,6 +15,14 @@ pull_request_rules:
   - status-success=Test (ubuntu-22.04, 3, temurin@11, rootJVM)
   actions:
     merge: {}
+- name: Label cli PRs
+  conditions:
+  - files~=^cli/
+  actions:
+    label:
+      add:
+      - cli
+      remove: []
 - name: Label core PRs
   conditions:
   - files~=^core/
@@ -22,4 +30,12 @@ pull_request_rules:
     label:
       add:
       - core
+      remove: []
+- name: Label sbt-plugin PRs
+  conditions:
+  - files~=^sbt-plugin/
+  actions:
+    label:
+      add:
+      - sbt-plugin
       remove: []
