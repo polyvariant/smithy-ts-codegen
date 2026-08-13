@@ -18,6 +18,8 @@ package org.polyvariant.smithy.ts
 
 import software.amazon.smithy.model.Model
 
+import scala.jdk.CollectionConverters.*
+
 class TsCodegenPluginTest extends munit.FunSuite {
 
   private def model(smithy: String): Model =
@@ -194,6 +196,96 @@ class TsCodegenPluginTest extends munit.FunSuite {
       )
     }
     assert(clue(ex.getMessage).contains("does not support recursive shapes"))
+  }
+
+  // The model stores shapes in a hash map keyed by ShapeId, so iteration order
+  // varies between environments. Independent shapes must therefore come out in
+  // shape-id order, or the emitted file differs machine-to-machine.
+  test("emits mutually independent shapes in shape id order") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |enum Zebra {
+         |  A = "a"
+         |}
+         |
+         |enum Apple {
+         |  B = "b"
+         |}
+         |
+         |enum Mango {
+         |  C = "c"
+         |}
+         |""".stripMargin
+    )
+
+    val emitted = List("Apple", "Mango", "Zebra").map(n => n -> out.indexOf(s"const ${n}Schema"))
+    assert(emitted.forall(_._2 >= 0), clue(emitted))
+    assertEquals(emitted.sortBy(_._2).map(_._1), List("Apple", "Mango", "Zebra"))
+  }
+
+  // Ordering by shape id must not override the topological constraint: a shape
+  // has to follow everything it references, whatever the names sort like.
+  test("orders dependencies before dependents even against shape id order") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |structure Aaa {
+         |  z: Zzz
+         |}
+         |
+         |structure Zzz {
+         |  name: String
+         |}
+         |""".stripMargin
+    )
+
+    assert(out.indexOf("const ZzzSchema") < out.indexOf("const AaaSchema"), clue(out))
+  }
+
+  // The regression that motivated the sort: `model.shapes` handed the generator a
+  // different order on macOS than on the CI runner, so the committed output drifted.
+  // Feeding topoSort shuffled input the way `generate` does must yield one ordering.
+  test("topoSort output is stable regardless of input order") {
+    val base = model(
+      """|$version: "2"
+         |namespace test
+         |
+         |structure Order { item: Item, cust: Customer }
+         |structure Customer { name: Username, tags: TagList }
+         |structure Item { sku: Sku, price: Integer }
+         |list TagList { member: String }
+         |string Username
+         |string Sku
+         |
+         |enum Status {
+         |  A = "a"
+         |  B = "b"
+         |}
+         |
+         |enum Direction {
+         |  ASC = "asc"
+         |  DESC = "desc"
+         |}
+         |""".stripMargin
+    )
+
+    val shapes = base
+      .shapes()
+      .iterator()
+      .asScala
+      .toList
+      .filter(s => s.getId.getNamespace == "test" && !s.isMemberShape)
+
+    val orders =
+      (1 to 200).map { seed =>
+        val shuffled = scala.util.Random(seed).shuffle(shapes)
+        TsCodegenPlugin.topoSort(shuffled.sortBy(_.getId.toString)).map(_.getId.toString)
+      }.distinct
+
+    assertEquals(orders.size, 1, s"got ${orders.size} distinct orderings across shuffles")
   }
 
 }

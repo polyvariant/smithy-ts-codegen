@@ -143,7 +143,12 @@ object TsCodegenPlugin {
   }
 
   def generate(model: Model, excludeServices: Set[String]): String = {
-    val emittables = model.shapes.iterator.asScala.filter(emittable).toList
+    // `model.shapes` iterates a hash map keyed by ShapeId, so its order varies
+    // between environments (JVM, classpath, filesystem). Sort by shape id to give
+    // the topological sort below a deterministic starting order — otherwise the
+    // emitted file differs machine-to-machine and codegen-drift checks fail.
+    val emittables =
+      model.shapes.iterator.asScala.filter(emittable).toList.sortBy(_.getId.toString)
     val ordered = topoSort(emittables)
     val w = new TsWriter
 
@@ -194,7 +199,12 @@ object TsCodegenPlugin {
   // Shape selection & ordering
   // --------------------------------------------------------------------------
 
-  private def topoSort(shapes: List[Shape]): List[Shape] = {
+  /** Orders shapes so every shape follows the ones it references. `DependencyGraph` is backed by
+    * `LinkedHashMap`/`LinkedHashSet`, so it preserves insertion order for otherwise-unordered
+    * nodes: feeding it a list sorted by shape id (and sorted dependency sets) makes the result
+    * byte-stable across environments.
+    */
+  private[ts] def topoSort(shapes: List[Shape]): List[Shape] = {
     val emittableSet = shapes.map(_.getId).toSet
     val graph = new DependencyGraph[ShapeId]()
     shapes.foreach { shape =>
@@ -208,9 +218,10 @@ object TsCodegenPlugin {
           .map(_.getTarget)
           .filter(emittableSet.contains)
           .filterNot(_ == shape.getId)
-          .toSet
-          .asJava
-      graph.addDependencies(shape.getId, deps)
+          .toList
+          .distinct
+          .sortBy(_.toString)
+      graph.addDependencies(shape.getId, new java.util.LinkedHashSet(deps.asJava))
     }
     val cycles = graph.findCycles.asScala.toList
     if (cycles.nonEmpty) {
