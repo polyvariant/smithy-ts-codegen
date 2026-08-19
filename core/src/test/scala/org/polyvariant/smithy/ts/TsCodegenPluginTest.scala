@@ -528,4 +528,160 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assertEquals(orders.size, 1, s"got ${orders.size} distinct orderings across shuffles")
   }
 
+  test("an @openEnum accepts unknown values, keeping the known ones as completions") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#openEnum
+         |
+         |@openEnum
+         |enum Category {
+         |  BOOK = "book"
+         |  FILM = "film"
+         |}
+         |""".stripMargin
+    )
+
+    assert(
+      out.contains("export const CategorySchema = z.union([z.enum(['book', 'film']), z.string()])"),
+      out,
+    )
+    // Not `z.infer`: that collapses the union to plain `string` and loses the literals.
+    assert(out.contains("""export type Category = "book" | "film" | (string & {})"""), out)
+  }
+
+  test("a closed enum is unchanged") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |enum Category {
+         |  BOOK = "book"
+         |  FILM = "film"
+         |}
+         |""".stripMargin
+    )
+
+    assert(out.contains("export const CategorySchema = z.enum(['book', 'film'])"), out)
+    assert(out.contains("export type Category = z.infer<typeof CategorySchema>"), out)
+  }
+
+  test("a @jsonUnknown member makes the union open, with the catch-all arm last") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#jsonUnknown
+         |
+         |union Figure {
+         |  circle: Circle
+         |  @jsonUnknown
+         |  other: Document
+         |}
+         |
+         |structure Circle {
+         |  @required
+         |  radius: Integer
+         |}
+         |""".stripMargin
+    )
+
+    // The tagged member is not a variant of its own — no `{ other: ... }` arm.
+    assert(!out.contains("z.object({ other:"), out)
+    val schema =
+      out
+        .linesIterator
+        .dropWhile(!_.contains("FigureSchema = "))
+        .takeWhile(!_.contains("])"))
+        .toList
+    assert(schema.exists(_.contains("z.object({ circle: CircleSchema })")), out)
+    // Ordering matters: z.union tries arms in order, so a permissive record
+    // placed earlier would swallow every known variant.
+    val knownIdx = schema.indexWhere(_.contains("circle:"))
+    val unknownIdx = schema.indexWhere(_.contains("z.record(z.string(), z.unknown())"))
+    assert(knownIdx >= 0 && unknownIdx > knownIdx, schema.mkString("\n"))
+  }
+
+  test("a closed union has no catch-all arm") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |union Figure {
+         |  circle: Circle
+         |}
+         |
+         |structure Circle {
+         |  @required
+         |  radius: Integer
+         |}
+         |""".stripMargin
+    )
+
+    assert(!out.contains("z.record(z.string(), z.unknown())"), out)
+  }
+
+  test("@mapToString maps a numeric member to a string, per member and not per shape") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.smithy.ts#mapToString
+         |
+         |structure Measurement {
+         |  sequence: Integer
+         |  seed: Long
+         |}
+         |
+         |structure Counter {
+         |  @required
+         |  total: Long
+         |}
+         |
+         |apply Measurement$seed @mapToString
+         |""".stripMargin
+    )
+
+    assert(out.contains("seed: z.string().optional()"), out)
+    // Same `Long`, no trait — still a number.
+    assert(out.contains("total: z.number().int()"), out)
+    assert(out.contains("sequence: z.number().int().optional()"), out)
+  }
+
+  test("a @mapToString member bound to a header or query is not coerced with Number()") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |use org.polyvariant.smithy.ts#mapToString
+         |
+         |@simpleRestJson
+         |service Directory {
+         |  operations: [Measure]
+         |}
+         |
+         |@http(method: "GET", uri: "/measurements")
+         |operation Measure {
+         |  input := {
+         |    @httpQuery("offset")
+         |    offset: Long
+         |  }
+         |  output := {
+         |    @httpHeader("x-total")
+         |    total: Long
+         |  }
+         |}
+         |
+         |apply MeasureInput$offset @mapToString
+         |apply MeasureOutput$total @mapToString
+         |""".stripMargin
+    )
+
+    // The schema now expects a string, so coercing the header would break parsing.
+    assert(out.contains("raw['total'] = res.headers['x-total']"), out)
+    assert(!out.contains("Number(res.headers['x-total'])"), out)
+  }
+
 }

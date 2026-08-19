@@ -6,8 +6,11 @@ $version: "2"
 
 namespace test
 
+use alloy#jsonUnknown
+use alloy#openEnum
 use alloy#simpleRestJson
 use org.polyvariant.ndjson#ndjsonRestJson
+use org.polyvariant.smithy.ts#mapToString
 
 // --- Data shapes: one of every kind the generator handles ---
 
@@ -87,6 +90,7 @@ service Directory {
         PutPerson
         Search
         Ping
+        Measure
     ]
     errors: [
         NotFound
@@ -256,3 +260,89 @@ structure Failure {
 
 @streaming
 blob Bytes
+
+// --- Open types: the server may send values this model does not list ---
+
+/// An open enum: unrecognized values pass through as plain strings.
+@openEnum
+enum Category {
+    BOOK = "book"
+    FILM = "film"
+}
+
+/// An open union: an unrecognized discriminator key activates the
+/// `@jsonUnknown` member, so the schema accepts any single-key object.
+union Figure {
+    circle: Circle
+
+    square: Square
+
+    @jsonUnknown
+    other: Document
+}
+
+structure Circle {
+    @required
+    radius: Integer
+}
+
+structure Square {
+    @required
+    side: Integer
+}
+
+// --- @mapToString: numeric members with no lossless JS `number` form ---
+
+structure Measurement {
+    /// Stays a `number` — an Integer always fits in a JS number.
+    sequence: Integer
+
+    /// Exceeds the JS safe-integer range, so it is carried as a string.
+    seed: Long
+
+    precise: BigDecimal
+
+    @required
+    label: String
+}
+
+apply Measurement$seed @mapToString
+apply Measurement$precise @mapToString
+
+/// A structure reusing the same `Long` shape *without* the trait, proving the
+/// mapping is per-member and not per-shape.
+structure Counter {
+    @required
+    total: Long
+}
+
+/// Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a
+/// `@httpQuery` and a `@httpHeader`, none of which may be coerced with
+/// `Number(...)` once the member is carried as a string.
+@http(method: "GET", uri: "/measurements/{seed}")
+operation Measure {
+    input := {
+        @required
+        @httpLabel
+        seed: Long
+
+        @httpQuery("offset")
+        offset: Long
+
+        @httpHeader("x-revision")
+        revision: Long
+    }
+
+    output := {
+        @required
+        measurement: Measurement
+
+        @httpHeader("x-total")
+        total: Long
+    }
+}
+
+apply MeasureInput$seed @mapToString
+apply MeasureInput$offset @mapToString
+apply MeasureInput$revision @mapToString
+apply MeasureOutput$total @mapToString

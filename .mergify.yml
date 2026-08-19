@@ -39,3 +39,11 @@ pull_request_rules:
       add:
       - sbt-plugin
       remove: []
+- name: Label traits PRs
+  conditions:
+  - files~=^traits/
+  actions:
+    label:
+      add:
+      - traits
+      remove: []

@@ -194,6 +194,85 @@ compiles the two against each other, so the pairing can't drift silently.
 
 See [runtime/README.md](runtime/README.md) for the full API.
 
+## Open types
+
+Both of alloy's open-type traits are honored, so a model can evolve without breaking clients
+compiled against an older copy of it.
+
+`@openEnum` widens the schema to accept any string. The type is written out rather than inferred
+from it, so the known values survive as editor completions:
+
+```ts
+export const CategorySchema = z.union([z.enum(['book', 'film']), z.string()])
+export type Category = "book" | "film" | (string & {})
+```
+
+A union member tagged `@jsonUnknown` makes the union open. On the wire, any discriminator key the
+model does not know activates that member, carrying the whole `{ <unknownKey>: <payload> }`
+object — so it is not a variant of its own, but a catch-all arm, emitted last (`z.union` tries its
+arms in order, and a permissive record placed earlier would swallow every known variant):
+
+```ts
+export const FigureSchema = z.union([
+  z.object({ circle: CircleSchema }),
+  z.object({ square: SquareSchema }),
+  z.record(z.string(), z.unknown()),
+])
+```
+
+Branch over the known keys with `in`, and treat anything left as the unknown case.
+
+## Large numbers: `@mapToString`
+
+JavaScript numbers are IEEE-754 doubles, so an integer outside ±(2^53 - 1) cannot be represented
+exactly — reading one into a `number` silently rounds it. A `long`, `bigInteger` or `bigDecimal`
+whose values reach that far therefore has no lossless `number` form on the client.
+
+`@mapToString`, from the `smithy-ts-codegen-traits` artifact, maps such a member to
+`z.string()` / `string` instead, leaving the value exactly as it arrived:
+
+```
+$version: "2"
+
+namespace example
+
+use org.polyvariant.smithy.ts#mapToString
+
+structure Measurement {
+    sequence: Integer
+    seed: Long
+}
+
+apply Measurement$seed @mapToString
+```
+
+```ts
+export const MeasurementSchema = z.object({
+  sequence: z.number().int().optional(),
+  seed: z.string().optional(),
+})
+```
+
+The trait is member-scoped, not shape-scoped: whether a field can exceed the safe range is a
+property of that field, and the same numeric shape is usually reused for values that stay well
+inside it. Applying it to `Measurement$seed` above leaves every other `Long` in the model a
+`number`. It applies in HTTP bindings too — a `@mapToString` member bound to a label, query
+parameter or header is passed through as-is rather than coerced with `Number(...)`.
+
+Depend on the traits artifact to `apply` it:
+
+```scala
+libraryDependencies += "org.polyvariant" % "smithy-ts-codegen-traits" % "<version>"
+```
+
+It is a plain smithy model under `META-INF/smithy`, kept out of `smithy-ts-codegen` so a model
+can depend on the trait definitions without pulling the generator and its dependencies onto the
+model's classpath.
+
+Note this changes only the *TypeScript* representation — the wire format is still a JSON number,
+so a client sending such a member is responsible for serializing it back as an unquoted numeric
+literal.
+
 ## Conventions & limits
 
 - Only `alloy#simpleRestJson` services get clients; every operation needs an `@http` trait.
@@ -255,9 +334,10 @@ rights on the `@polyvariant` scope.
 
 ## Dependencies
 
-`smithy-build`, `smithy-codegen-core`, `smithy-model`, `alloy-core`, `smithy4s-protocol`, and
+`smithy-build`, `smithy-codegen-core`, `smithy-model`, `alloy-core`, `smithy4s-protocol`,
 `smithy4s-ndjson-protocol` (the trait definition only — nothing Scala-specific from
-smithy4s-ndjson is needed, since the codegen keys off `@streaming` members).
+smithy4s-ndjson is needed, since the codegen keys off `@streaming` members), and
+`smithy-ts-codegen-traits` (this project's own codegen-controlling traits).
 
 ## License
 

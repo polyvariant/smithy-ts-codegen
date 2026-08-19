@@ -67,12 +67,28 @@ val commonSettings = Seq(
   )
 )
 
+// The traits that control codegen, as a plain smithy model under
+// `META-INF/smithy` — no Scala code. Kept separate from [[core]] so a model can
+// depend on the trait definitions (to `apply` them) without pulling the
+// generator, its smithy-build machinery and its transitive deps onto the
+// model's classpath.
+lazy val traits = project
+  .in(file("traits"))
+  .settings(
+    name := "smithy-ts-codegen-traits",
+    commonSettings,
+    // Resources only; nothing to compile, and no Scala artifact to cross-build.
+    autoScalaLibrary := false,
+    crossPaths := false,
+  )
+
 // A standalone smithy-build plugin that emits a single `generated.ts` of zod
 // schemas + TypeScript types + typed HTTP clients (and Storybook mock stubs)
 // for a `simpleRestJson` smithy model. JVM-only: it is discovered by
 // smithy-build via the SPI file under `META-INF/services`.
 lazy val core = project
   .in(file("core"))
+  .dependsOn(traits)
   .settings(
     name := "smithy-ts-codegen",
     commonSettings,
@@ -174,4 +190,4 @@ tsCodegenSampleCheck := {
     )
 }
 
-lazy val root = tlCrossRootProject.aggregate(core, cli, sbtPlugin)
+lazy val root = tlCrossRootProject.aggregate(traits, core, cli, sbtPlugin)

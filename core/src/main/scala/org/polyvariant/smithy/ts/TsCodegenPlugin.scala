@@ -16,7 +16,9 @@
 
 package org.polyvariant.smithy.ts
 
+import alloy.JsonUnknownTrait
 import alloy.NullableTrait
+import alloy.OpenEnumTrait
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ImportContainer
@@ -78,6 +80,12 @@ class TsCodegenPlugin extends SmithyBuildPlugin {
 }
 
 object TsCodegenPlugin {
+
+  /** `org.polyvariant.smithy.ts#mapToString`, defined as a plain smithy model in the
+    * `smithy-ts-codegen-traits` artifact. There is no generated Java class for it, so it is looked
+    * up by id.
+    */
+  private val MapToStringTraitId = ShapeId.from("org.polyvariant.smithy.ts#mapToString")
 
   /** Single-file output, so we never import anything. */
   private final class TsImports extends ImportContainer {
@@ -307,7 +315,7 @@ object TsCodegenPlugin {
             w.line(s"/** ${t.getValue.replace("\n", " ").trim} */")
           }
           val target = model.expectShape(member.getTarget)
-          val schemaExpr = inlineSchemaExpr(target)
+          val schemaExpr = inlineSchemaExpr(target, member)
           val required = member.hasTrait(classOf[RequiredTrait])
           val nullable = member.hasTrait(classOf[NullableTrait])
           val finalExpr =
@@ -339,30 +347,60 @@ object TsCodegenPlugin {
     }
   }
 
+  /** A union member tagged `alloy#jsonUnknown` makes the union *open*: on the wire, any
+    * discriminator key the model does not know about activates that member, carrying the whole
+    * `{ <unknownKey>: <payload> }` object. So it is not a variant of its own — emitting
+    * `{ theUnknownMember: ... }` would describe a key that never appears — but a catch-all arm that
+    * accepts any single-key object.
+    *
+    * The arm has to come last: `z.union` tries its options in order, and a permissive record would
+    * otherwise match (and swallow) every known variant.
+    */
   private def writeUnion(w: TsWriter, model: Model, shape: UnionShape): Unit = {
     val name = shape.getId.getName
-    val members = shape.getAllMembers.asScala.toList
-    if (members.isEmpty) {
+    val (unknownMembers, knownMembers) =
+      shape
+        .getAllMembers
+        .asScala
+        .toList
+        .partition { case (_, m) => m.hasTrait(classOf[JsonUnknownTrait]) }
+    val open = unknownMembers.nonEmpty
+    if (knownMembers.isEmpty && !open) {
       w.line(s"export const ${name}Schema = z.never()")
       w.line(s"export type $name = z.infer<typeof ${name}Schema>")
     } else {
       w.block(s"export const ${name}Schema = z.union([", "])") {
-        members.foreach { case (memberName, member) =>
+        knownMembers.foreach { case (memberName, member) =>
           val target = model.expectShape(member.getTarget)
-          val variant = inlineSchemaExpr(target)
+          val variant = inlineSchemaExpr(target, member)
           w.line(s"z.object({ $memberName: $variant }),")
         }
+        if (open)
+          w.line("z.record(z.string(), z.unknown()),")
       }
       w.line(s"export type $name = z.infer<typeof ${name}Schema>")
     }
   }
 
+  /** `alloy#openEnum` means the server may send a value this model does not list, so the schema has
+    * to accept any string.
+    *
+    * The type is written out rather than inferred: `z.infer` of that union collapses to plain
+    * `string`, which would lose the known values as completions. `"a" | "b" | (string & {})` keeps
+    * them — the `& {}` stops TypeScript from eagerly widening the whole union to `string`.
+    */
   private def writeEnum(w: TsWriter, shape: EnumShape): Unit = {
     val name = shape.getId.getName
     val values = shape.getEnumValues.asScala.values.toList
     val literals = values.map(jsString).mkString(", ")
-    w.line(s"export const ${name}Schema = z.enum([$literals])")
-    w.line(s"export type $name = z.infer<typeof ${name}Schema>")
+    if (shape.hasTrait(classOf[OpenEnumTrait])) {
+      w.line(s"export const ${name}Schema = z.union([z.enum([$literals]), z.string()])")
+      val union = values.map(v => "\"" + v + "\"").mkString(" | ")
+      w.line(s"export type $name = $union | (string & {})")
+    } else {
+      w.line(s"export const ${name}Schema = z.enum([$literals])")
+      w.line(s"export type $name = z.infer<typeof ${name}Schema>")
+    }
   }
 
   private def writeList(w: TsWriter, model: Model, shape: ListShape): Unit = {
@@ -405,6 +443,20 @@ object TsCodegenPlugin {
     else
       s"${id.getName}Schema"
   }
+
+  /** `@mapToString` (see the `smithy-ts-codegen-traits` model) asks for a numeric member to be
+    * represented as a string, because JS numbers cannot hold every value of the underlying shape
+    * losslessly. It is member-scoped, so it can only be honored where the member is in scope —
+    * hence this overload alongside the shape-only one above.
+    */
+  private def inlineSchemaExpr(target: Shape, member: MemberShape): String =
+    if (mapsToString(member))
+      "z.string()"
+    else
+      inlineSchemaExpr(target)
+
+  private def mapsToString(member: MemberShape): Boolean =
+    member.hasTrait(MapToStringTraitId)
 
   private def primitiveSchema(shape: Shape): String =
     shape match {
@@ -922,7 +974,7 @@ object TsCodegenPlugin {
           val queryName = member.expectTrait(classOf[HttpQueryTrait]).getValue
           val target = model.expectShape(member.getTarget)
           w.line(
-            s"if (input.$memberName !== undefined) query[${jsString(queryName)}] = ${coerceToQueryValue(target, s"input.$memberName")}"
+            s"if (input.$memberName !== undefined) query[${jsString(queryName)}] = ${coerceToQueryValue(target, member, s"input.$memberName")}"
           )
         }
       }
@@ -1120,7 +1172,7 @@ object TsCodegenPlugin {
       val target = model.expectShape(member.getTarget)
       w.block(s"if (res.headers[${jsString(headerName.toLowerCase)}] !== undefined) {", "}") {
         w.line(
-          s"raw[${jsString(memberName)}] = ${coerceFromString(target, s"res.headers[${jsString(headerName.toLowerCase)}]")}"
+          s"raw[${jsString(memberName)}] = ${coerceFromString(target, member, s"res.headers[${jsString(headerName.toLowerCase)}]")}"
         )
       }
     }
@@ -1173,7 +1225,7 @@ object TsCodegenPlugin {
       val lookup = s"res.headers[${jsString(headerName.toLowerCase)}]"
       w.block(s"if ($lookup !== undefined) {", "}") {
         w.line(
-          s"raw[${jsString(memberName)}] = ${inlineSchemaExpr(target)}.parse(${coerceFromString(target, lookup)})"
+          s"raw[${jsString(memberName)}] = ${inlineSchemaExpr(target, member)}.parse(${coerceFromString(target, member, lookup)})"
         )
       }
     }
@@ -1517,7 +1569,7 @@ object TsCodegenPlugin {
       labelMembers.foreach { case (memberName, member) =>
         val target = model.expectShape(member.getTarget)
         w.line(
-          s"raw[${jsString(memberName)}] = ${coerceFromString(target, s"req.pathParams[${jsString(memberName)}]")}"
+          s"raw[${jsString(memberName)}] = ${coerceFromString(target, member, s"req.pathParams[${jsString(memberName)}]")}"
         )
       }
       queryMembers.foreach { case (memberName, member) =>
@@ -1525,7 +1577,7 @@ object TsCodegenPlugin {
         val target = model.expectShape(member.getTarget)
         w.block(s"if (req.query[${jsString(queryName)}] !== undefined) {", "}") {
           w.line(
-            s"raw[${jsString(memberName)}] = ${coerceFromString(target, s"req.query[${jsString(queryName)}] as string")}"
+            s"raw[${jsString(memberName)}] = ${coerceFromString(target, member, s"req.query[${jsString(queryName)}] as string")}"
           )
         }
       }
@@ -1608,6 +1660,12 @@ object TsCodegenPlugin {
     * richer TS type (a timestamp is a `Date`, an alias is branded) has to be rendered explicitly —
     * a blanket `as string | number | boolean` is a type error on those.
     */
+  private def coerceToQueryValue(target: Shape, member: MemberShape, expr: String): String =
+    if (mapsToString(member))
+      expr
+    else
+      coerceToQueryValue(target, expr)
+
   private def coerceToQueryValue(target: Shape, expr: String): String =
     target match {
       case _: BooleanShape => expr
@@ -1622,6 +1680,12 @@ object TsCodegenPlugin {
     * input schema expects before branding/parsing. Numbers and booleans are converted; everything
     * else is left as a string.
     */
+  private def coerceFromString(target: Shape, member: MemberShape, expr: String): String =
+    if (mapsToString(member))
+      expr
+    else
+      coerceFromString(target, expr)
+
   private def coerceFromString(target: Shape, expr: String): String =
     target match {
       case _: ByteShape | _: ShortShape | _: IntegerShape | _: LongShape | _: BigIntegerShape |
