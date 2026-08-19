@@ -79,7 +79,7 @@ jobs:
 
       - name: Committed sample TypeScript is up to date
         if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'
-        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' tsCodegenSampleCheck
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' 'project /' tsCodegenSampleCheck
 
       - name: Install nix
         if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'

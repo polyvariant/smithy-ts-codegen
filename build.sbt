@@ -31,8 +31,10 @@ ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
 // type-checked by `nix flake check`. Fail the build if it no longer matches
 // what the codegen produces for typecheck/model.smithy — otherwise the tsc run
 // would be checking a stale file.
+// `project /` first: these tasks live on the root build, not on the rootJVM
+// aggregate the surrounding steps have selected.
 ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
-  List("tsCodegenSampleCheck"),
+  List("project /", "tsCodegenSampleCheck"),
   name = Some("Committed sample TypeScript is up to date"),
   cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
 )
@@ -160,8 +162,10 @@ sampleCodegenRun := Def.taskDyn {
 tsCodegenSampleCheck := {
   val out = tsCodegenSampleFile.value
   val before =
-    if (out.exists) IO.read(out)
-    else ""
+    if (out.exists)
+      IO.read(out)
+    else
+      ""
   val _ = sampleCodegenRun.value
   val after = IO.read(out)
   if (before != after)
