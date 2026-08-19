@@ -32,7 +32,10 @@ TaskKey[Unit]("checkOutput") := {
   // an ndjson output stream, element-checked against the union schema
   require("responseStreamEncoding: 'ndjson',")
   require("decodeStream(res.stream, FeedEventSchema,")
+  // a streamed member alongside a bound one: the stream is intersected in
   require("export type WatchOutput = z.infer<typeof WatchOutputSchema> & { events: AsyncIterable<FeedEvent> }")
+  // ...whereas Upload's input streams its only body member
+  require("export type Bytes = AsyncIterable<Uint8Array>")
   // a binary input stream: a stream type, never a value schema
   require("requestStreamEncoding: 'binary',")
   require("export type Bytes = AsyncIterable<Uint8Array>")

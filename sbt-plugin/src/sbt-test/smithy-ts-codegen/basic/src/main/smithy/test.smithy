@@ -61,6 +61,9 @@ operation Watch {
         @required
         @httpPayload
         events: FeedEvent
+
+        @httpHeader("x-session")
+        session: String
     }
 }
 
