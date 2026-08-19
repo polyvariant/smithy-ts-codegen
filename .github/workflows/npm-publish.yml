@@ -30,8 +30,10 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
-      # Lets npm record the build's provenance, so consumers can verify the
-      # tarball was built from this commit by this workflow.
+      # Trusted publishing: npm exchanges this workflow's OIDC identity for a
+      # short-lived publish credential, so there is no token to store or
+      # rotate. It also backs the provenance attestation, which lets consumers
+      # verify the tarball was built from this commit by this workflow.
       id-token: write
     steps:
       - name: Checkout
@@ -71,8 +73,12 @@ jobs:
         working-directory: runtime
         run: pnpm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
 
+      # `npm publish`, not `pnpm publish`: the OIDC exchange that backs trusted
+      # publishing is implemented in the npm CLI. `--provenance` is implied by
+      # trusted publishing, but stays explicit so a fallback to a token still
+      # attests. npm >= 11.5.1 is required for OIDC.
       - name: Publish
         working-directory: runtime
-        run: pnpm publish --access public --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm install -g npm@latest
+          npm publish --access public --provenance
