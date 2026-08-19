@@ -28,7 +28,11 @@ TaskKey[Unit]("checkOutput") := {
   // Streaming: the transport half, and both framings.
   require("export interface StreamTransport {")
   require("export class FeedClient {")
-  require("constructor(transport: Transport, streamTransport: StreamTransport) {")
+  // both of Feed's operations stream, so `transport.request` is never called —
+  // the client takes the streaming half alone
+  require("constructor(streamTransport: StreamTransport) {")
+  // ...while Greeter, which streams nothing, keeps the unary half
+  require("constructor(transport: Transport) {")
   // an ndjson output stream, element-checked against the union schema
   require("responseStreamEncoding: 'ndjson',")
   require("decodeStream(res.stream, FeedEventSchema,")
