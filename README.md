@@ -222,6 +222,43 @@ export const FigureSchema = z.union([
 
 Branch over the known keys with `in`, and treat anything left as the unknown case.
 
+### Discriminated unions
+
+`@discriminated` changes the encoding: instead of a single-key envelope, the variant is flattened
+into the object and labelled with a discriminator property. A closed one becomes a
+`z.discriminatedUnion`, which dispatches on that property in one step and reports errors against the
+selected arm rather than against every arm:
+
+```ts
+export const RegionSchema = z.discriminatedUnion('kind', [
+  CircleSchema.extend({ 'kind': z.literal('circle') }),
+  SquareSchema.extend({ 'kind': z.literal('square') }),
+])
+```
+
+Adding `@jsonUnknown` makes it open, and the schema falls back to a plain `z.union`.
+`z.discriminatedUnion` builds its dispatch map from the arms' literal discriminator values, and
+throws when constructed with an arm whose discriminator is a plain `z.string()` — so it cannot
+express the catch-all. As in the tagged case the catch-all comes last, since `z.union` dispatches by
+trial and it would otherwise match every known variant:
+
+```ts
+export const ZoneSchema = z.union([
+  CircleSchema.extend({ 'kind': z.literal('circle') }),
+  SquareSchema.extend({ 'kind': z.literal('square') }),
+  z.object({ 'kind': z.string() }).catchall(z.unknown()),
+])
+```
+
+One consequence is worth knowing: a *known* discriminator carrying a payload that does not validate
+lands in the catch-all rather than failing. That follows from what an open union asks for — a client
+built against an older model cannot tell a malformed variant from a newer one it does not know — but
+it does mean an open discriminated union validates its known variants less strictly than a closed
+one. Keep the union closed where you want the stricter errors.
+
+Members are flattened into the encoded object, so they have to target structures; a member pointing
+at a string or a list fails codegen with an error naming it.
+
 ## Large numbers: `@mapToString`
 
 JavaScript numbers are IEEE-754 doubles, so an integer outside ±(2^53 - 1) cannot be represented

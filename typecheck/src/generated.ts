@@ -130,6 +130,25 @@ export const FigureSchema = z.union([
 ])
 export type Figure = z.infer<typeof FigureSchema>
 
+/**
+ * `{ "radius": 1, "kind": "circle" }` rather than `{ "circle": { ... } }`.
+ */
+export const RegionSchema = z.discriminatedUnion('kind', [
+  CircleSchema.extend({ 'kind': z.literal('circle') }),
+  SquareSchema.extend({ 'kind': z.literal('square') }),
+])
+export type Region = z.infer<typeof RegionSchema>
+
+/**
+ * Discriminated *and* open: the shape is known, only the label may not be.
+ */
+export const ZoneSchema = z.union([
+  CircleSchema.extend({ 'kind': z.literal('circle') }),
+  SquareSchema.extend({ 'kind': z.literal('square') }),
+  z.object({ 'kind': z.string() }).catchall(z.unknown()),
+])
+export type Zone = z.infer<typeof ZoneSchema>
+
 export const MeasureOutputSchema = z.object({
   measurement: MeasurementSchema,
   total: z.string().optional(),

@@ -6,6 +6,7 @@ $version: "2"
 
 namespace test
 
+use alloy#discriminated
 use alloy#jsonUnknown
 use alloy#openEnum
 use alloy#simpleRestJson
@@ -346,3 +347,24 @@ apply MeasureInput$seed @mapToString
 apply MeasureInput$offset @mapToString
 apply MeasureInput$revision @mapToString
 apply MeasureOutput$total @mapToString
+
+// --- Discriminated unions: the variant is flattened and labelled ---
+
+/// `{ "radius": 1, "kind": "circle" }` rather than `{ "circle": { ... } }`.
+@discriminated("kind")
+union Region {
+    circle: Circle
+
+    square: Square
+}
+
+/// Discriminated *and* open: the shape is known, only the label may not be.
+@discriminated("kind")
+union Zone {
+    circle: Circle
+
+    square: Square
+
+    @jsonUnknown
+    other: Document
+}

@@ -684,4 +684,105 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(!out.contains("Number(res.headers['x-total'])"), out)
   }
 
+  test("a @discriminated union dispatches on its discriminator property") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#discriminated
+         |
+         |@discriminated("kind")
+         |union Region {
+         |  circle: Circle
+         |  square: Square
+         |}
+         |
+         |structure Circle {
+         |  @required
+         |  radius: Integer
+         |}
+         |
+         |structure Square {
+         |  @required
+         |  side: Integer
+         |}
+         |""".stripMargin
+    )
+
+    assert(out.contains("export const RegionSchema = z.discriminatedUnion('kind', ["), out)
+    // The variant is flattened into the encoded object, so the arm is the target
+    // structure itself, labelled with the discriminator — not a single-key envelope.
+    assert(out.contains("CircleSchema.extend({ 'kind': z.literal('circle') }),"), out)
+    assert(out.contains("SquareSchema.extend({ 'kind': z.literal('square') }),"), out)
+    assert(!out.contains("z.object({ circle:"), out)
+  }
+
+  test("an open @discriminated union falls back to z.union, with the catch-all arm last") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#discriminated
+         |use alloy#jsonUnknown
+         |
+         |@discriminated("kind")
+         |union Zone {
+         |  circle: Circle
+         |  @jsonUnknown
+         |  other: Document
+         |}
+         |
+         |structure Circle {
+         |  @required
+         |  radius: Integer
+         |}
+         |""".stripMargin
+    )
+
+    // z.discriminatedUnion builds its dispatch map from the arms' literal
+    // discriminators, and throws when constructed with a `z.string()` arm — so an
+    // open discriminated union has to be a plain z.union.
+    assert(out.contains("export const ZoneSchema = z.union(["), out)
+    assert(!out.contains("ZoneSchema = z.discriminatedUnion"), out)
+
+    val schema =
+      out
+        .linesIterator
+        .dropWhile(!_.contains("ZoneSchema = "))
+        .takeWhile(!_.contains("])"))
+        .toList
+    val knownIdx = schema.indexWhere(_.contains("CircleSchema.extend("))
+    val unknownIdx = schema.indexWhere(_.contains(".catchall(z.unknown())"))
+    // Trial dispatch: the catch-all matches any object carrying the discriminator,
+    // so ahead of the known arms it would swallow all of them.
+    assert(knownIdx >= 0 && unknownIdx > knownIdx, schema.mkString("\n"))
+    assert(schema.exists(_.contains("z.object({ 'kind': z.string() }).catchall(z.unknown())")), out)
+  }
+
+  test("rejects a @discriminated union whose member does not target a structure") {
+    val e = intercept[Exception](
+      generate(
+        """|$version: "2"
+           |namespace test
+           |
+           |use alloy#discriminated
+           |
+           |@discriminated("kind")
+           |union Region {
+           |  circle: Circle
+           |  label: String
+           |}
+           |
+           |structure Circle {
+           |  @required
+           |  radius: Integer
+           |}
+           |""".stripMargin
+      )
+    )
+
+    assert(e.getMessage.contains("test#Region"), e.getMessage)
+    assert(e.getMessage.contains("label"), e.getMessage)
+  }
+
 }

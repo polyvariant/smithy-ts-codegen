@@ -16,6 +16,7 @@
 
 package org.polyvariant.smithy.ts
 
+import alloy.DiscriminatedUnionTrait
 import alloy.JsonUnknownTrait
 import alloy.NullableTrait
 import alloy.OpenEnumTrait
@@ -348,13 +349,23 @@ object TsCodegenPlugin {
   }
 
   /** A union member tagged `alloy#jsonUnknown` makes the union *open*: on the wire, any
-    * discriminator key the model does not know about activates that member, carrying the whole
-    * `{ <unknownKey>: <payload> }` object. So it is not a variant of its own — emitting
-    * `{ theUnknownMember: ... }` would describe a key that never appears — but a catch-all arm that
-    * accepts any single-key object.
+    * discriminator the model does not know about activates that member, carrying the whole object.
+    * So it is not a variant of its own — emitting `{ theUnknownMember: ... }` would describe a key
+    * that never appears — but a catch-all arm.
     *
-    * The arm has to come last: `z.union` tries its options in order, and a permissive record would
-    * otherwise match (and swallow) every known variant.
+    * Two encodings, per `alloy#discriminated`:
+    *
+    *   - tagged (the default): a single-key envelope, `{ "one": { "a": 123 } }`. The catch-all arm
+    *     accepts any single-key object, and has to come *last* — `z.union` tries its options in
+    *     order, and a permissive record placed earlier would match (and swallow) every known
+    *     variant.
+    *   - discriminated: the variant is flattened into the object and labelled with a discriminator
+    *     property, `{ "a": 123, "type": "one" }`. A *closed* discriminated union uses
+    *     `z.discriminatedUnion`, which dispatches on that property in one step and reports errors
+    *     against the selected arm rather than against every arm. An *open* one cannot: zod builds
+    *     its dispatch map from the arms' literal discriminator values, and rejects an arm whose
+    *     discriminator is a plain `z.string()` when the schema is constructed. So the open case
+    *     falls back to `z.union` and trial dispatch, catch-all last.
     */
   private def writeUnion(w: TsWriter, model: Model, shape: UnionShape): Unit = {
     val name = shape.getId.getName
@@ -365,21 +376,89 @@ object TsCodegenPlugin {
         .toList
         .partition { case (_, m) => m.hasTrait(classOf[JsonUnknownTrait]) }
     val open = unknownMembers.nonEmpty
+    val discriminator = shape.getTrait(classOf[DiscriminatedUnionTrait]).toScala.map(_.getValue)
     if (knownMembers.isEmpty && !open) {
       w.line(s"export const ${name}Schema = z.never()")
       w.line(s"export type $name = z.infer<typeof ${name}Schema>")
-    } else {
-      w.block(s"export const ${name}Schema = z.union([", "])") {
-        knownMembers.foreach { case (memberName, member) =>
-          val target = model.expectShape(member.getTarget)
-          val variant = inlineSchemaExpr(target, member)
-          w.line(s"z.object({ $memberName: $variant }),")
-        }
-        if (open)
-          w.line("z.record(z.string(), z.unknown()),")
+    } else
+      discriminator match {
+        case Some(field) => writeDiscriminatedUnion(w, model, shape, field, knownMembers, open)
+        case None        => writeTaggedUnion(w, model, shape, knownMembers, open)
       }
-      w.line(s"export type $name = z.infer<typeof ${name}Schema>")
+  }
+
+  private def writeTaggedUnion(
+    w: TsWriter,
+    model: Model,
+    shape: UnionShape,
+    knownMembers: List[(String, MemberShape)],
+    open: Boolean,
+  ): Unit = {
+    val name = shape.getId.getName
+    w.block(s"export const ${name}Schema = z.union([", "])") {
+      knownMembers.foreach { case (memberName, member) =>
+        val target = model.expectShape(member.getTarget)
+        val variant = inlineSchemaExpr(target, member)
+        w.line(s"z.object({ $memberName: $variant }),")
+      }
+      if (open)
+        w.line("z.record(z.string(), z.unknown()),")
     }
+    w.line(s"export type $name = z.infer<typeof ${name}Schema>")
+  }
+
+  /** A discriminated variant is flattened into the enclosing object, so it has to *be* an object:
+    * there is nothing to spread out of a string or a list. Hence the check — `alloy`'s own selector
+    * does not constrain the member targets, so an unusable model would otherwise reach codegen and
+    * emit a schema that cannot match anything.
+    *
+    * The known arms extend the target structure's schema with the discriminator literal. The
+    * catch-all arm for an open union keeps the discriminator (a `string`, since the value is
+    * exactly what the model does not know) and allows anything alongside it: unlike the tagged case
+    * the envelope is not the unknown part — the shape is known, only the label is not. It comes
+    * last, because an open union is dispatched by trial and it would otherwise match every known
+    * variant.
+    */
+  private def writeDiscriminatedUnion(
+    w: TsWriter,
+    model: Model,
+    shape: UnionShape,
+    field: String,
+    knownMembers: List[(String, MemberShape)],
+    open: Boolean,
+  ): Unit = {
+    val name = shape.getId.getName
+    knownMembers.foreach { case (memberName, member) =>
+      val target = model.expectShape(member.getTarget)
+      if (!target.isStructureShape)
+        sys.error(
+          s"union ${shape.getId} is @discriminated, so its members are flattened into the " +
+            s"encoded object and must target structures, but member `$memberName` targets " +
+            s"${target.getId} (${target.getType})"
+        )
+    }
+    // `z.discriminatedUnion` derives its dispatch map from the arms' literal discriminators, so it
+    // rejects the open union's catch-all arm outright — when the schema is constructed, not when it
+    // parses. The open case therefore uses `z.union`, whose trial dispatch tolerates it.
+    val opener =
+      if (open)
+        "z.union(["
+      else
+        s"z.discriminatedUnion(${jsString(field)}, ["
+    w.block(s"export const ${name}Schema = $opener", "])") {
+      knownMembers.foreach { case (memberName, member) =>
+        val target = model.expectShape(member.getTarget)
+        val variant = inlineSchemaExpr(target, member)
+        w.line(s"$variant.extend({ ${jsString(field)}: z.literal(${jsString(memberName)}) }),")
+      }
+      // Last, so trial dispatch reaches the known arms first. Note the consequence: a known
+      // discriminator carrying a payload that does not validate lands here rather than failing.
+      // That is what an open union asks for — a client built against an older model cannot tell a
+      // malformed variant from a newer one it does not know.
+      if (open)
+        w.line(s"z.object({ ${jsString(field)}: z.string() }).catchall(z.unknown()),")
+    }
+    w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
   /** `alloy#openEnum` means the server may send a value this model does not list, so the schema has

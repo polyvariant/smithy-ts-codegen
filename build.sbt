@@ -80,6 +80,9 @@ lazy val traits = project
     // Resources only; nothing to compile, and no Scala artifact to cross-build.
     autoScalaLibrary := false,
     crossPaths := false,
+    // No previous release to compare against, and no classfiles to compare
+    // even once there is one — the artifact is a smithy model.
+    tlMimaPreviousVersions := Set.empty,
   )
 
 // A standalone smithy-build plugin that emits a single `generated.ts` of zod
