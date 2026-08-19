@@ -143,8 +143,11 @@ lazy val sbtPlugin = project
     scriptedLaunchOpts ++= Seq("-Xmx1024M", "-Dplugin.version=" + version.value),
     scriptedBufferLog := false,
     // Scripted resolves the CLI artifact at the plugin's version from the local
-    // Ivy repo, so publish it (and its `core` dep) there first.
-    scripted := scripted.dependsOn(cli / publishLocal, core / publishLocal).evaluated,
+    // Ivy repo, so publish it and everything it depends on there first — `core`,
+    // and `traits` for the trait definitions `core` resolves the model against.
+    scripted := scripted
+      .dependsOn(cli / publishLocal, core / publishLocal, traits / publishLocal)
+      .evaluated,
   )
 
 // The generated TypeScript that `nix flake check` type-checks. It is committed
