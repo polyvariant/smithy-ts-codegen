@@ -15,9 +15,10 @@ From one model, into a single `generated.ts`:
    `.brand<'Xxx'>()`-ed for nominal typing).
 2. **Error classes** — one `XxxError extends Error` per `@error` shape, carrying the declared
    HTTP status and error-type name.
-3. **Transport** — a small `Transport` interface plus request/response types you implement once
-   (over `fetch`, axios, …). The generated clients are transport-agnostic. Models with
-   streaming operations also get a `StreamTransport` (see [Streaming](#streaming)).
+3. **Transport** — a small `Transport` interface plus request/response types. The generated
+   clients are transport-agnostic; a ready-made `fetch` implementation ships separately in
+   [`@polyvariant/smithy-ts-runtime`](runtime/). Models with streaming operations also get a
+   `StreamTransport` (see [Streaming](#streaming)).
 4. **Service clients** — one `XxxClient` class per service, one `async` method per operation.
    Each method walks the operation's `@http` trait to build the request (URI labels, query,
    headers, body) and parses the response with the generated output schema, dispatching declared
@@ -135,7 +136,8 @@ streamed response commits its status before the first element, **a mid-stream fa
 be an HTTP status** — model it as a member of the streamed union (the protocol expects a
 terminal member such as `completed` / `failed`).
 
-Framing itself is the transport's job: implement `StreamTransport.requestStream`, which
+Framing itself is the transport's job: `@polyvariant/smithy-ts-runtime` does it for you, and
+a hand-rolled transport implements `StreamTransport.requestStream`, which
 receives `requestStreamEncoding` / `responseStreamEncoding` telling it which framing to
 apply, so it never has to guess from a content type. The generated code adds the per-element
 schema on top. Services with streaming operations take both halves —
@@ -155,9 +157,42 @@ mockService(WatcherMock, {
 })
 ```
 
-> **TODO:** the `Transport` / `StreamTransport` implementations are currently written by hand
-> in each consuming project. They should be published as a library (a `fetch`-based transport
-> with ndjson/binary framing) so consumers don't re-implement the same framing logic.
+Implementations of both halves ship in
+[`@polyvariant/smithy-ts-runtime`](runtime/) — see [Transports](#transports).
+
+## Transports
+
+The codegen emits the `Transport` / `StreamTransport` *interfaces*; the
+implementation lives in [`@polyvariant/smithy-ts-runtime`](runtime/), published
+separately so a generated file stays dependency-free.
+
+```sh
+pnpm add @polyvariant/smithy-ts-runtime
+```
+
+```ts
+import { chain, fetchTransport, withHeaders } from '@polyvariant/smithy-ts-runtime'
+import { DirectoryClient, FeedClient } from './generated.js'
+
+const transport = chain(
+  fetchTransport({ baseUrl: '/api' }),
+  withHeaders(() => ({ authorization: `Bearer ${token()}` })),
+)
+
+const directory = new DirectoryClient(transport)
+const feed = new FeedClient(transport, transport)   // streaming ops take both
+```
+
+It covers the whole contract — unary requests, ndjson and binary framing in both
+directions, 401 handling, and a middleware seam (`chain` / `around` / `tap` /
+`interceptorStack`) for tracing, auth headers and error reporting. The framing
+primitives are exported on their own for transports it doesn't ship.
+
+The library imports nothing from generated code: it declares structural copies of
+the transport types, which TypeScript matches by shape. `typecheck/src/runtimeUsage.ts`
+compiles the two against each other, so the pairing can't drift silently.
+
+See [runtime/README.md](runtime/README.md) for the full API.
 
 ## Conventions & limits
 
@@ -177,20 +212,46 @@ mockService(WatcherMock, {
 sbt test                  # unit tests
 sbt sbtPlugin/scripted    # the sbt plugin, end to end
 sbt tsCodegenSample       # regenerate typecheck/src/generated.ts
-nix flake check           # type-check the generated TypeScript with tsc
+nix flake check           # type-check + test the TypeScript side
+pnpm check                # the same, without nix (needs `pnpm install` first)
 ```
 
-`typecheck/` holds a model (`model.smithy`) exercising every construct the codegen emits, its
-committed output (`src/generated.ts`), and a consumer-side `src/usage.ts` that uses the
-clients, streams and mocks the way a caller would. `nix flake check` runs the real `tsc` over
-both under `strict` + `erasableSyntaxOnly`.
+The TypeScript lives in a pnpm workspace of two packages:
+
+- `runtime/` — the published transport library. `pnpm --filter @polyvariant/smithy-ts-runtime
+  run check` builds it, type-checks it and runs its `node:test` suite (framing round-trips,
+  the transport against a `fetch` double, middleware ordering).
+- `typecheck/` — a model (`model.smithy`) exercising every construct the codegen emits, its
+  committed output (`src/generated.ts`), a consumer-side `src/usage.ts` that uses the clients,
+  streams and mocks the way a caller would, and `src/runtimeUsage.ts`, which drives those same
+  clients with the *library's* transport. That last file is what pins the library's structural
+  transport types to the ones the codegen emits — change one without the other and it stops
+  compiling.
+
+`nix flake check` runs both under `strict` + `erasableSyntaxOnly`.
 
 This matters because the Scala tests assert on substrings of the emitted file, which cannot
 catch a type error — a generator declared as `AsyncIterable`, an intersection with an empty
 `z.object`, a `Date` cast to a query value. After changing the generator, run
 `sbt tsCodegenSample` and commit the result; CI fails if it drifts.
 
+Changing anything under `runtime/` or `typecheck/` that moves the lockfile means updating
+`pnpmDeps.hash` in `nix/typecheck.nix` — build once, and nix prints the hash it wanted.
+Note that `nix build` only sees git-tracked files, so `git add` new files before running it.
+
 A `nix develop` shell provides node, pnpm, sbt and a JDK.
+
+### Releasing
+
+A `v*` tag ships both halves at the same version: sbt-typelevel publishes the JVM artifacts
+from the generated `ci.yml`, and `.github/workflows/npm-publish.yml` publishes
+`@polyvariant/smithy-ts-runtime` to npm. The tag is the only source of version truth —
+`runtime/package.json` keeps a placeholder `0.0.0` that the workflow overwrites, so there is no
+version to bump by hand.
+
+`ci.yml` is generated (`sbt githubWorkflowGenerate`) and CI fails if it drifts; the npm
+workflow is hand-written for that reason. Publishing needs an `NPM_TOKEN` secret with publish
+rights on the `@polyvariant` scope.
 
 ## Dependencies
 
