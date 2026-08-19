@@ -210,8 +210,10 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(out.contains("const res = await this.streamTransport.requestStream({"))
     // each element is validated against the union schema as it is pulled
     assert(out.contains("decodeStream(res.stream, WatchEventSchema,"))
-    // a streaming service takes both halves of the transport
-    assert(out.contains("constructor(transport: Transport, streamTransport: StreamTransport) {"))
+    // every operation here streams, so the unary half would never be called —
+    // the client takes the streaming half alone
+    assert(out.contains("constructor(streamTransport: StreamTransport) {"))
+    assert(!out.contains("private readonly transport: Transport"))
   }
 
   test("streams a binary blob input as an AsyncIterable of chunks") {
@@ -366,6 +368,75 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(!out.contains("decodeStream"))
     // and the client keeps its single-argument constructor
     assert(out.contains("constructor(transport: Transport) {"))
+  }
+
+  test("a service mixing streaming and unary operations takes both transport halves") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.ndjson#ndjsonRestJson
+         |
+         |@ndjsonRestJson
+         |service Mixed {
+         |  operations: [Watch, Ping]
+         |}
+         |
+         |@http(method: "GET", uri: "/watch")
+         |operation Watch {
+         |  output := {
+         |    @required
+         |    @httpPayload
+         |    events: WatchEvent
+         |  }
+         |}
+         |
+         |@http(method: "GET", uri: "/ping")
+         |operation Ping {
+         |  output := {
+         |    @required
+         |    message: String
+         |  }
+         |}
+         |
+         |@streaming
+         |union WatchEvent {
+         |  item: Item
+         |}
+         |
+         |structure Item {
+         |  @required
+         |  name: String
+         |}
+         |""".stripMargin
+    )
+
+    // `ping` calls `transport.request`, `watch` calls `streamTransport.requestStream`,
+    // so both halves are genuinely used and both are required.
+    assert(
+      clue(out).contains("constructor(transport: Transport, streamTransport: StreamTransport) {")
+    )
+    assert(out.contains("private readonly transport: Transport"))
+    assert(out.contains("private readonly streamTransport: StreamTransport"))
+  }
+
+  test("a service with no operations still takes the unary transport") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |
+         |@simpleRestJson
+         |service Empty {
+         |  operations: []
+         |}
+         |""".stripMargin
+    )
+
+    // nothing is called either way; the unary half is the honest default, and it
+    // keeps the signature stable once a first operation shows up
+    assert(clue(out).contains("constructor(transport: Transport) {"))
   }
 
   test("rejects a @streaming member that is neither blob nor union") {

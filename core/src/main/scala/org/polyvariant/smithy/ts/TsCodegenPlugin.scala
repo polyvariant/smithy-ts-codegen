@@ -948,24 +948,35 @@ object TsCodegenPlugin {
   private def writeClient(w: TsWriter, model: Model, service: ServiceShape): Unit = {
     val svcName = service.getId.getName
     val ops = serviceOperations(model, service)
-    // A service with streaming operations needs the streaming half of the
-    // transport too. Requiring both up front (rather than an optional second
-    // argument) keeps a streaming call from failing at runtime on a transport
-    // that can't serve it.
+    // Each half of the transport is taken only when some operation actually
+    // uses it: a service that streams everything never calls `Transport.request`,
+    // and one that streams nothing never calls `requestStream`. Requiring both
+    // up front (rather than an optional second argument) keeps a streaming call
+    // from failing at runtime on a transport that can't serve it, but requiring
+    // a half nothing calls would just force callers to invent a stub.
     val streaming = ops.exists(opStreams(model, _).isStreaming)
+    val unary = ops.exists(!opStreams(model, _).isStreaming)
+    // A service with no operations at all still takes the unary half: an empty
+    // constructor would make the client look like it needs no transport, and a
+    // later operation would silently change its signature.
+    val takesUnary = unary || !streaming
+    val params =
+      List(
+        Option.when(takesUnary)("transport: Transport"),
+        Option.when(streaming)("streamTransport: StreamTransport"),
+      ).flatten.mkString(", ")
     w.block(s"export class ${svcName}Client {", "}") {
       // Avoid parameter-property syntax — `tsc --erasableSyntaxOnly` rejects it.
-      w.line("private readonly transport: Transport")
-      if (streaming) {
+      if (takesUnary)
+        w.line("private readonly transport: Transport")
+      if (streaming)
         w.line("private readonly streamTransport: StreamTransport")
-        w.block("constructor(transport: Transport, streamTransport: StreamTransport) {", "}") {
+      w.block(s"constructor($params) {", "}") {
+        if (takesUnary)
           w.line("this.transport = transport")
+        if (streaming)
           w.line("this.streamTransport = streamTransport")
-        }
-      } else
-        w.block("constructor(transport: Transport) {", "}") {
-          w.line("this.transport = transport")
-        }
+      }
       ops.foreach(op => writeOperation(w, model, op, service))
     }
     w.line("")
