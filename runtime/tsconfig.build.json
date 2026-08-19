@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    // The published artifact must not depend on @types/node — it targets the
+    // browser as much as the server.
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

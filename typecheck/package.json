@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@polyvariant/smithy-ts-runtime": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

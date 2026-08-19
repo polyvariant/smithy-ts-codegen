@@ -7,3 +7,7 @@ node_modules/
 .metals/
 .bloop/
 metals.sbt
+
+# nix build output
+result
+result-*
