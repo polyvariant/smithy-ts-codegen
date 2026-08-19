@@ -107,6 +107,15 @@ object TsCodegenPlugin {
       val _ = write(content, args*)
     }
 
+    /** Emit `content` literally, bypassing the `$`-expression parser. Model text (doc comments,
+      * etc.) may contain a `$` (e.g. a shape member id like `City$name`); routing it through the
+      * built-in `$L` formatter as an argument keeps the writer from trying to parse it as an
+      * expression.
+      */
+    def lit(content: String): Unit = {
+      val _ = write("$L", content)
+    }
+
     def block(open: String, close: String, args: Object*)(body: => Unit): Unit = {
       val rendered = format(open, args*)
       val _ = openBlock(rendered, close, (() => body): Runnable)
@@ -298,7 +307,7 @@ object TsCodegenPlugin {
   private def writeDoc(w: TsWriter, shape: Shape): Unit =
     shape.getTrait(classOf[DocumentationTrait]).toScala.foreach { t =>
       w.line("/**")
-      t.getValue.split("\n").foreach(line => w.line(s" * $line"))
+      t.getValue.split("\n").foreach(line => w.lit(s" * $line"))
       w.line(" */")
     }
 
@@ -313,7 +322,7 @@ object TsCodegenPlugin {
       shape.getAllMembers.asScala.toList.filterNot { case (n, _) => streamed.contains(n) }.foreach {
         case (memberName, member) =>
           member.getTrait(classOf[DocumentationTrait]).toScala.foreach { t =>
-            w.line(s"/** ${t.getValue.replace("\n", " ").trim} */")
+            w.lit(s"/** ${t.getValue.replace("\n", " ").trim} */")
           }
           val target = model.expectShape(member.getTarget)
           val schemaExpr = inlineSchemaExpr(target, member)
@@ -1036,10 +1045,10 @@ object TsCodegenPlugin {
           .toList
     (docLines ++ streamNotes) match {
       case Nil           => ()
-      case single :: Nil => w.line(s"/** $single */")
+      case single :: Nil => w.lit(s"/** $single */")
       case many          =>
         w.line("/**")
-        many.foreach(note => w.line(s" * $note"))
+        many.foreach(note => w.lit(s" * $note"))
         w.line(" */")
     }
     // The generated input/output types already declare a streamed member as an
@@ -1560,7 +1569,7 @@ object TsCodegenPlugin {
           else
             s"$outTy | Promise<$outTy>"
         op.getTrait(classOf[DocumentationTrait]).toScala.foreach { t =>
-          w.line(s"/** ${t.getValue.replace("\n", " ").trim} */")
+          w.lit(s"/** ${t.getValue.replace("\n", " ").trim} */")
         }
         if (isUnitInput)
           w.line(s"$methodName(): $ret")
