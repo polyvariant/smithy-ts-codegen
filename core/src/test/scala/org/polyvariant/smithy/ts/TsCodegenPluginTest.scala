@@ -33,6 +33,46 @@ class TsCodegenPluginTest extends munit.FunSuite {
   private def generate(smithy: String, exclude: Set[String] = Set.empty): String =
     TsCodegenPlugin.generate(model(smithy), exclude)
 
+  /** A service streaming a union out, over the ndjson protocol. */
+  private val ndjsonModel =
+    """|$version: "2"
+       |namespace test
+       |
+       |use org.polyvariant.ndjson#ndjsonRestJson
+       |
+       |@ndjsonRestJson
+       |service Watcher {
+       |  operations: [Watch]
+       |}
+       |
+       |@http(method: "GET", uri: "/watch/{id}")
+       |operation Watch {
+       |  input := {
+       |    @required
+       |    @httpLabel
+       |    id: String
+       |  }
+       |  output := {
+       |    @required
+       |    @httpPayload
+       |    events: WatchEvent
+       |  }
+       |}
+       |
+       |@streaming
+       |union WatchEvent {
+       |  item: Item
+       |  completed: Completed
+       |}
+       |
+       |structure Item {
+       |  @required
+       |  name: String
+       |}
+       |
+       |structure Completed {}
+       |""".stripMargin
+
   test("emits a zod schema + type for a simple structure") {
     val out = generate(
       """|$version: "2"
@@ -149,6 +189,206 @@ class TsCodegenPluginTest extends munit.FunSuite {
     // mock stubs
     assert(out.contains("export interface GreeterHandlers {"))
     assert(out.contains("export const GreeterMock: MockServiceDescriptor<GreeterHandlers> = {"))
+  }
+
+  test("streams an ndjson union output as an AsyncIterable") {
+    val out = generate(ndjsonModel)
+
+    // the streamed member becomes an AsyncIterable of the union type, carried by
+    // the generated output type itself rather than bolted on at the call site
+    assert(clue(out).contains("watch(input: WatchInput"))
+    // `events` is the only member here, so the type is the stream alone —
+    // intersecting with `z.infer` of an empty object would make it `never`.
+    assert(out.contains("export type WatchOutput = { events: AsyncIterable<WatchEvent> }"))
+    // ...and it is left out of the zod object, which has nothing to validate it with
+    assert(out.contains("export const WatchOutputSchema = z.object({\n})"))
+    assert(
+      out.contains("async watch(input: WatchInput, opts?: TransportOptions): Promise<WatchOutput>")
+    )
+    // the transport is told how to frame the response
+    assert(out.contains("responseStreamEncoding: 'ndjson',"))
+    assert(out.contains("const res = await this.streamTransport.requestStream({"))
+    // each element is validated against the union schema as it is pulled
+    assert(out.contains("decodeStream(res.stream, WatchEventSchema,"))
+    // a streaming service takes both halves of the transport
+    assert(out.contains("constructor(transport: Transport, streamTransport: StreamTransport) {"))
+  }
+
+  test("streams a binary blob input as an AsyncIterable of chunks") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.ndjson#ndjsonRestJson
+         |
+         |@ndjsonRestJson
+         |service Uploader {
+         |  operations: [Upload]
+         |}
+         |
+         |@http(method: "POST", uri: "/upload/{id}")
+         |operation Upload {
+         |  input := {
+         |    @required
+         |    @httpLabel
+         |    id: String
+         |    @required
+         |    @httpPayload
+         |    body: Chunks
+         |  }
+         |}
+         |
+         |@streaming
+         |blob Chunks
+         |""".stripMargin
+    )
+
+    assert(
+      clue(out).contains(
+        "export type UploadInput = z.infer<typeof UploadInputSchema> & { body: AsyncIterable<Uint8Array> }"
+      )
+    )
+    // a streaming blob is a stream type, never a value with a schema
+    assert(out.contains("export type Chunks = AsyncIterable<Uint8Array>"))
+    assert(!out.contains("ChunksSchema"))
+    assert(out.contains("requestStreamEncoding: 'binary',"))
+    assert(out.contains("stream: input.body,"))
+    // the stream replaces the JSON body
+    assert(out.contains("body: undefined,"))
+  }
+
+  test("a structure whose only member streams is the stream type alone") {
+    // `z.infer` of an empty `z.object({})` is `Record<string, never>` under zod
+    // v4; intersecting with it makes every property `never`, so the generated
+    // type has to skip the intersection entirely when nothing else remains.
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.ndjson#ndjsonRestJson
+         |
+         |@ndjsonRestJson
+         |service Echoer {
+         |  operations: [Echo]
+         |}
+         |
+         |@http(method: "POST", uri: "/echo")
+         |operation Echo {
+         |  input := {
+         |    @required
+         |    @httpPayload
+         |    incoming: Event
+         |  }
+         |}
+         |
+         |@streaming
+         |union Event {
+         |  item: Item
+         |}
+         |
+         |structure Item {
+         |  @required
+         |  name: String
+         |}
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("export type EchoInput = { incoming: AsyncIterable<Event> }"))
+    assert(!out.contains("export type EchoInput = z.infer"))
+  }
+
+  test("serialises a @httpQuery timestamp rather than casting it") {
+    // A `Date` doesn't fit `string | number | boolean`, so a blanket cast is a
+    // type error at the call site.
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |
+         |@simpleRestJson
+         |service Searcher {
+         |  operations: [Search]
+         |}
+         |
+         |@http(method: "GET", uri: "/search")
+         |operation Search {
+         |  input := {
+         |    @httpQuery("since")
+         |    since: Timestamp
+         |    @httpQuery("limit")
+         |    limit: Integer
+         |  }
+         |}
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("query['since'] = input.since.toISOString()"))
+    assert(out.contains("query['limit'] = input.limit"))
+    assert(!out.contains("as string | number | boolean"))
+  }
+
+  test("emits streaming-aware mock handlers") {
+    val out = generate(ndjsonModel)
+
+    // the handler mirrors the client: it returns the streamed member as an
+    // AsyncIterable, so a story can implement it as an async generator
+    assert(clue(out).contains("watch(input: WatchInput): WatchOutput | Promise<WatchOutput>"))
+    assert(out.contains("responseStreamEncoding: 'ndjson',"))
+    assert(out.contains("encodeStream: (output) =>"))
+    // a streamed output has no JSON body
+    assert(out.contains("encodeBody: () => undefined,"))
+  }
+
+  test("does not emit the streaming transport for a model without streaming") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |
+         |@simpleRestJson
+         |service Greeter {
+         |  operations: [Greet]
+         |}
+         |
+         |@http(method: "GET", uri: "/greet")
+         |operation Greet {
+         |  output := {
+         |    @required
+         |    message: String
+         |  }
+         |}
+         |""".stripMargin
+    )
+
+    assert(!clue(out).contains("StreamTransport"))
+    assert(!out.contains("decodeStream"))
+    // and the client keeps its single-argument constructor
+    assert(out.contains("constructor(transport: Transport) {"))
+  }
+
+  test("rejects a @streaming member that is neither blob nor union") {
+    // `@streaming` is restricted to blob/union by smithy's own selector, so the
+    // model itself is what rejects this — the codegen never sees it.
+    val ex = intercept[RuntimeException] {
+      generate(
+        """|$version: "2"
+           |namespace test
+           |
+           |structure Holder {
+           |  @required
+           |  items: Items
+           |}
+           |
+           |@streaming
+           |list Items {
+           |  member: String
+           |}
+           |""".stripMargin
+      )
+    }
+    assert(clue(ex.getMessage).nonEmpty)
   }
 
   test("excludeServices skips the client but keeps the data shapes") {

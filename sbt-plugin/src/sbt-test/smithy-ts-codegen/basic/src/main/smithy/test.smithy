@@ -3,6 +3,7 @@ $version: "2"
 namespace test
 
 use alloy#simpleRestJson
+use org.polyvariant.ndjson#ndjsonRestJson
 
 structure Person {
     @required
@@ -47,3 +48,41 @@ structure Secret {
     @required
     value: String
 }
+
+/// Streams ndjson out and raw bytes in.
+@ndjsonRestJson
+service Feed {
+    operations: [Watch, Upload]
+}
+
+@http(method: "GET", uri: "/watch")
+operation Watch {
+    output := {
+        @required
+        @httpPayload
+        events: FeedEvent
+
+        @httpHeader("x-session")
+        session: String
+    }
+}
+
+@http(method: "POST", uri: "/upload")
+operation Upload {
+    input := {
+        @required
+        @httpPayload
+        body: Bytes
+    }
+}
+
+@streaming
+union FeedEvent {
+    item: Person
+    completed: Done
+}
+
+structure Done {}
+
+@streaming
+blob Bytes

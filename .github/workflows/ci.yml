@@ -77,6 +77,18 @@ jobs:
         if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' sbtPlugin/scripted
 
+      - name: Committed sample TypeScript is up to date
+        if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' 'project /' tsCodegenSampleCheck
+
+      - name: Install nix
+        if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'
+        uses: cachix/install-nix-action@v31
+
+      - name: Typecheck the generated TypeScript
+        if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'
+        run: nix flake check --print-build-logs
+
       - name: Make target directories
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         run: mkdir -p sbt-plugin/target cli/target core/target project/target

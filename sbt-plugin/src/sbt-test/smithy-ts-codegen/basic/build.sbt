@@ -24,4 +24,20 @@ TaskKey[Unit]("checkOutput") := {
   assert(!contents.contains("export class HiddenServiceClient {"), "HiddenService client should be excluded")
   // ...but its referenced data shape is still emitted
   require("export const SecretSchema = z.object({")
+
+  // Streaming: the transport half, and both framings.
+  require("export interface StreamTransport {")
+  require("export class FeedClient {")
+  require("constructor(transport: Transport, streamTransport: StreamTransport) {")
+  // an ndjson output stream, element-checked against the union schema
+  require("responseStreamEncoding: 'ndjson',")
+  require("decodeStream(res.stream, FeedEventSchema,")
+  // a streamed member alongside a bound one: the stream is intersected in
+  require("export type WatchOutput = z.infer<typeof WatchOutputSchema> & { events: AsyncIterable<FeedEvent> }")
+  // ...whereas Upload's input streams its only body member
+  require("export type Bytes = AsyncIterable<Uint8Array>")
+  // a binary input stream: a stream type, never a value schema
+  require("requestStreamEncoding: 'binary',")
+  require("export type Bytes = AsyncIterable<Uint8Array>")
+  assert(!contents.contains("BytesSchema"), "a streaming blob must not get a zod schema")
 }
