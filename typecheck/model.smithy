@@ -16,6 +16,8 @@ use org.polyvariant.smithy.ts#mapToString
 // --- Data shapes: one of every kind the generator handles ---
 
 structure Person {
+    /// The person's name, e.g. the value of `Person$name`. The `$` here is
+    /// deliberate: doc text is model data, not a format string.
     @required
     name: String
 

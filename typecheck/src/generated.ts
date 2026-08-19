@@ -156,6 +156,7 @@ export const MeasureOutputSchema = z.object({
 export type MeasureOutput = z.infer<typeof MeasureOutputSchema>
 
 export const PersonSchema = z.object({
+  /** The person's name, e.g. the value of `Person$name`. The `$` here is deliberate: doc text is model data, not a format string. */
   name: z.string(),
   age: z.number().int().optional(),
   kind: KindSchema,
