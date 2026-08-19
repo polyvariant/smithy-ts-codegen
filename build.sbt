@@ -27,9 +27,36 @@ ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
   cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
 )
 
+// The generated TypeScript is committed (typecheck/src/generated.ts) and
+// type-checked by `nix flake check`. Fail the build if it no longer matches
+// what the codegen produces for typecheck/model.smithy — otherwise the tsc run
+// would be checking a stale file.
+ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
+  List("tsCodegenSampleCheck"),
+  name = Some("Committed sample TypeScript is up to date"),
+  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+)
+
+// Type-check the generated TypeScript with the real `tsc` (see nix/typecheck.nix).
+// The Scala tests only assert on substrings, so this is what catches an actual
+// type error in the emitted file.
+ThisBuild / githubWorkflowBuildPostamble ++= Seq(
+  WorkflowStep.Use(
+    UseRef.Public("cachix", "install-nix-action", "v31"),
+    name = Some("Install nix"),
+    cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+  ),
+  WorkflowStep.Run(
+    List("nix flake check --print-build-logs"),
+    name = Some("Typecheck the generated TypeScript"),
+    cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+  ),
+)
+
 val smithyVersion = "1.71.0"
 val alloyVersion = "0.3.39"
 val smithy4sVersion = "0.19.8"
+val smithy4sNdjsonVersion = "0.1.1"
 
 val commonSettings = Seq(
   scalacOptions ++= Seq(
@@ -53,6 +80,10 @@ lazy val core = project
       "software.amazon.smithy" % "smithy-model" % smithyVersion,
       "com.disneystreaming.alloy" % "alloy-core" % alloyVersion,
       "com.disneystreaming.smithy4s" % "smithy4s-protocol" % smithy4sVersion,
+      // Only the protocol module — the `@ndjsonRestJson` trait definition. The
+      // codegen keys off `@streaming` members, so nothing scala-specific from
+      // smithy4s-ndjson is needed here.
+      "org.polyvariant" % "smithy4s-ndjson-protocol" % smithy4sNdjsonVersion,
       "org.scalameta" %% "munit" % "1.2.0" % Test,
     ),
   )
@@ -94,5 +125,49 @@ lazy val sbtPlugin = project
     // Ivy repo, so publish it (and its `core` dep) there first.
     scripted := scripted.dependsOn(cli / publishLocal, core / publishLocal).evaluated,
   )
+
+// The generated TypeScript that `nix flake check` type-checks. It is committed
+// (typecheck/src/generated.ts) so the tsc run is hermetic — no JVM in the nix
+// sandbox — and so a change to the emitted output shows up in review.
+//
+//   sbt tsCodegenSample      regenerate it
+//   sbt tsCodegenSampleCheck fail if it differs from what is committed (CI)
+lazy val tsCodegenSampleFile =
+  settingKey[File]("Where the committed sample TypeScript lives")
+lazy val tsCodegenSample = taskKey[Unit]("Regenerate the committed sample TypeScript")
+lazy val tsCodegenSampleCheck =
+  taskKey[Unit]("Check the committed sample TypeScript is up to date")
+
+ThisBuild / tsCodegenSampleFile := (ThisBuild / baseDirectory).value / "typecheck" / "src" / "generated.ts"
+
+tsCodegenSample := {
+  // `runMain` is an InputTask, so its argument string has to be built outside
+  // the task body (sbt's macro can't close over a val bound in here).
+  val _ = sampleCodegenRun.value
+  streams.value.log.info(s"wrote ${tsCodegenSampleFile.value}")
+}
+
+lazy val sampleCodegenRun = taskKey[Unit]("Run the sample codegen")
+
+sampleCodegenRun := Def.taskDyn {
+  val model = (ThisBuild / baseDirectory).value / "typecheck" / "model.smithy"
+  val out = tsCodegenSampleFile.value
+  (core / Compile / runMain).toTask(
+    s" org.polyvariant.smithy.ts.SampleCodegen $model $out"
+  )
+}.value
+
+tsCodegenSampleCheck := {
+  val out = tsCodegenSampleFile.value
+  val before =
+    if (out.exists) IO.read(out)
+    else ""
+  val _ = sampleCodegenRun.value
+  val after = IO.read(out)
+  if (before != after)
+    sys.error(
+      s"$out is out of date — run `sbt tsCodegenSample` and commit the result"
+    )
+}
 
 lazy val root = tlCrossRootProject.aggregate(core, cli, sbtPlugin)

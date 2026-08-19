@@ -16,7 +16,8 @@ From one model, into a single `generated.ts`:
 2. **Error classes** — one `XxxError extends Error` per `@error` shape, carrying the declared
    HTTP status and error-type name.
 3. **Transport** — a small `Transport` interface plus request/response types you implement once
-   (over `fetch`, axios, …). The generated clients are transport-agnostic.
+   (over `fetch`, axios, …). The generated clients are transport-agnostic. Models with
+   streaming operations also get a `StreamTransport` (see [Streaming](#streaming)).
 4. **Service clients** — one `XxxClient` class per service, one `async` method per operation.
    Each method walks the operation's `@http` trait to build the request (URI labels, query,
    headers, body) and parses the response with the generated output schema, dispatching declared
@@ -101,6 +102,63 @@ Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joi
 
 This is what the sbt plugin forks; the smithy-build plugin is discovered via the SPI.
 
+## Streaming
+
+Operations of an [`org.polyvariant.ndjson#ndjsonRestJson`](https://github.com/polyvariant/smithy4s-ndjson)
+service may stream their request body, their response body, or both. Smithy restricts
+`@streaming` to `blob` and `union`, and the protocol requires such a member to carry
+`@httpPayload`, which gives exactly two framings — applied identically in both directions:
+
+| Smithy | Wire | TypeScript |
+| --- | --- | --- |
+| `@streaming blob` | `application/octet-stream`, body verbatim | `AsyncIterable<Uint8Array>` |
+| `@streaming union` | `application/x-ndjson`, one JSON value per line | `AsyncIterable<TheUnion>` |
+
+A streamed member is surfaced as an `AsyncIterable` on the generated type itself, so a
+streaming operation's signature reads like any other:
+
+```ts
+const client = new WatcherClient(transport, streamTransport)
+
+// @streaming union out
+const { events } = await client.watch({ id })
+for await (const event of events) { /* typed as WatchEvent */ }
+
+// @streaming blob in
+await client.upload({ id, body: chunks /* AsyncIterable<Uint8Array> */ })
+```
+
+The promise resolves as soon as the response status is known; elements are pulled lazily,
+and ndjson elements are validated against the union's schema one at a time (a bad element
+throws `StreamDecodeError` at that element rather than truncating the stream). Because a
+streamed response commits its status before the first element, **a mid-stream failure can't
+be an HTTP status** — model it as a member of the streamed union (the protocol expects a
+terminal member such as `completed` / `failed`).
+
+Framing itself is the transport's job: implement `StreamTransport.requestStream`, which
+receives `requestStreamEncoding` / `responseStreamEncoding` telling it which framing to
+apply, so it never has to guess from a content type. The generated code adds the per-element
+schema on top. Services with streaming operations take both halves —
+`new XxxClient(transport, streamTransport)`; services without one are unchanged, and a model
+with no streaming emits no streaming code at all.
+
+Mocks mirror the client, so a story can implement a streaming operation as an async generator:
+
+```ts
+mockService(WatcherMock, {
+  watch: async (input) => ({
+    events: (async function* () {
+      yield { item: { name: 'one' } }
+      yield { completed: {} }
+    })(),
+  }),
+})
+```
+
+> **TODO:** the `Transport` / `StreamTransport` implementations are currently written by hand
+> in each consuming project. They should be published as a library (a `fetch`-based transport
+> with ndjson/binary framing) so consumers don't re-implement the same framing logic.
+
 ## Conventions & limits
 
 - Only `alloy#simpleRestJson` services get clients; every operation needs an `@http` trait.
@@ -108,11 +166,37 @@ This is what the sbt plugin forks; the smithy-build plugin is discovered via the
   are not emitted as data types.
 - **Recursive shapes are not supported** — the generator topologically sorts shapes into one
   file and fails on cycles.
-- Timestamps become `z.coerce.date()`; blobs become `z.string()`.
+- Timestamps become `z.coerce.date()`; blobs become `z.string()` (a `@streaming` blob instead
+  becomes `AsyncIterable<Uint8Array>`, with no zod schema — there is nothing to validate).
+- A `@streaming` member is left out of its structure's zod schema (validating it would mean
+  consuming the stream); the generated *type* still carries it, as an `AsyncIterable`.
+
+## Development
+
+```
+sbt test                  # unit tests
+sbt sbtPlugin/scripted    # the sbt plugin, end to end
+sbt tsCodegenSample       # regenerate typecheck/src/generated.ts
+nix flake check           # type-check the generated TypeScript with tsc
+```
+
+`typecheck/` holds a model (`model.smithy`) exercising every construct the codegen emits, its
+committed output (`src/generated.ts`), and a consumer-side `src/usage.ts` that uses the
+clients, streams and mocks the way a caller would. `nix flake check` runs the real `tsc` over
+both under `strict` + `erasableSyntaxOnly`.
+
+This matters because the Scala tests assert on substrings of the emitted file, which cannot
+catch a type error — a generator declared as `AsyncIterable`, an intersection with an empty
+`z.object`, a `Date` cast to a query value. After changing the generator, run
+`sbt tsCodegenSample` and commit the result; CI fails if it drifts.
+
+A `nix develop` shell provides node, pnpm, sbt and a JDK.
 
 ## Dependencies
 
-`smithy-build`, `smithy-codegen-core`, `smithy-model`, `alloy-core`, and `smithy4s-protocol`.
+`smithy-build`, `smithy-codegen-core`, `smithy-model`, `alloy-core`, `smithy4s-protocol`, and
+`smithy4s-ndjson-protocol` (the trait definition only — nothing Scala-specific from
+smithy4s-ndjson is needed, since the codegen keys off `@streaming` members).
 
 ## License
 

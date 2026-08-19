@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    // The settings a consuming project is likely to use, so the generated file
+    // is checked under at least as strict a regime as it will actually meet.
+    "strict": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    // The generated file must stay free of TS-only runtime constructs (enums,
+    // parameter properties, namespaces) so it can be stripped rather than
+    // compiled — this is what forbids them.
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

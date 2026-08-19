@@ -36,6 +36,7 @@ import software.amazon.smithy.model.traits.HttpResponseCodeTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MixinTrait
 import software.amazon.smithy.model.traits.RequiredTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.TraitDefinition
 import software.amazon.smithy.utils.DependencyGraph
@@ -48,10 +49,12 @@ import scala.jdk.OptionConverters.*
 /** smithy-build plugin that emits a single `generated.ts` containing:
   *   1. zod schemas + types for every reachable shape in the model;
   *   2. one `XxxError extends Error` class per `@error` shape;
-  *   3. a small `Transport` interface;
-  *   4. one client class per `@simpleRestJson` service, with one method per operation. The method
-  *      walks the operation's `@http` trait to build the request and parses the response with the
-  *      generated output schema.
+  *   3. a small `Transport` interface, plus a `StreamTransport` when some operation streams;
+  *   4. one client class per service, with one method per operation. The method walks the
+  *      operation's `@http` trait to build the request and parses the response with the generated
+  *      output schema. An operation with a `@streaming` member (per
+  *      `org.polyvariant.ndjson#ndjsonRestJson`) streams that member instead, as an `AsyncIterable`
+  *      — `Uint8Array` chunks for a blob, schema-checked elements for a union.
   *
   * See the package-level README for plugin settings and conventions.
   */
@@ -181,6 +184,10 @@ object TsCodegenPlugin {
       w.line("// --- Transport ---")
       w.line("")
       writeTransport(w)
+      // The streaming half of the transport is only emitted when some operation
+      // actually streams, so models without streaming are unaffected.
+      if (servicesToEmit.exists(hasStreamingOperation(model, _)))
+        writeStreamTransport(w)
       w.line("")
       w.line("// --- Service clients ---")
       w.line("")
@@ -188,7 +195,7 @@ object TsCodegenPlugin {
       w.line("")
       w.line("// --- Storybook mock server ---")
       w.line("")
-      writeMockRuntime(w)
+      writeMockRuntime(w, servicesToEmit.exists(hasStreamingOperation(model, _)))
       servicesToEmit.foreach(svc => writeMockService(w, model, svc))
     }
 
@@ -256,6 +263,17 @@ object TsCodegenPlugin {
   // --------------------------------------------------------------------------
 
   private def writeShape(w: TsWriter, model: Model, shape: Shape): Unit = {
+    // A `@streaming blob` is never a value — it only ever appears as the body of
+    // a streaming operation, where the client/mock surface it as an
+    // `AsyncIterable<Uint8Array>`. Emitting the usual branded-string alias for
+    // it would advertise a type nothing can legitimately produce, so emit the
+    // stream type instead.
+    if (shape.isInstanceOf[BlobShape] && shape.hasTrait(classOf[StreamingTrait])) {
+      writeDoc(w, shape)
+      writeStreamingBlobAlias(w, shape)
+      w.line("")
+      return
+    }
     writeDoc(w, shape)
     shape match {
       case _: StructureShape => writeStructure(w, model, shape.asStructureShape().get())
@@ -277,26 +295,48 @@ object TsCodegenPlugin {
 
   private def writeStructure(w: TsWriter, model: Model, shape: StructureShape): Unit = {
     val name = shape.getId.getName
+    // A `@streaming` member is the body of a stream, not a value in an object:
+    // it has no schema to sit in this one (a streamed blob has no schema at
+    // all), and validating it would mean consuming the stream. It is left out
+    // here and re-attached, as an `AsyncIterable`, by the client and the mock.
+    val streamed = streamInfo(model, shape).map(_.memberName)
     w.block(s"export const ${name}Schema = z.object({", "})") {
-      shape.getAllMembers.asScala.foreach { case (memberName, member) =>
-        member.getTrait(classOf[DocumentationTrait]).toScala.foreach { t =>
-          w.line(s"/** ${t.getValue.replace("\n", " ").trim} */")
-        }
-        val target = model.expectShape(member.getTarget)
-        val schemaExpr = inlineSchemaExpr(target)
-        val required = member.hasTrait(classOf[RequiredTrait])
-        val nullable = member.hasTrait(classOf[NullableTrait])
-        val finalExpr =
-          if (nullable)
-            schemaExpr + ".nullish()"
-          else if (required)
-            schemaExpr
-          else
-            schemaExpr + ".optional()"
-        w.line(s"$memberName: $finalExpr,")
+      shape.getAllMembers.asScala.toList.filterNot { case (n, _) => streamed.contains(n) }.foreach {
+        case (memberName, member) =>
+          member.getTrait(classOf[DocumentationTrait]).toScala.foreach { t =>
+            w.line(s"/** ${t.getValue.replace("\n", " ").trim} */")
+          }
+          val target = model.expectShape(member.getTarget)
+          val schemaExpr = inlineSchemaExpr(target)
+          val required = member.hasTrait(classOf[RequiredTrait])
+          val nullable = member.hasTrait(classOf[NullableTrait])
+          val finalExpr =
+            if (nullable)
+              schemaExpr + ".nullish()"
+            else if (required)
+              schemaExpr
+            else
+              schemaExpr + ".optional()"
+          w.line(s"$memberName: $finalExpr,")
       }
     }
-    w.line(s"export type $name = z.infer<typeof ${name}Schema>")
+    // The streamed member is absent from the schema, so the inferred type would
+    // lack it too. Declare the type explicitly so `Omit<X, 'member'>` in the
+    // client and the handlers still refers to something with that member.
+    streamed match {
+      case None             => w.line(s"export type $name = z.infer<typeof ${name}Schema>")
+      case Some(memberName) =>
+        val info = streamInfo(model, shape).get
+        val streamMember = s"{ $memberName: ${info.streamType} }"
+        // `z.infer` of an empty `z.object({})` is `Record<string, never>`, which
+        // would make every property of the intersection `never`. When the stream
+        // is the only member there is nothing to intersect with, so emit it alone.
+        val remaining = shape.getAllMembers.asScala.keySet.filterNot(_ == memberName)
+        if (remaining.isEmpty)
+          w.line(s"export type $name = $streamMember")
+        else
+          w.line(s"export type $name = z.infer<typeof ${name}Schema> & $streamMember")
+    }
   }
 
   private def writeUnion(w: TsWriter, model: Model, shape: UnionShape): Unit = {
@@ -349,6 +389,15 @@ object TsCodegenPlugin {
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
+  /** A `@streaming blob` alias: a type alias only, with no zod schema. There is nothing to validate
+    * — the bytes are the body verbatim — and a schema would only invite parsing a stream as if it
+    * were a value.
+    */
+  private def writeStreamingBlobAlias(w: TsWriter, shape: Shape): Unit = {
+    val name = shape.getId.getName
+    w.line(s"export type $name = AsyncIterable<Uint8Array>")
+  }
+
   private def inlineSchemaExpr(target: Shape): String = {
     val id = target.getId
     if (id.getNamespace == "smithy.api")
@@ -375,6 +424,137 @@ object TsCodegenPlugin {
       case _: DocumentShape => "z.unknown()"
       case _: BlobShape     => "z.string()"
       case other => sys.error(s"unsupported primitive shape: ${other.getId} (${other.getType})")
+    }
+
+  // --------------------------------------------------------------------------
+  // Streaming (org.polyvariant.ndjson#ndjsonRestJson)
+  // --------------------------------------------------------------------------
+  //
+  // Smithy restricts `@streaming` to `:is(blob, union)` and the ndjson protocol
+  // requires such a member to carry `@httpPayload`, so a structure has at most
+  // one streaming member and it always *is* the body. That gives exactly two
+  // framings, applied identically to input and output:
+  //
+  //   - `@streaming blob`  -> the body verbatim (`application/octet-stream`),
+  //     surfaced as `AsyncIterable<Uint8Array>`;
+  //   - `@streaming union` -> one JSON value per line (`application/x-ndjson`),
+  //     surfaced as `AsyncIterable<TheUnion>`.
+  //
+  // Framing itself is the transport's job (see `StreamTransport`): it hands us
+  // already-split values and takes values back. What the generated code adds on
+  // top is the per-element zod schema, so a stream is as typed as a unary body.
+
+  /** How a `@streaming` member is framed on the wire, and what the TS element type is. */
+  private sealed trait StreamFraming {
+
+    /** Value of `streamEncoding` on the transport request — what the transport must frame as. */
+    def encoding: String
+
+    /** TS type of one element of the stream. */
+    def elementType: String
+
+  }
+
+  private object StreamFraming {
+
+    /** `@streaming blob`: raw bytes, no per-element schema. */
+    case object Binary extends StreamFraming {
+      val encoding = "binary"
+      val elementType = "Uint8Array"
+    }
+
+    /** `@streaming union`: newline-delimited JSON, one union value per line. */
+    final case class Ndjson(shapeName: String) extends StreamFraming {
+      val encoding = "ndjson"
+      def elementType: String = shapeName
+      def schemaExpr: String = s"${shapeName}Schema"
+    }
+
+  }
+
+  /** The `@streaming` member of a structure, if any: its member name and framing. */
+  private final case class StreamInfo(memberName: String, framing: StreamFraming) {
+    def elementType: String = framing.elementType
+
+    /** TS type of the stream as a whole, as seen by user code. */
+    def streamType: String = s"AsyncIterable<${framing.elementType}>"
+
+  }
+
+  /** Finds the `@streaming` member of `shape`, if it has one.
+    *
+    * The trait may sit on the member or on the targeted shape (smithy allows either), so both are
+    * checked. A structure with more than one streaming member is rejected: the stream is the body,
+    * and there is only one body.
+    */
+  private def streamInfo(model: Model, shape: StructureShape): Option[StreamInfo] = {
+    val streaming = shape
+      .getAllMembers
+      .asScala
+      .toList
+      .filter { case (_, m) =>
+        m.hasTrait(classOf[StreamingTrait]) ||
+        model.expectShape(m.getTarget).hasTrait(classOf[StreamingTrait])
+      }
+    if (streaming.sizeIs > 1)
+      sys.error(
+        s"structure ${shape.getId} has multiple @streaming members (${streaming.map(_._1).mkString(", ")}); at most one is allowed"
+      )
+    streaming.headOption.map { case (memberName, member) =>
+      val target = model.expectShape(member.getTarget)
+      val framing =
+        target match {
+          case _: BlobShape  => StreamFraming.Binary
+          case u: UnionShape => StreamFraming.Ndjson(u.getId.getName)
+          case other         =>
+            sys.error(
+              s"@streaming member ${shape.getId}$$$memberName targets ${other.getId} (${other.getType}); only blob and union are supported"
+            )
+        }
+      StreamInfo(memberName, framing)
+    }
+  }
+
+  /** The streaming shape of one operation: what streams in, what streams out. */
+  private final case class OpStreams(input: Option[StreamInfo], output: Option[StreamInfo]) {
+    def isStreaming: Boolean = input.isDefined || output.isDefined
+  }
+
+  private def opStreams(model: Model, op: OperationShape): OpStreams = OpStreams(
+    input = streamInfo(model, model.expectShape(op.getInputShape, classOf[StructureShape])),
+    output = streamInfo(model, model.expectShape(op.getOutputShape, classOf[StructureShape])),
+  )
+
+  private def serviceOperations(model: Model, service: ServiceShape): List[OperationShape] =
+    service
+      .getOperations
+      .asScala
+      .toList
+      .map(model.expectShape(_, classOf[OperationShape]))
+      .sortBy(_.getId.toString)
+
+  private def hasStreamingOperation(model: Model, service: ServiceShape): Boolean =
+    serviceOperations(model, service).exists(opStreams(model, _).isStreaming)
+
+  /** Emits the expression that adapts a stream of typed elements into the stream of values the
+    * transport frames — i.e. the encode half. Binary streams pass through untouched; ndjson streams
+    * are handed over as-is too (the transport does `JSON.stringify` per element), so this is a pure
+    * pass-through today, kept as a seam for future per-element encoding.
+    */
+  private def streamEncodeExpr(info: StreamInfo, expr: String): String = {
+    val _ = info
+    expr
+  }
+
+  /** Emits the expression that validates the transport's stream of already-framed values against
+    * the element schema. Binary streams are `Uint8Array` chunks and need no parsing; ndjson streams
+    * get the union schema applied per line, so a malformed element fails at the element, naming the
+    * operation.
+    */
+  private def streamDecodeExpr(info: StreamInfo, expr: String, opLabel: String): String =
+    info.framing match {
+      case StreamFraming.Binary    => s"$expr as AsyncIterable<Uint8Array>"
+      case n: StreamFraming.Ndjson => s"decodeStream($expr, ${n.schemaExpr}, $opLabel)"
     }
 
   // --------------------------------------------------------------------------
@@ -500,24 +680,161 @@ object TsCodegenPlugin {
     w.line("")
   }
 
+  /** Emits the streaming half of the transport contract, plus the `decodeStream` helper the
+    * generated clients/mocks use to type ndjson elements. Only emitted when the model actually has
+    * a streaming operation, so a model without one produces byte-identical output to before.
+    */
+  private def writeStreamTransport(w: TsWriter): Unit = {
+    w.line("/** A request whose body is streamed, whose response body is streamed,")
+    w.line(" * or both. Everything a `TransportRequest` carries applies here too;")
+    w.line(" * what is added is the framing and the outgoing stream.")
+    w.line(" *")
+    w.line(" * `streamEncoding` tells the transport how to frame each direction that")
+    w.line(" * streams — the generator derives it from the shape of the `@streaming`")
+    w.line(" * member, so the transport never has to guess from a content type:")
+    w.line(" *")
+    w.line(" *   - `'ndjson'` — one JSON value per line (`application/x-ndjson`).")
+    w.line(" *     Outgoing: `JSON.stringify` each element, terminate each with a")
+    w.line(" *     newline. Incoming: split on newlines, skip blank lines, and")
+    w.line(" *     `JSON.parse` each one. The generated client applies the element")
+    w.line(" *     schema on top of whatever is yielded here.")
+    w.line(" *   - `'binary'` — the body verbatim")
+    w.line(" *     (`application/octet-stream`), as `Uint8Array` chunks. Chunk")
+    w.line(" *     boundaries carry no meaning in either direction.")
+    w.line(" */")
+    w.line("export type StreamEncoding = 'ndjson' | 'binary'")
+    w.line("")
+    w.block("export interface StreamTransportRequest extends TransportRequest {", "}") {
+      w.line("/** Framing for the request body, when it streams. `undefined` means the")
+      w.line(" * request body is an ordinary (unary) JSON body carried by `body`.")
+      w.line(" */")
+      w.line("requestStreamEncoding?: StreamEncoding")
+      w.line("/** Framing the response body is expected in, when it streams.")
+      w.line(" * `undefined` means an ordinary JSON response body.")
+      w.line(" */")
+      w.line("responseStreamEncoding?: StreamEncoding")
+      w.line("/** The outgoing stream, present exactly when `requestStreamEncoding` is.")
+      w.line(" * For `'ndjson'` these are the values to serialise, one per line; for")
+      w.line(" * `'binary'`, `Uint8Array` chunks. Overrides `body`.")
+      w.line(" */")
+      w.line("stream?: AsyncIterable<unknown>")
+    }
+    w.line("")
+    w.block("export interface StreamTransportResponse {", "}") {
+      w.line("status: number")
+      w.line("/** Lowercased header names → values, as on `TransportResponse`. */")
+      w.line("headers: Record<string, string>")
+      w.line("/** The deframed response body, present exactly when the operation")
+      w.line(" * streams its output and the status was 2xx. Elements are the values")
+      w.line(" * `responseStreamEncoding` describes — already `JSON.parse`d for")
+      w.line(" * `'ndjson'`, raw `Uint8Array` chunks for `'binary'`. The generated")
+      w.line(" * client validates ndjson elements against the operation's schema.")
+      w.line(" */")
+      w.line("stream?: AsyncIterable<unknown>")
+      w.line("/** The fully-read body, for a non-2xx response (so declared errors can")
+      w.line(" * be parsed and thrown) or an operation with a unary response body.")
+      w.line(" */")
+      w.line("body?: unknown")
+    }
+    w.line("")
+    w.line("/** The streaming counterpart of `Transport`. A transport that backs a")
+    w.line(" * service with streaming operations implements both; the generated client")
+    w.line(" * takes whichever it needs.")
+    w.line(" *")
+    w.line(" * A streamed response commits its HTTP status before the first element is")
+    w.line(" * pulled, so a failure that happens mid-stream cannot arrive as a status.")
+    w.line(" * Such failures are modelled as members of the streamed union instead —")
+    w.line(" * the protocol expects a terminal member (e.g. `completed` / `failed`) —")
+    w.line(" * so `requestStream` rejecting means the request failed *before* the")
+    w.line(" * stream started, and an error after that surfaces as an element or as an")
+    w.line(" * exception thrown while iterating.")
+    w.line(" */")
+    w.block("export interface StreamTransport {", "}") {
+      w.line("requestStream(req: StreamTransportRequest): Promise<StreamTransportResponse>")
+    }
+    w.line("")
+    w.line("/** Thrown when a streamed response was expected but the transport didn't")
+    w.line(" * produce one (a transport bug, or a server that answered 2xx with a")
+    w.line(" * non-streamed body). */")
+    w.block("export class MissingStreamError extends Error {", "}") {
+      w.line("readonly operation: string")
+      w.block("constructor(operation: string) {", "}") {
+        w.line("super(operation + ' -> response did not carry a stream')")
+        w.line("this.name = 'MissingStreamError'")
+        w.line("this.operation = operation")
+      }
+    }
+    w.line("")
+    w.line("/** Validates each element of a deframed ndjson stream against the")
+    w.line(" * operation's element schema, lazily — an element is parsed as it is")
+    w.line(" * pulled, so a long-running stream doesn't buffer and a malformed element")
+    w.line(" * fails at that element rather than silently truncating the stream. */")
+    w.line("export const decodeStream = async function* <T>(")
+    w.line("  source: AsyncIterable<unknown>,")
+    w.line("  schema: { parse: (value: unknown) => T },")
+    w.line("  operation: string,")
+    // A generator's declared return type has to be a generator type —
+    // `AsyncIterable<T>` alone is rejected — but `AsyncGenerator` is assignable
+    // to `AsyncIterable`, so callers still see a plain async iterable.
+    w.block("): AsyncGenerator<T, void, undefined> {", "}") {
+      w.block("for await (const element of source) {", "}") {
+        w.tryCatchBlock("err") {
+          w.line("yield schema.parse(element)")
+        } {
+          w.line("throw new StreamDecodeError(operation, element, err)")
+        }
+      }
+    }
+    w.line("")
+    w.line("/** An empty stream, used when a request that declares a streamed input")
+    w.line(" * arrives without one (e.g. a mock invoked with no stream). */")
+    w.line(
+      "export const emptyStream = async function* (): AsyncGenerator<never, void, undefined> {}"
+    )
+    w.line("")
+    w.line("/** Thrown while iterating a streamed response whose element failed the")
+    w.line(" * operation's schema. Carries the offending element so a caller can log")
+    w.line(" * what actually came over the wire. */")
+    w.block("export class StreamDecodeError extends Error {", "}") {
+      w.line("readonly operation: string")
+      w.line("readonly element: unknown")
+      // `cause` is declared by `Error` itself under ES2022 libs, so it is set
+      // through the constructor's options bag rather than redeclared here.
+      w.block("constructor(operation: string, element: unknown, cause: unknown) {", "}") {
+        w.line("super(operation + ' -> could not decode a stream element', { cause })")
+        w.line("this.name = 'StreamDecodeError'")
+        w.line("this.operation = operation")
+        w.line("this.element = element")
+      }
+    }
+    w.line("")
+  }
+
   // --------------------------------------------------------------------------
   // Service clients
   // --------------------------------------------------------------------------
 
   private def writeClient(w: TsWriter, model: Model, service: ServiceShape): Unit = {
     val svcName = service.getId.getName
+    val ops = serviceOperations(model, service)
+    // A service with streaming operations needs the streaming half of the
+    // transport too. Requiring both up front (rather than an optional second
+    // argument) keeps a streaming call from failing at runtime on a transport
+    // that can't serve it.
+    val streaming = ops.exists(opStreams(model, _).isStreaming)
     w.block(s"export class ${svcName}Client {", "}") {
       // Avoid parameter-property syntax — `tsc --erasableSyntaxOnly` rejects it.
       w.line("private readonly transport: Transport")
-      w.block("constructor(transport: Transport) {", "}") {
-        w.line("this.transport = transport")
-      }
-      val ops = service
-        .getOperations
-        .asScala
-        .toList
-        .map(model.expectShape(_, classOf[OperationShape]))
-        .sortBy(_.getId.toString)
+      if (streaming) {
+        w.line("private readonly streamTransport: StreamTransport")
+        w.block("constructor(transport: Transport, streamTransport: StreamTransport) {", "}") {
+          w.line("this.transport = transport")
+          w.line("this.streamTransport = streamTransport")
+        }
+      } else
+        w.block("constructor(transport: Transport) {", "}") {
+          w.line("this.transport = transport")
+        }
       ops.foreach(op => writeOperation(w, model, op, service))
     }
     w.line("")
@@ -551,15 +868,47 @@ object TsCodegenPlugin {
     val inputTypeName = input.getId.getName
     val isUnitInput = input.getId.toString == "smithy.api#Unit"
 
+    val streams = opStreams(model, op)
+    val opLabel = jsString(s"${svcName}Client.$methodName")
+
     w.line("")
-    op.getTrait(classOf[DocumentationTrait]).toScala.foreach { t =>
-      w.line(s"/** ${t.getValue.replace("\n", " ").trim} */")
+    // The operation's own docs and the streaming notes share one comment block,
+    // rather than stacking two `/** */`s on the same method.
+    val docLines =
+      op.getTrait(classOf[DocumentationTrait])
+        .toScala
+        .map(_.getValue.replace("\n", " ").trim)
+        .toList
+    val streamNotes =
+      streams
+        .input
+        .map { in =>
+          s"Streams `${in.memberName}` to the server as ${framingLabel(in)}."
+        }
+        .toList ++
+        streams
+          .output
+          .map { out =>
+            s"Resolves once the response status is known; `${out.memberName}` then yields ${framingLabel(out)} lazily, so iterate it to consume the response."
+          }
+          .toList
+    (docLines ++ streamNotes) match {
+      case Nil           => ()
+      case single :: Nil => w.line(s"/** $single */")
+      case many          =>
+        w.line("/**")
+        many.foreach(note => w.line(s" * $note"))
+        w.line(" */")
     }
+    // The generated input/output types already declare a streamed member as an
+    // `AsyncIterable` (see `writeStructure`), so they describe a streaming
+    // operation's signature as-is.
+    val resultType = returnType(output)
     val signature =
       if (isUnitInput)
-        s"async $methodName(opts?: TransportOptions): Promise<${returnType(output)}> {"
+        s"async $methodName(opts?: TransportOptions): Promise<$resultType> {"
       else
-        s"async $methodName(input: $inputTypeName, opts?: TransportOptions): Promise<${returnType(output)}> {"
+        s"async $methodName(input: $inputTypeName, opts?: TransportOptions): Promise<$resultType> {"
 
     w.block(signature, "}") {
       // urlExpression returns a TS template literal containing `${...}`; route
@@ -571,8 +920,9 @@ object TsCodegenPlugin {
         w.line("const query: Record<string, string | number | boolean | undefined> = {}")
         queryMembers.foreach { case (memberName, member) =>
           val queryName = member.expectTrait(classOf[HttpQueryTrait]).getValue
+          val target = model.expectShape(member.getTarget)
           w.line(
-            s"if (input.$memberName !== undefined) query[${jsString(queryName)}] = input.$memberName as string | number | boolean"
+            s"if (input.$memberName !== undefined) query[${jsString(queryName)}] = ${coerceToQueryValue(target, s"input.$memberName")}"
           )
         }
       }
@@ -586,17 +936,28 @@ object TsCodegenPlugin {
         }
       }
 
+      // A streaming input member *is* the body, so it travels as `stream`
+      // rather than `body` and never joins the JSON payload.
       val bodyExpr: String =
-        payloadMember match {
-          case Some((memberName, _))       => s"input.$memberName"
-          case None if bodyMembers.isEmpty => "undefined"
-          case None                        =>
-            val pairs = bodyMembers.map { case (n, _) => s"$n: input.$n" }.mkString(", ")
-            s"{ $pairs }"
+        streams.input match {
+          case Some(_) => "undefined"
+          case None    =>
+            payloadMember match {
+              case Some((memberName, _))       => s"input.$memberName"
+              case None if bodyMembers.isEmpty => "undefined"
+              case None                        =>
+                val pairs = bodyMembers.map { case (n, _) => s"$n: input.$n" }.mkString(", ")
+                s"{ $pairs }"
+            }
         }
 
-      w.block("const res = await this.transport.request({", "})") {
-        w.line(s"operation: ${jsString(s"${svcName}Client.$methodName")},")
+      val call =
+        if (streams.isStreaming)
+          "const res = await this.streamTransport.requestStream({"
+        else
+          "const res = await this.transport.request({"
+      w.block(call, "})") {
+        w.line(s"operation: $opLabel,")
         w.line(s"method: ${jsString(http.getMethod)},")
         w.line("url,")
         if (queryMembers.nonEmpty)
@@ -604,6 +965,13 @@ object TsCodegenPlugin {
         if (headerMembers.nonEmpty)
           w.line("headers,")
         w.line(s"body: $bodyExpr,")
+        streams.input.foreach { in =>
+          w.line(s"requestStreamEncoding: ${jsString(in.framing.encoding)},")
+          w.line(s"stream: ${streamEncodeExpr(in, s"input.${in.memberName}")},")
+        }
+        streams.output.foreach { out =>
+          w.line(s"responseStreamEncoding: ${jsString(out.framing.encoding)},")
+        }
         w.line("options: opts,")
       }
 
@@ -613,7 +981,10 @@ object TsCodegenPlugin {
       // when an undeclared status came back). The transport already throws
       // `UnauthenticatedError` for 401 itself, so we won't see one here.
       w.block("if (res.status >= 200 && res.status < 300) {", "}") {
-        writeResponseParse(w, model, output)
+        streams.output match {
+          case None      => writeResponseParse(w, model, output)
+          case Some(out) => writeStreamingResponseParse(w, model, output, out, opLabel)
+        }
       }
 
       // Bucket declared errors by status. One error per status → throw directly;
@@ -642,7 +1013,6 @@ object TsCodegenPlugin {
         }
       }
 
-      val opLabel = jsString(s"${svcName}Client.$methodName")
       w.line(s"throw new UnexpectedResponseError($opLabel, res.status, res.body, res.headers)")
     }
   }
@@ -766,6 +1136,56 @@ object TsCodegenPlugin {
     else
       output.getId.getName
 
+  /** Human-readable framing, for the generated doc comments. */
+  private def framingLabel(info: StreamInfo): String =
+    info.framing match {
+      case StreamFraming.Binary    => "raw bytes"
+      case n: StreamFraming.Ndjson => s"newline-delimited `${n.shapeName}` values"
+    }
+
+  /** Emits the `return ...` for a successful streamed response: the non-streaming members are
+    * re-hydrated from headers / status exactly as in the unary case, and the streaming member is
+    * filled from `res.stream` (schema-checked per element for ndjson).
+    *
+    * The result is deliberately *not* run through the output schema: the stream member would fail
+    * validation (it isn't an array, and consuming it to check would defeat streaming), so the bound
+    * members are validated individually and the object is assembled by hand.
+    */
+  private def writeStreamingResponseParse(
+    w: TsWriter,
+    model: Model,
+    output: StructureShape,
+    out: StreamInfo,
+    opLabel: String,
+  ): Unit = {
+    val members = output.getAllMembers.asScala.toList
+    val headerMembers = members.filter(_._2.hasTrait(classOf[HttpHeaderTrait]))
+    val responseCodeMembers = members.filter(_._2.hasTrait(classOf[HttpResponseCodeTrait]))
+    val outName = output.getId.getName
+
+    w.ifBlock("res.stream === undefined") {
+      w.line(s"throw new MissingStreamError($opLabel)")
+    }
+    w.line("const raw: Record<string, unknown> = {}")
+    headerMembers.foreach { case (memberName, member) =>
+      val headerName = member.expectTrait(classOf[HttpHeaderTrait]).getValue
+      val target = model.expectShape(member.getTarget)
+      val lookup = s"res.headers[${jsString(headerName.toLowerCase)}]"
+      w.block(s"if ($lookup !== undefined) {", "}") {
+        w.line(
+          s"raw[${jsString(memberName)}] = ${inlineSchemaExpr(target)}.parse(${coerceFromString(target, lookup)})"
+        )
+      }
+    }
+    responseCodeMembers.foreach { case (memberName, _) =>
+      w.line(s"raw[${jsString(memberName)}] = res.status")
+    }
+    w.line(
+      s"raw[${jsString(out.memberName)}] = ${streamDecodeExpr(out, "res.stream", opLabel)}"
+    )
+    w.line(s"return raw as $outName")
+  }
+
   // --------------------------------------------------------------------------
   // Storybook mock server
   // --------------------------------------------------------------------------
@@ -777,7 +1197,7 @@ object TsCodegenPlugin {
   // partial set of handlers into a request matcher that a Storybook axios mock
   // adapter can consume.
 
-  private def writeMockRuntime(w: TsWriter): Unit = {
+  private def writeMockRuntime(w: TsWriter, streaming: Boolean): Unit = {
     w.line("/** A request as seen by the mock server: the URL path already has any")
     w.line(" * proxy prefix stripped, `pathParams` holds decoded `@httpLabel`")
     w.line(" * values, `query` the parsed query string, `body` the parsed JSON body. */")
@@ -787,12 +1207,26 @@ object TsCodegenPlugin {
       w.line("pathParams: Record<string, string>")
       w.line("query: Record<string, string | undefined>")
       w.line("body: unknown")
+      if (streaming) {
+        w.line("/** The deframed request body, for an operation that streams its input.")
+        w.line(" * Elements are `JSON.parse`d values for an ndjson stream and")
+        w.line(" * `Uint8Array` chunks for a binary one — the same shape the streaming")
+        w.line(" * transport yields, so a mock and a real server see the same thing. */")
+        w.line("stream?: AsyncIterable<unknown>")
+      }
     }
     w.line("")
     w.block("export interface MockResponse {", "}") {
       w.line("status: number")
       w.line("body: unknown")
       w.line("headers: Record<string, string>")
+      if (streaming) {
+        w.line("/** Set instead of `body` when the operation streams its output; the")
+        w.line(" * adapter frames these elements per `streamEncoding`. */")
+        w.line("stream?: AsyncIterable<unknown>")
+        w.line("/** Framing for `stream`, mirroring `StreamEncoding` on the transport. */")
+        w.line("streamEncoding?: 'ndjson' | 'binary'")
+      }
     }
     w.line("")
     w.line("/** One URI path segment of an operation's route: a literal or a")
@@ -810,6 +1244,14 @@ object TsCodegenPlugin {
       w.line("readonly segments: readonly MockUriSegment[]")
       w.line("readonly decodeInput: (req: MockRequest) => unknown")
       w.line("readonly encodeBody: (output: unknown) => unknown")
+      if (streaming) {
+        w.line("/** Framing of this operation's streamed output, when it streams one.")
+        w.line(" * `undefined` for an ordinary unary operation. */")
+        w.line("readonly responseStreamEncoding?: 'ndjson' | 'binary'")
+        w.line("/** Pulls the streamed member out of a handler's returned output, for")
+        w.line(" * an operation that streams its output. */")
+        w.line("readonly encodeStream?: (output: unknown) => AsyncIterable<unknown>")
+      }
     }
     w.line("")
     w.block("export interface MockServiceDescriptor<Handlers> {", "}") {
@@ -891,6 +1333,20 @@ object TsCodegenPlugin {
               w.line("const input = op.decodeInput({ ...req, pathParams })")
               w.tryCatchBlock("err") {
                 w.line("const output = await handler(input)")
+                // A streaming operation's status commits before any element is
+                // pulled, so the handler's stream is handed back unconsumed —
+                // a handler that throws mid-stream surfaces while iterating,
+                // exactly as it would against a real server.
+                if (streaming)
+                  w.ifBlock("op.encodeStream !== undefined") {
+                    w.block("return {", "}") {
+                      w.line("status: 200,")
+                      w.line("body: op.encodeBody(output),")
+                      w.line("headers: {},")
+                      w.line("stream: op.encodeStream(output),")
+                      w.line("streamEncoding: op.responseStreamEncoding,")
+                    }
+                  }
                 w.line("return { status: 200, body: op.encodeBody(output), headers: {} }")
               } {
                 w.ifBlock("err instanceof MockHttpError") {
@@ -941,12 +1397,7 @@ object TsCodegenPlugin {
 
   private def writeMockService(w: TsWriter, model: Model, service: ServiceShape): Unit = {
     val svcName = service.getId.getName
-    val ops = service
-      .getOperations
-      .asScala
-      .toList
-      .map(model.expectShape(_, classOf[OperationShape]))
-      .sortBy(_.getId.toString)
+    val ops = serviceOperations(model, service)
 
     // Handlers interface: one method per operation, decoded input -> typed
     // output (or a thrown error). Unit inputs take no argument.
@@ -957,6 +1408,9 @@ object TsCodegenPlugin {
         val input = model.expectShape(op.getInputShape, classOf[StructureShape])
         val output = model.expectShape(op.getOutputShape, classOf[StructureShape])
         val isUnitInput = input.getId.toString == "smithy.api#Unit"
+        // A handler mirrors the client method. The generated input/output types
+        // already declare streamed members as `AsyncIterable`s, so a story
+        // implements such an operation as an async generator with no ceremony.
         val outTy = returnType(output)
         val ret =
           if (outTy == "void")
@@ -1008,6 +1462,9 @@ object TsCodegenPlugin {
     val isUnitInput = input.getId.toString == "smithy.api#Unit"
     val inputTypeName = input.getId.getName
 
+    val streams = opStreams(model, op)
+    val opLabel = jsString(s"${op.getId.getName}")
+
     w.block("{", "},") {
       w.line(s"key: ${jsString(methodName)},")
       w.line(s"method: ${jsString(http.getMethod)},")
@@ -1021,8 +1478,16 @@ object TsCodegenPlugin {
         queryMembers,
         payloadMember,
         bodyMembers,
+        streams.input,
+        opLabel,
       )
-      writeMockEncodeBody(w, output)
+      writeMockEncodeBody(w, output, streams.output)
+      streams.output.foreach { out =>
+        w.line(s"responseStreamEncoding: ${jsString(out.framing.encoding)},")
+        w.line(
+          s"encodeStream: (output) => ${streamEncodeExpr(out, s"(output as Record<string, unknown>)[${jsString(out.memberName)}] as AsyncIterable<unknown>")},"
+        )
+      }
     }
   }
 
@@ -1040,6 +1505,8 @@ object TsCodegenPlugin {
     queryMembers: List[(String, MemberShape)],
     payloadMember: Option[(String, MemberShape)],
     bodyMembers: List[(String, MemberShape)],
+    inputStream: Option[StreamInfo],
+    opLabel: String,
   ): Unit = {
     if (isUnitInput) {
       w.line("decodeInput: () => undefined,")
@@ -1062,16 +1529,34 @@ object TsCodegenPlugin {
           )
         }
       }
-      payloadMember match {
-        case Some((memberName, _))        => w.line(s"raw[${jsString(memberName)}] = req.body")
-        case None if bodyMembers.nonEmpty =>
-          w.line("const body = (req.body ?? {}) as Record<string, unknown>")
-          bodyMembers.foreach { case (memberName, _) =>
-            w.line(s"raw[${jsString(memberName)}] = body[${jsString(memberName)}]")
+      inputStream match {
+        case Some(_) => ()
+        case None    =>
+          payloadMember match {
+            case Some((memberName, _))        => w.line(s"raw[${jsString(memberName)}] = req.body")
+            case None if bodyMembers.nonEmpty =>
+              w.line("const body = (req.body ?? {}) as Record<string, unknown>")
+              bodyMembers.foreach { case (memberName, _) =>
+                w.line(s"raw[${jsString(memberName)}] = body[${jsString(memberName)}]")
+              }
+            case None => ()
           }
-        case None => ()
       }
-      w.line(s"return ${inputTypeName}Schema.parse(raw) as $inputTypeName")
+      inputStream match {
+        case None     => w.line(s"return ${inputTypeName}Schema.parse(raw) as $inputTypeName")
+        case Some(in) =>
+          // The streamed member is already absent from the generated schema
+          // (see `writeStructure`), so parsing validates exactly the non-stream
+          // members; the stream is attached afterwards, element-checked lazily
+          // for ndjson.
+          w.line(s"const decoded = ${inputTypeName}Schema.parse(raw)")
+          w.block("return {", "}") {
+            w.line("...decoded,")
+            w.line(
+              s"${in.memberName}: ${streamDecodeExpr(in, s"(req.stream ?? emptyStream())", opLabel)},"
+            )
+          }
+      }
     }
   }
 
@@ -1081,9 +1566,19 @@ object TsCodegenPlugin {
     * `@httpHeader` / `@httpResponseCode`, which don't belong in the JSON body. A Unit output
     * encodes to an empty body.
     */
-  private def writeMockEncodeBody(w: TsWriter, output: StructureShape): Unit = {
+  private def writeMockEncodeBody(
+    w: TsWriter,
+    output: StructureShape,
+    outputStream: Option[StreamInfo],
+  ): Unit = {
     if (output.getId.toString == "smithy.api#Unit") {
       w.line("encodeBody: () => ({}),")
+      return
+    }
+    // The stream carries the body; anything else on the output travels in
+    // headers / status, so there is no JSON body left to encode.
+    if (outputStream.isDefined) {
+      w.line("encodeBody: () => undefined,")
       return
     }
     val payload = output.getAllMembers.asScala.find { case (_, m) =>
@@ -1107,6 +1602,21 @@ object TsCodegenPlugin {
         }
     }
   }
+
+  /** TS expression serialising a member into a query-string value. The inverse of
+    * [[coerceFromString]]: strings/numbers/booleans are already query values, but anything with a
+    * richer TS type (a timestamp is a `Date`, an alias is branded) has to be rendered explicitly —
+    * a blanket `as string | number | boolean` is a type error on those.
+    */
+  private def coerceToQueryValue(target: Shape, expr: String): String =
+    target match {
+      case _: BooleanShape => expr
+      case _: ByteShape | _: ShortShape | _: IntegerShape | _: LongShape | _: BigIntegerShape |
+          _: FloatShape | _: DoubleShape | _: BigDecimalShape =>
+        expr
+      case _: TimestampShape => s"$expr.toISOString()"
+      case _                 => s"String($expr)"
+    }
 
   /** TS expression that coerces a raw string (from a path label or query param) into the value the
     * input schema expects before branding/parsing. Numbers and booleans are converted; everything
