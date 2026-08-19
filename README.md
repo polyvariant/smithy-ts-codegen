@@ -119,7 +119,8 @@ A streamed member is surfaced as an `AsyncIterable` on the generated type itself
 streaming operation's signature reads like any other:
 
 ```ts
-const client = new WatcherClient(transport, streamTransport)
+// every operation here streams, so only the streaming half is needed
+const client = new WatcherClient(streamTransport)
 
 // @streaming union out
 const { events } = await client.watch({ id })
@@ -140,9 +141,11 @@ Framing itself is the transport's job: `@polyvariant/smithy-ts-runtime` does it 
 a hand-rolled transport implements `StreamTransport.requestStream`, which
 receives `requestStreamEncoding` / `responseStreamEncoding` telling it which framing to
 apply, so it never has to guess from a content type. The generated code adds the per-element
-schema on top. Services with streaming operations take both halves —
-`new XxxClient(transport, streamTransport)`; services without one are unchanged, and a model
-with no streaming emits no streaming code at all.
+schema on top. A client takes exactly the halves its operations use: a service that mixes
+streaming and unary operations takes both — `new XxxClient(transport, streamTransport)` — one
+whose operations all stream takes `new XxxClient(streamTransport)`, and one that streams
+nothing is unchanged at `new XxxClient(transport)`. A model with no streaming anywhere emits
+no streaming code at all.
 
 Mocks mirror the client, so a story can implement a streaming operation as an async generator:
 
