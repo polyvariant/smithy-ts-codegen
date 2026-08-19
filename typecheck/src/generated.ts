@@ -11,10 +11,30 @@ export type AlreadyExists = z.infer<typeof AlreadyExistsSchema>
 
 export type Bytes = AsyncIterable<Uint8Array>
 
+/**
+ * An open enum: unrecognized values pass through as plain strings.
+ */
+export const CategorySchema = z.union([z.enum(['book', 'film']), z.string()])
+export type Category = "book" | "film" | (string & {})
+
+export const CircleSchema = z.object({
+  radius: z.number().int(),
+})
+export type Circle = z.infer<typeof CircleSchema>
+
 export const ConflictSchema = z.object({
   message: z.string(),
 })
 export type Conflict = z.infer<typeof ConflictSchema>
+
+/**
+ * A structure reusing the same `Long` shape *without* the trait, proving the
+ * mapping is per-member and not per-shape.
+ */
+export const CounterSchema = z.object({
+  total: z.number().int(),
+})
+export type Counter = z.infer<typeof CounterSchema>
 
 export const DoneSchema = z.object({
 })
@@ -25,6 +45,11 @@ export const FailureSchema = z.object({
 })
 export type Failure = z.infer<typeof FailureSchema>
 
+export const SquareSchema = z.object({
+  side: z.number().int(),
+})
+export type Square = z.infer<typeof SquareSchema>
+
 export const GetPersonInputSchema = z.object({
   id: z.string(),
   verbose: z.boolean().optional(),
@@ -33,6 +58,23 @@ export type GetPersonInput = z.infer<typeof GetPersonInputSchema>
 
 export const KindSchema = z.enum(['admin', 'user'])
 export type Kind = z.infer<typeof KindSchema>
+
+export const MeasureInputSchema = z.object({
+  seed: z.string(),
+  offset: z.string().optional(),
+  revision: z.string().optional(),
+})
+export type MeasureInput = z.infer<typeof MeasureInputSchema>
+
+export const MeasurementSchema = z.object({
+  /** Stays a `number` — an Integer always fits in a JS number. */
+  sequence: z.number().int().optional(),
+  /** Exceeds the JS safe-integer range, so it is carried as a string. */
+  seed: z.string().optional(),
+  precise: z.string().optional(),
+  label: z.string(),
+})
+export type Measurement = z.infer<typeof MeasurementSchema>
 
 export const NotFoundSchema = z.object({
   message: z.string(),
@@ -76,6 +118,42 @@ export const UploadInputSchema = z.object({
   id: z.string(),
 })
 export type UploadInput = z.infer<typeof UploadInputSchema> & { body: AsyncIterable<Uint8Array> }
+
+/**
+ * An open union: an unrecognized discriminator key activates the
+ * `@jsonUnknown` member, so the schema accepts any single-key object.
+ */
+export const FigureSchema = z.union([
+  z.object({ circle: CircleSchema }),
+  z.object({ square: SquareSchema }),
+  z.record(z.string(), z.unknown()),
+])
+export type Figure = z.infer<typeof FigureSchema>
+
+/**
+ * `{ "radius": 1, "kind": "circle" }` rather than `{ "circle": { ... } }`.
+ */
+export const RegionSchema = z.discriminatedUnion('kind', [
+  CircleSchema.extend({ 'kind': z.literal('circle') }),
+  SquareSchema.extend({ 'kind': z.literal('square') }),
+])
+export type Region = z.infer<typeof RegionSchema>
+
+/**
+ * Discriminated *and* open: the shape is known, only the label may not be.
+ */
+export const ZoneSchema = z.union([
+  CircleSchema.extend({ 'kind': z.literal('circle') }),
+  SquareSchema.extend({ 'kind': z.literal('square') }),
+  z.object({ 'kind': z.string() }).catchall(z.unknown()),
+])
+export type Zone = z.infer<typeof ZoneSchema>
+
+export const MeasureOutputSchema = z.object({
+  measurement: MeasurementSchema,
+  total: z.string().optional(),
+})
+export type MeasureOutput = z.infer<typeof MeasureOutputSchema>
 
 export const PersonSchema = z.object({
   name: z.string(),
@@ -408,6 +486,35 @@ export class DirectoryClient {
       if (errorType === 'AlreadyExists') throw new AlreadyExistsError(AlreadyExistsSchema.parse(res.body))
     }
     throw new UnexpectedResponseError('DirectoryClient.getPerson', res.status, res.body, res.headers)
+  }
+
+  /** Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member is carried as a string. */
+  async measure(input: MeasureInput, opts?: TransportOptions): Promise<MeasureOutput> {
+    const url = `/measurements/${encodeURIComponent(String(input.seed))}`
+    const query: Record<string, string | number | boolean | undefined> = {}
+    if (input.offset !== undefined) query['offset'] = input.offset
+    const headers: Record<string, string> = {}
+    if (input.revision !== undefined) headers['x-revision'] = String(input.revision)
+    const res = await this.transport.request({
+      operation: 'DirectoryClient.measure',
+      method: 'GET',
+      url,
+      query,
+      headers,
+      body: undefined,
+      options: opts,
+    })
+    if (res.status >= 200 && res.status < 300) {
+      const raw: Record<string, unknown> = { ...(MeasureOutputSchema.omit({ 'total': true }).parse(res.body) as Record<string, unknown>) }
+      if (res.headers['x-total'] !== undefined) {
+        raw['total'] = res.headers['x-total']
+      }
+      return MeasureOutputSchema.parse(raw) as MeasureOutput
+    }
+    if (res.status === 404) {
+      throw new NotFoundError(NotFoundSchema.parse(res.body))
+    }
+    throw new UnexpectedResponseError('DirectoryClient.measure', res.status, res.body, res.headers)
   }
 
   /** No input, no output. */
@@ -770,6 +877,8 @@ export const mockServices = (
 
 export interface DirectoryHandlers {
   getPerson(input: GetPersonInput): GetPersonOutput | Promise<GetPersonOutput>
+  /** Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member is carried as a string. */
+  measure(input: MeasureInput): MeasureOutput | Promise<MeasureOutput>
   /** No input, no output. */
   ping(): void | Promise<void>
   putPerson(input: PutPersonInput): void | Promise<void>
@@ -792,6 +901,20 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
         return GetPersonInputSchema.parse(raw) as GetPersonInput
       },
       encodeBody: (output) => { const { code: _code, trace: _trace, ...body } = output as Record<string, unknown>; return body },
+    },
+    {
+      key: 'measure',
+      method: 'GET',
+      segments: [{ literal: 'measurements' }, { label: 'seed' }],
+      decodeInput: (req) => {
+        const raw: Record<string, unknown> = {}
+        raw['seed'] = req.pathParams['seed']
+        if (req.query['offset'] !== undefined) {
+          raw['offset'] = req.query['offset'] as string
+        }
+        return MeasureInputSchema.parse(raw) as MeasureInput
+      },
+      encodeBody: (output) => { const { total: _total, ...body } = output as Record<string, unknown>; return body },
     },
     {
       key: 'ping',
