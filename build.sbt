@@ -11,7 +11,7 @@ ThisBuild / githubWorkflowPublishTargetBranches := Seq(
 )
 
 val scala3 = "3.3.8"
-val scala212 = "2.12.20"
+val scala212 = "2.12.21"
 
 ThisBuild / scalaVersion := scala3
 ThisBuild / tlJdkRelease := Some(11)

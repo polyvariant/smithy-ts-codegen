@@ -1,6 +1,6 @@
 enablePlugins(SmithyTsCodegenPlugin)
 
-scalaVersion := "2.12.20"
+scalaVersion := "2.12.21"
 
 // Resolve the codegen artifact (published locally by the scripted run) and the
 // snapshot dependencies it pulls in.
@@ -21,7 +21,10 @@ TaskKey[Unit]("checkOutput") := {
   require("export type Person = z.infer<typeof PersonSchema>")
   require("export class GreeterClient {")
   // excluded service must not get a client...
-  assert(!contents.contains("export class HiddenServiceClient {"), "HiddenService client should be excluded")
+  assert(
+    !contents.contains("export class HiddenServiceClient {"),
+    "HiddenService client should be excluded",
+  )
   // ...but its referenced data shape is still emitted
   require("export const SecretSchema = z.object({")
 
@@ -37,7 +40,9 @@ TaskKey[Unit]("checkOutput") := {
   require("responseStreamEncoding: 'ndjson',")
   require("decodeStream(res.stream, FeedEventSchema,")
   // a streamed member alongside a bound one: the stream is intersected in
-  require("export type WatchOutput = z.infer<typeof WatchOutputSchema> & { events: AsyncIterable<FeedEvent> }")
+  require(
+    "export type WatchOutput = z.infer<typeof WatchOutputSchema> & { events: AsyncIterable<FeedEvent> }"
+  )
   // ...whereas Upload's input streams its only body member
   require("export type Bytes = AsyncIterable<Uint8Array>")
   // a binary input stream: a stream type, never a value schema
