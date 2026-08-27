@@ -1,6 +1,6 @@
 enablePlugins(SmithyTsCodegenPlugin)
 
-scalaVersion := "2.12.21"
+scalaVersion := "2.13.18"
 
 // Resolve the codegen artifact (published locally by the scripted run) and the
 // snapshot dependencies it pulls in.
