@@ -4,18 +4,82 @@ import { z } from 'zod'
 
 // --- Data types ---
 
+export const DataExampleSchema = z.union([
+  z.object({ smithy: z.unknown() }),
+  z.object({ json: z.unknown() }),
+  z.object({ string: z.string() }),
+])
+export type DataExample = z.infer<typeof DataExampleSchema>
+
+export const UnitSchema = z.object({
+})
+export type Unit = z.infer<typeof UnitSchema>
+
+export const DurationSchema = z.number().brand<'Duration'>()
+export type Duration = z.infer<typeof DurationSchema>
+
+export const LocalDateSchema = z.string().brand<'LocalDate'>()
+export type LocalDate = z.infer<typeof LocalDateSchema>
+
+export const LocalDateTimeSchema = z.string().brand<'LocalDateTime'>()
+export type LocalDateTime = z.infer<typeof LocalDateTimeSchema>
+
+export const LocalTimeSchema = z.string().brand<'LocalTime'>()
+export type LocalTime = z.infer<typeof LocalTimeSchema>
+
+export const MonthDaySchema = z.string().brand<'MonthDay'>()
+export type MonthDay = z.infer<typeof MonthDaySchema>
+
+export const OffsetDateTimeSchema = z.coerce.date().brand<'OffsetDateTime'>()
+export type OffsetDateTime = z.infer<typeof OffsetDateTimeSchema>
+
+export const OffsetTimeSchema = z.string().brand<'OffsetTime'>()
+export type OffsetTime = z.infer<typeof OffsetTimeSchema>
+
+export const UUIDSchema = z.string().brand<'UUID'>()
+export type UUID = z.infer<typeof UUIDSchema>
+
+export const UncheckedExampleSchema = z.object({
+  title: z.string(),
+  documentation: z.string().optional(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
+})
+export type UncheckedExample = z.infer<typeof UncheckedExampleSchema>
+
+export const YearSchema = z.number().int().brand<'Year'>()
+export type Year = z.infer<typeof YearSchema>
+
+export const YearMonthSchema = z.string().brand<'YearMonth'>()
+export type YearMonth = z.infer<typeof YearMonthSchema>
+
+export const ZoneIdSchema = z.string().brand<'ZoneId'>()
+export type ZoneId = z.infer<typeof ZoneIdSchema>
+
+export const ZoneOffsetSchema = z.string().brand<'ZoneOffset'>()
+export type ZoneOffset = z.infer<typeof ZoneOffsetSchema>
+
+export const ZonedDateTimeSchema = z.string().brand<'ZonedDateTime'>()
+export type ZonedDateTime = z.infer<typeof ZonedDateTimeSchema>
+
+export const ProtobufAnySchema = z.object({
+  typeUrl: z.string().optional(),
+  value: z.string().optional(),
+})
+export type ProtobufAny = z.infer<typeof ProtobufAnySchema>
+
+export const RangeSchema = z.object({
+  start: z.number().int(),
+  end: z.number().int(),
+})
+export type Range = z.infer<typeof RangeSchema>
+
 export const AlreadyExistsSchema = z.object({
   message: z.string(),
 })
 export type AlreadyExists = z.infer<typeof AlreadyExistsSchema>
 
 export type Bytes = AsyncIterable<Uint8Array>
-
-/**
- * An open enum: unrecognized values pass through as plain strings.
- */
-export const CategorySchema = z.union([z.enum(['book', 'film']), z.string()])
-export type Category = "book" | "film" | (string & {})
 
 export const CircleSchema = z.object({
   radius: z.number().int(),
@@ -55,9 +119,6 @@ export const GetPersonInputSchema = z.object({
   verbose: z.boolean().optional(),
 })
 export type GetPersonInput = z.infer<typeof GetPersonInputSchema>
-
-export const KindSchema = z.enum(['admin', 'user'])
-export type Kind = z.infer<typeof KindSchema>
 
 export const MeasureInputSchema = z.object({
   seed: z.string(),
@@ -114,6 +175,34 @@ export const WatchInputSchema = z.object({
 })
 export type WatchInput = z.infer<typeof WatchInputSchema>
 
+export const DayOfWeekSchema = z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'])
+export type DayOfWeek = z.infer<typeof DayOfWeekSchema>
+
+export const MonthSchema = z.enum(['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'])
+export type Month = z.infer<typeof MonthSchema>
+
+export const GrpcStatusCodeSchema = z.number().int().brand<'GrpcStatusCode'>()
+export type GrpcStatusCode = z.infer<typeof GrpcStatusCodeSchema>
+
+/**
+ * An open enum: unrecognized values pass through as plain strings.
+ */
+export const CategorySchema = z.union([z.enum(['book', 'film']), z.string()])
+export type Category = "book" | "film" | (string & {})
+
+export const KindSchema = z.enum(['admin', 'user'])
+export type Kind = z.infer<typeof KindSchema>
+
+export const ProtobufAnyListSchema = z.array(ProtobufAnySchema)
+export type ProtobufAnyList = z.infer<typeof ProtobufAnyListSchema>
+
+export const ReservedFieldsDefinitionSchema = z.union([
+  z.object({ name: z.string() }),
+  z.object({ number: z.number().int() }),
+  z.object({ range: RangeSchema }),
+])
+export type ReservedFieldsDefinition = z.infer<typeof ReservedFieldsDefinitionSchema>
+
 export const UploadInputSchema = z.object({
   id: z.string(),
 })
@@ -168,6 +257,13 @@ export const PersonSchema = z.object({
   payload: z.unknown().optional(),
 })
 export type Person = z.infer<typeof PersonSchema>
+
+export const GoogleRpcStatusSchema = z.object({
+  code: z.number().int().optional(),
+  message: z.string().optional(),
+  details: ProtobufAnyListSchema.optional(),
+})
+export type GoogleRpcStatus = z.infer<typeof GoogleRpcStatusSchema>
 
 export const FeedEventSchema = z.union([
   z.object({ item: PersonSchema }),

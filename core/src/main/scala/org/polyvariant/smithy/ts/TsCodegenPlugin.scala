@@ -272,8 +272,6 @@ object TsCodegenPlugin {
       id == UnitId
     else if (id.getNamespace.startsWith("smithy4s"))
       false
-    else if (id.getNamespace.startsWith("alloy"))
-      false
     else if (shape.hasTrait(classOf[MixinTrait]))
       false
     else if (shape.hasTrait(classOf[TraitDefinition]))

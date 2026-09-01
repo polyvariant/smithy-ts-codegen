@@ -903,4 +903,50 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(!out.contains("input: Unit"))
   }
 
+  // --------------------------------------------------------------------------
+  // Trait definitions are never emitted
+  // --------------------------------------------------------------------------
+
+  test("a trait definition is not emitted, but a plain shape beside it is") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |@trait(selector: "member")
+         |structure sensitiveHint {
+         |  reason: String
+         |}
+         |
+         |structure Payload {
+         |  @required
+         |  value: String
+         |}
+         |""".stripMargin
+    )
+
+    assert(!clue(out).contains("sensitiveHint"))
+    assert(out.contains("export const PayloadSchema = z.object({"))
+  }
+
+  test("a non-prelude namespace's data shapes are emitted even when it also defines traits") {
+    // `alloy#UUID` is a plain `string` shape living in a namespace that mostly holds protocol
+    // traits. Filtering by namespace rather than by trait-ness would drop it while members still
+    // referenced its schema.
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#UUID
+         |
+         |structure Holder {
+         |  @required
+         |  id: UUID
+         |}
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("export const UUIDSchema"))
+    assert(out.contains("id: UUIDSchema,"))
+  }
+
 }
