@@ -1,3 +1,5 @@
+import com.typesafe.tools.mima.core.*
+
 ThisBuild / tlBaseVersion := "0.3"
 ThisBuild / organization := "org.polyvariant"
 ThisBuild / organizationName := "Polyvariant"
@@ -95,6 +97,15 @@ lazy val core = project
   .settings(
     name := "smithy-ts-codegen",
     commonSettings,
+    // `TsWriter` is a `private final class` inside the `TsCodegenPlugin` object,
+    // so it is unreachable from outside this module. Scala still emits it as a
+    // JVM-public class, so MiMa sees its constructor gaining a SymbolProvider
+    // parameter as a broken signature; there is no caller that could break.
+    mimaBinaryIssueFilters ++= Seq(
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "org.polyvariant.smithy.ts.TsCodegenPlugin#TsWriter.this"
+      )
+    ),
     libraryDependencies ++= Seq(
       "software.amazon.smithy" % "smithy-build" % smithyVersion,
       "software.amazon.smithy" % "smithy-codegen-core" % smithyVersion,

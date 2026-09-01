@@ -33,6 +33,17 @@ class TsCodegenPluginTest extends munit.FunSuite {
   private def generate(smithy: String, exclude: Set[String] = Set.empty): String =
     TsCodegenPlugin.generate(model(smithy), exclude)
 
+  /** Several model files at once — the only way to put two namespaces in one model, since a
+    * `.smithy` file declares exactly one.
+    */
+  private def generateAll(sources: String*): String = {
+    val assembler = Model.assembler().discoverModels(this.getClass.getClassLoader)
+    sources.zipWithIndex.foreach { case (src, i) =>
+      val _ = assembler.addUnparsedModel(s"test-$i.smithy", src)
+    }
+    TsCodegenPlugin.generate(assembler.assemble().unwrap(), Set.empty)
+  }
+
   /** A service streaming a union out, over the ndjson protocol. */
   private val ndjsonModel =
     """|$version: "2"
@@ -947,6 +958,76 @@ class TsCodegenPluginTest extends munit.FunSuite {
 
     assert(clue(out).contains("export const UUIDSchema"))
     assert(out.contains("id: UUIDSchema,"))
+  }
+
+  // --------------------------------------------------------------------------
+  // Cross-namespace name deconfliction
+  // --------------------------------------------------------------------------
+
+  test("a name owned by one shape is emitted bare") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example.a
+         |
+         |string ProfileId
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("export const ProfileIdSchema = z.string().brand<'ProfileId'>()"))
+  }
+
+  test("same name in two namespaces: both are qualified, neither keeps the bare name") {
+    val out = generateAll(
+      """|$version: "2"
+         |namespace com.example.a
+         |
+         |string ProfileId
+         |
+         |structure Holder {
+         |  @required
+         |  mine: ProfileId
+         |
+         |  @required
+         |  theirs: com.example.b#ProfileId
+         |}
+         |""".stripMargin,
+      """|$version: "2"
+         |namespace com.example.b
+         |
+         |string ProfileId
+         |""".stripMargin,
+    )
+
+    assert(clue(out).contains("export const com_example_a_ProfileIdSchema"))
+    assert(out.contains("export const com_example_b_ProfileIdSchema"))
+    // Neither may claim the bare name — that is what makes the scheme stable when a namespace
+    // is added later.
+    assert(!out.contains("export const ProfileIdSchema"))
+    assert(out.contains("mine: com_example_a_ProfileIdSchema,"))
+    assert(out.contains("theirs: com_example_b_ProfileIdSchema,"))
+  }
+
+  test("colliding aliases get distinct brands, so they are not mutually assignable") {
+    val out = generateAll(
+      """|$version: "2"
+         |namespace com.example.a
+         |
+         |string ProfileId
+         |
+         |structure Holder {
+         |  @required
+         |  theirs: com.example.b#ProfileId
+         |}
+         |""".stripMargin,
+      """|$version: "2"
+         |namespace com.example.b
+         |
+         |string ProfileId
+         |""".stripMargin,
+    )
+
+    assert(clue(out).contains("brand<'com_example_a_ProfileId'>()"))
+    assert(out.contains("brand<'com_example_b_ProfileId'>()"))
   }
 
 }
