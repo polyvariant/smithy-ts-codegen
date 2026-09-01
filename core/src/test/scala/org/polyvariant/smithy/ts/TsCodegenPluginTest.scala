@@ -856,4 +856,51 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(e.getMessage.contains("label"), e.getMessage)
   }
 
+  // --------------------------------------------------------------------------
+  // smithy.api#Unit as a member target
+  // --------------------------------------------------------------------------
+
+  test("a union member targeting Unit is an empty object, not a failure") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |union Result {
+         |  found: Item
+         |  notFound: Unit
+         |}
+         |
+         |structure Item {
+         |  @required
+         |  name: String
+         |}
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("export const UnitSchema = z.object({"))
+    assert(out.contains("z.object({ notFound: UnitSchema })"))
+  }
+
+  test("Unit is still 'no body' as an operation input and output") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |
+         |@simpleRestJson
+         |service Pinger {
+         |  operations: [Ping]
+         |}
+         |
+         |@http(method: "POST", uri: "/ping")
+         |operation Ping {}
+         |""".stripMargin
+    )
+
+    // No input parameter, and `void` rather than `Unit` as the result type.
+    assert(clue(out).contains("async ping(opts?: TransportOptions): Promise<void>"))
+    assert(!out.contains("input: Unit"))
+  }
+
 }

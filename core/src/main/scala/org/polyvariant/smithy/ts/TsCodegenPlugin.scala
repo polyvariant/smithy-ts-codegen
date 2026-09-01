@@ -88,6 +88,11 @@ object TsCodegenPlugin {
     */
   private val MapToStringTraitId = ShapeId.from("org.polyvariant.smithy.ts#mapToString")
 
+  /** `smithy.api#Unit`. Special only as an operation input/output, where it means "no body"; as a
+    * member target it is an ordinary empty structure.
+    */
+  private val UnitId = ShapeId.from("smithy.api#Unit")
+
   /** Single-file output, so we never import anything. */
   private final class TsImports extends ImportContainer {
     override def importSymbol(symbol: Symbol, alias: String): Unit = ()
@@ -259,8 +264,12 @@ object TsCodegenPlugin {
 
   private def emittable(shape: Shape): Boolean = {
     val id = shape.getId
+    // Prelude shapes are the primitives, spelled inline by `primitiveSchema` — with the
+    // exception of `Unit`, which is a structure like any other and is emitted as one. It
+    // only means "nothing" as an operation input/output; as a member target it is a real
+    // (empty) value, which is how a valueless union variant is spelled in Smithy.
     if (id.getNamespace == "smithy.api")
-      false
+      id == UnitId
     else if (id.getNamespace.startsWith("smithy4s"))
       false
     else if (id.getNamespace.startsWith("alloy"))
@@ -526,7 +535,7 @@ object TsCodegenPlugin {
 
   private def inlineSchemaExpr(target: Shape): String = {
     val id = target.getId
-    if (id.getNamespace == "smithy.api")
+    if (id.getNamespace == "smithy.api" && id != UnitId)
       primitiveSchema(target)
     else
       s"${id.getName}Schema"
@@ -1017,7 +1026,7 @@ object TsCodegenPlugin {
     val bodyMembers = inputMembers.filterNot { case (n, _) => httpBoundMembers.contains(n) }
 
     val inputTypeName = input.getId.getName
-    val isUnitInput = input.getId.toString == "smithy.api#Unit"
+    val isUnitInput = input.getId == UnitId
 
     val streams = opStreams(model, op)
     val opLabel = jsString(s"${svcName}Client.$methodName")
@@ -1239,7 +1248,7 @@ object TsCodegenPlugin {
     * object against the full output schema.
     */
   private def writeResponseParse(w: TsWriter, model: Model, output: StructureShape): Unit = {
-    if (output.getId.toString == "smithy.api#Unit") {
+    if (output.getId == UnitId) {
       w.line("return undefined")
       return
     }
@@ -1282,7 +1291,7 @@ object TsCodegenPlugin {
   }
 
   private def returnType(output: StructureShape): String =
-    if (output.getId.toString == "smithy.api#Unit")
+    if (output.getId == UnitId)
       "void"
     else
       output.getId.getName
@@ -1558,7 +1567,7 @@ object TsCodegenPlugin {
         val methodName = lowerFirst(opName)
         val input = model.expectShape(op.getInputShape, classOf[StructureShape])
         val output = model.expectShape(op.getOutputShape, classOf[StructureShape])
-        val isUnitInput = input.getId.toString == "smithy.api#Unit"
+        val isUnitInput = input.getId == UnitId
         // A handler mirrors the client method. The generated input/output types
         // already declare streamed members as `AsyncIterable`s, so a story
         // implements such an operation as an async generator with no ceremony.
@@ -1610,7 +1619,7 @@ object TsCodegenPlugin {
     val httpBoundMembers =
       (labelMembers ++ queryMembers ++ headerMembers ++ payloadMembers).map(_._1).toSet
     val bodyMembers = inputMembers.filterNot { case (n, _) => httpBoundMembers.contains(n) }
-    val isUnitInput = input.getId.toString == "smithy.api#Unit"
+    val isUnitInput = input.getId == UnitId
     val inputTypeName = input.getId.getName
 
     val streams = opStreams(model, op)
@@ -1722,7 +1731,7 @@ object TsCodegenPlugin {
     output: StructureShape,
     outputStream: Option[StreamInfo],
   ): Unit = {
-    if (output.getId.toString == "smithy.api#Unit") {
+    if (output.getId == UnitId) {
       w.line("encodeBody: () => ({}),")
       return
     }
