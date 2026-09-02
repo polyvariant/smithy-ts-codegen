@@ -9,6 +9,7 @@ resolvers += Resolver.sonatypeCentralSnapshots
 tsCodegenSmithyDirs := Seq(baseDirectory.value / "src" / "main" / "smithy")
 tsCodegenOutputFile := baseDirectory.value / "target" / "generated.ts"
 tsCodegenExcludeServices := Seq("test#HiddenService")
+tsCodegenPathPrefix := "/internal/v1"
 
 TaskKey[Unit]("checkOutput") := {
   val f = tsCodegenOutputFile.value
@@ -16,6 +17,13 @@ TaskKey[Unit]("checkOutput") := {
   val contents = IO.read(f)
   def require(sub: String): Unit =
     assert(contents.contains(sub), s"expected generated.ts to contain: $sub")
+
+  // pathPrefix reaches the client through the forked CLI, where it is passed
+  // positionally after excludeServices — so this covers that wiring too.
+  require("const url = `/internal/v1/greet/${encodeURIComponent(String(input.name))}`")
+  // ...and the mock router gets it as literal segments, so mocks still match.
+  require("segments: [{ literal: 'internal' }, { literal: 'v1' }, { literal: 'greet' }")
+  assert(!contents.contains("const url = `/greet/"), "the un-prefixed url must not survive")
 
   require("export const PersonSchema = z.object({")
   require("export type Person = z.infer<typeof PersonSchema>")

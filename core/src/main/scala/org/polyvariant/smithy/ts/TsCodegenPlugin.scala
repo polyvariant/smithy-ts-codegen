@@ -75,7 +75,10 @@ class TsCodegenPlugin extends SmithyBuildPlugin {
       .map(_.getElementsAs(classOf[software.amazon.smithy.model.node.StringNode]))
       .map(_.asScala.iterator.map(_.getValue).toSet)
       .getOrElse(Set.empty[String])
-    val rendered = TsCodegenPlugin.generate(ctx.getModel, excludeServices)
+    val pathPrefix = Option(settings.getStringMember("pathPrefix").orElse(null))
+      .map(_.getValue)
+      .getOrElse("")
+    val rendered = TsCodegenPlugin.generate(ctx.getModel, excludeServices, pathPrefix)
     val _ = ctx.getFileManifest.writeFile(Paths.get(outFile), rendered)
   }
 
@@ -251,7 +254,12 @@ object TsCodegenPlugin {
 
   }
 
-  def generate(model: Model, excludeServices: Set[String]): String = {
+  def generate(
+    model: Model,
+    excludeServices: Set[String],
+    pathPrefix: String = "",
+  ): String = {
+    val prefix = normalizePathPrefix(pathPrefix)
     // `model.shapes` iterates a hash map keyed by ShapeId, so its order varies
     // between environments (JVM, classpath, filesystem). Sort by shape id to give
     // the topological sort below a deterministic starting order — otherwise the
@@ -299,12 +307,12 @@ object TsCodegenPlugin {
       w.line("")
       w.line("// --- Service clients ---")
       w.line("")
-      servicesToEmit.foreach(svc => writeClient(w, model, svc))
+      servicesToEmit.foreach(svc => writeClient(w, model, svc, prefix))
       w.line("")
       w.line("// --- Storybook mock server ---")
       w.line("")
       writeMockRuntime(w, servicesToEmit.exists(hasStreamingOperation(w, model, _)))
-      servicesToEmit.foreach(svc => writeMockService(w, model, svc))
+      servicesToEmit.foreach(svc => writeMockService(w, model, svc, prefix))
     }
 
     w.toString
@@ -1048,7 +1056,12 @@ object TsCodegenPlugin {
   // Service clients
   // --------------------------------------------------------------------------
 
-  private def writeClient(w: TsWriter, model: Model, service: ServiceShape): Unit = {
+  private def writeClient(
+    w: TsWriter,
+    model: Model,
+    service: ServiceShape,
+    pathPrefix: String,
+  ): Unit = {
     val svcName = service.getId.getName
     val ops = serviceOperations(model, service)
     // Each half of the transport is taken only when some operation actually
@@ -1080,13 +1093,18 @@ object TsCodegenPlugin {
         if (streaming)
           w.line("this.streamTransport = streamTransport")
       }
-      ops.foreach(op => writeOperation(w, model, op, service))
+      ops.foreach(op => writeOperation(w, model, op, service, pathPrefix))
     }
     w.line("")
   }
 
-  private def writeOperation(w: TsWriter, model: Model, op: OperationShape, service: ServiceShape)
-    : Unit = {
+  private def writeOperation(
+    w: TsWriter,
+    model: Model,
+    op: OperationShape,
+    service: ServiceShape,
+    pathPrefix: String,
+  ): Unit = {
     val svcName = service.getId.getName
     val opName = op.getId.getName
     val methodName = lowerFirst(opName)
@@ -1159,7 +1177,10 @@ object TsCodegenPlugin {
       // urlExpression returns a TS template literal containing `${...}`; route
       // through the $L (literal) formatter so smithy's `$`-parser doesn't try
       // to interpret it.
-      w.line("const url = $L", urlExpression(http.getUri, labelMembers.map(_._1).toSet))
+      w.line(
+        "const url = $L",
+        urlExpression(http.getUri, labelMembers.map(_._1).toSet, pathPrefix),
+      )
 
       if (queryMembers.nonEmpty) {
         w.line("const query: Record<string, string | number | boolean | undefined> = {}")
@@ -1264,9 +1285,24 @@ object TsCodegenPlugin {
     }
   }
 
+  /** Normalizes a configured `pathPrefix` to either `""` or a string with a leading and no trailing
+    * slash, so it composes with an `@http` URI (which always starts with `/`) by plain
+    * concatenation. `"/"` alone normalizes to `""`: it would otherwise double the URI's own slash.
+    */
+  private[ts] def normalizePathPrefix(pathPrefix: String): String = {
+    val trimmed = pathPrefix.trim.stripSuffix("/")
+    if (trimmed.isEmpty)
+      ""
+    else if (trimmed.startsWith("/"))
+      trimmed
+    else
+      "/" + trimmed
+  }
+
   private def urlExpression(
     uri: software.amazon.smithy.model.pattern.UriPattern,
     labelNames: Set[String],
+    pathPrefix: String,
   ): String = {
     val segments = uri.getSegments.asScala
     val rendered =
@@ -1286,10 +1322,10 @@ object TsCodegenPlugin {
         }
         .mkString
     val final_ =
-      if (rendered.isEmpty)
+      if (rendered.isEmpty && pathPrefix.isEmpty)
         "/"
       else
-        rendered
+        pathPrefix + rendered
     "`" + final_ + "`"
   }
 
@@ -1643,7 +1679,12 @@ object TsCodegenPlugin {
     w.line("")
   }
 
-  private def writeMockService(w: TsWriter, model: Model, service: ServiceShape): Unit = {
+  private def writeMockService(
+    w: TsWriter,
+    model: Model,
+    service: ServiceShape,
+    pathPrefix: String,
+  ): Unit = {
     val svcName = service.getId.getName
     val ops = serviceOperations(model, service)
 
@@ -1679,13 +1720,18 @@ object TsCodegenPlugin {
     w.block(s"export const ${svcName}Mock: MockServiceDescriptor<${svcName}Handlers> = {", "}") {
       w.line(s"serviceName: ${jsString(svcName)},")
       w.block("operations: [", "],") {
-        ops.foreach(op => writeMockOperation(w, model, op))
+        ops.foreach(op => writeMockOperation(w, model, op, pathPrefix))
       }
     }
     w.line("")
   }
 
-  private def writeMockOperation(w: TsWriter, model: Model, op: OperationShape): Unit = {
+  private def writeMockOperation(
+    w: TsWriter,
+    model: Model,
+    op: OperationShape,
+    pathPrefix: String,
+  ): Unit = {
     val opName = op.getId.getName
     val methodName = lowerFirst(opName)
     val http = op
@@ -1716,7 +1762,10 @@ object TsCodegenPlugin {
     w.block("{", "},") {
       w.line(s"key: ${jsString(methodName)},")
       w.line(s"method: ${jsString(http.getMethod)},")
-      w.line("segments: $L,", segmentsArrayExpr(http.getUri, labelMembers.map(_._1).toSet))
+      w.line(
+        "segments: $L,",
+        segmentsArrayExpr(http.getUri, labelMembers.map(_._1).toSet, pathPrefix),
+      )
       writeMockDecodeInput(
         w,
         model,
@@ -1916,7 +1965,17 @@ object TsCodegenPlugin {
   private def segmentsArrayExpr(
     uri: software.amazon.smithy.model.pattern.UriPattern,
     labelNames: Set[String],
+    pathPrefix: String,
   ): String = {
+    // The mock router matches path segments one by one, so a prefix has to arrive
+    // as literal segments here rather than as one concatenated string.
+    val prefixSegs =
+      pathPrefix
+        .split('/')
+        .iterator
+        .filter(_.nonEmpty)
+        .map(seg => s"{ literal: ${jsString(seg)} }")
+        .toList
     val segs = uri
       .getSegments
       .asScala
@@ -1931,7 +1990,7 @@ object TsCodegenPlugin {
           s"{ label: ${jsString(name)} }"
         }
       }
-    "[" + segs.mkString(", ") + "]"
+    "[" + (prefixSegs ++ segs).mkString(", ") + "]"
   }
 
   // --------------------------------------------------------------------------

@@ -31,7 +31,7 @@ import scala.jdk.CollectionConverters.*
   * from a build via a forked `java` process so the plugin lives on the JVM's classpath (and is
   * discovered via the smithy-build SPI).
   *
-  * Usage: `Main <smithyDirs> <outFile> [<excludeServices>]`
+  * Usage: `Main <smithyDirs> <outFile> [<excludeServices> [<pathPrefix>]]`
   *
   *   - `smithyDirs` — `File.pathSeparator`-joined list of directories containing `.smithy` sources.
   *     Files matching `*.smithy` or `*.json` are loaded into one model.
@@ -39,7 +39,9 @@ import scala.jdk.CollectionConverters.*
   *     necessary.
   *   - `excludeServices` — optional `,`-joined list of fully-qualified service shape ids
   *     (`namespace#Name`) that the plugin should not emit clients for. Their referenced data shapes
-  *     are still emitted.
+  *     are still emitted. Pass `""` to skip it while still supplying `pathPrefix`.
+  *   - `pathPrefix` — optional path prepended to every operation's `@http` URI, for a service
+  *     mounted under a prefix the model does not describe.
   */
 object Main {
 
@@ -48,21 +50,24 @@ object Main {
       case smithyDirsArg :: outFileArg :: rest =>
         val dirs = smithyDirsArg.split(java.io.File.pathSeparatorChar).toList.map(Paths.get(_))
         val excluded =
-          rest match {
-            case head :: Nil if head.nonEmpty => head.split(',').toList
-            case _                            => Nil
-          }
-        run(dirs, Paths.get(outFileArg), excluded)
+          rest.headOption.filter(_.nonEmpty).map(_.split(',').toList).getOrElse(Nil)
+        val pathPrefix = rest.drop(1).headOption.getOrElse("")
+        run(dirs, Paths.get(outFileArg), excluded, pathPrefix)
       case _ =>
         Console
           .err
           .println(
-            "usage: Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)>]"
+            "usage: Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)> [<pathPrefix>]]"
           )
         sys.exit(2)
     }
 
-  private def run(smithyDirs: List[Path], outFile: Path, excludeServices: List[String]): Unit = {
+  private def run(
+    smithyDirs: List[Path],
+    outFile: Path,
+    excludeServices: List[String],
+    pathPrefix: String,
+  ): Unit = {
     val tmp = Files.createTempDirectory("smithy-ts-codegen")
     try {
       val pluginSettings = Node
@@ -71,6 +76,7 @@ object Main {
           "excludeServices",
           Node.fromStrings(excludeServices.asJava),
         )
+        .withMember("pathPrefix", pathPrefix)
         .build()
       val configNode = Node
         .objectNodeBuilder()

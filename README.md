@@ -39,7 +39,8 @@ Add the artifact to your smithy-build classpath and reference the plugin by name
   "plugins": {
     "ts-codegen": {
       "outFile": "generated.ts",
-      "excludeServices": ["myorg.auth#AuthService"]
+      "excludeServices": ["myorg.auth#AuthService"],
+      "pathPrefix": "/internal/v1"
     }
   }
 }
@@ -51,6 +52,12 @@ Settings:
 - `excludeServices` — fully-qualified service shape ids (`namespace#Name`) to skip. Their
   referenced data shapes are still emitted; only the operations and the client class are
   dropped. Use this for services you hand-roll (streaming, custom routing, …).
+- `pathPrefix` — path prepended to every operation's `@http` URI (default: none). For a service
+  mounted under a prefix that the model itself does not describe — a server framework that
+  derives one from a trait, or a reverse proxy. A leading slash is optional and a trailing one
+  is ignored, so `"internal/v1"`, `"/internal/v1"` and `"/internal/v1/"` are equivalent. The
+  prefix applies to the generated Storybook mocks too, so mocked routes keep matching the
+  client.
 
 ### From sbt (recommended)
 
@@ -68,6 +75,7 @@ enablePlugins(SmithyTsCodegenPlugin)
 tsCodegenSmithyDirs := Seq(baseDirectory.value / "src" / "main" / "smithy")
 tsCodegenOutputFile := baseDirectory.value / "src" / "generated.ts"
 tsCodegenExcludeServices := Seq("myorg.auth#AuthService")
+tsCodegenPathPrefix := "/internal/v1"
 ```
 
 then run `tsCodegen`. The plugin resolves the `smithy-ts-codegen-cli` artifact (at the plugin's
@@ -77,6 +85,7 @@ version affects the codegen. Settings:
 - `tsCodegenSmithyDirs` — dirs scanned for `*.smithy` / `*.json` (default `src/main/smithy`).
 - `tsCodegenOutputFile` — where to write the TypeScript (default `target/generated.ts`).
 - `tsCodegenExcludeServices` — service shape ids to skip (see above).
+- `tsCodegenPathPrefix` — path prepended to every `@http` URI (see above; default none).
 - `tsCodegenVersion` — override the codegen version to resolve (defaults to the plugin's own).
 
 ### Programmatically (`TsCodegenPlugin.generate`)
@@ -88,7 +97,7 @@ import org.polyvariant.smithy.ts.TsCodegenPlugin
 import software.amazon.smithy.model.Model
 
 val model: Model = ???
-val ts: String = TsCodegenPlugin.generate(model, excludeServices = Set.empty)
+val ts: String = TsCodegenPlugin.generate(model, excludeServices = Set.empty, pathPrefix = "")
 ```
 
 ### From any build (forked JVM)
@@ -98,7 +107,7 @@ from `.smithy`/`.json` sources and writes the output file. Run it with the CLI (
 the classpath:
 
 ```
-Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)>]
+Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joined)> [<pathPrefix>]]
 ```
 
 This is what the sbt plugin forks; the smithy-build plugin is discovered via the SPI.

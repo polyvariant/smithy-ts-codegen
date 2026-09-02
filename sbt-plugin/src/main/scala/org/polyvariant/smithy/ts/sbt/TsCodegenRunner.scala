@@ -32,6 +32,7 @@ private[sbt] object TsCodegenRunner {
     classpath: Seq[File],
     outFile: File,
     excludeServices: Seq[String],
+    pathPrefix: String,
     log: Logger,
   ): Unit = {
     val cpString = classpath.map(_.getAbsolutePath).mkString(File.pathSeparator)
@@ -45,7 +46,9 @@ private[sbt] object TsCodegenRunner {
       outFile.getAbsolutePath,
     )
     val cmd =
-      if (excludeServices.nonEmpty)
+      if (pathPrefix.nonEmpty)
+        baseCmd ++ Seq(excludeServices.mkString(","), pathPrefix)
+      else if (excludeServices.nonEmpty)
         baseCmd :+ excludeServices.mkString(",")
       else
         baseCmd

@@ -43,6 +43,7 @@ import scala.collection.JavaConverters._
   * tsCodegenSmithyDirs := Seq(baseDirectory.value / "src" / "main" / "smithy")
   * tsCodegenOutputFile := baseDirectory.value / "generated.ts"
   * tsCodegenExcludeServices := Seq("myorg.auth#AuthService")
+  * tsCodegenPathPrefix := "/internal/v1"
   * }}}
   *
   * then run `tsCodegen`.
@@ -68,6 +69,11 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
         "their referenced data shapes are still emitted"
     )
 
+    val tsCodegenPathPrefix = settingKey[String](
+      "Path prepended to every operation's @http URI, for a service mounted under a prefix " +
+        "the model does not describe (e.g. \"/internal/v1\")"
+    )
+
     val tsCodegenVersion =
       settingKey[String]("Version of the smithy-ts-codegen-cli artifact to resolve and run")
   }
@@ -78,6 +84,7 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
     Seq(
       tsCodegenVersion := BuildInfo.smithyTsCodegenVersion,
       tsCodegenExcludeServices := Seq.empty,
+      tsCodegenPathPrefix := "",
       tsCodegenSmithyDirs := Seq((Compile / sourceDirectory).value / "smithy"),
       tsCodegenOutputFile := (Compile / target).value / "generated.ts",
       tsCodegen := tsCodegenTask.value,
@@ -119,6 +126,7 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
     val smithyDirs = tsCodegenSmithyDirs.value
     val outFile = tsCodegenOutputFile.value
     val excludeServices = tsCodegenExcludeServices.value
+    val pathPrefix = tsCodegenPathPrefix.value
     val version = tsCodegenVersion.value
     val cacheDir = streams.value.cacheDirectory / "smithy-ts-codegen"
 
@@ -129,7 +137,7 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
         .flatMap(d => (d ** ("*.smithy" || "*.json")).get)
         .toSet
     val configInput = cacheDir / "exclude-services.txt"
-    IO.write(configInput, excludeServices.mkString("\n"))
+    IO.write(configInput, (excludeServices :+ s"pathPrefix=$pathPrefix").mkString("\n"))
 
     val cached =
       FileFunction.cached(
@@ -144,6 +152,7 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
           classpath = classpath,
           outFile = outFile,
           excludeServices = excludeServices,
+          pathPrefix = pathPrefix,
           log = log,
         )
         Set(outFile)

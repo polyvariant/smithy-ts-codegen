@@ -30,8 +30,12 @@ class TsCodegenPluginTest extends munit.FunSuite {
       .assemble()
       .unwrap()
 
-  private def generate(smithy: String, exclude: Set[String] = Set.empty): String =
-    TsCodegenPlugin.generate(model(smithy), exclude)
+  private def generate(
+    smithy: String,
+    exclude: Set[String] = Set.empty,
+    pathPrefix: String = "",
+  ): String =
+    TsCodegenPlugin.generate(model(smithy), exclude, pathPrefix)
 
   /** Several model files at once — the only way to put two namespaces in one model, since a
     * `.smithy` file declares exactly one.
@@ -1096,6 +1100,104 @@ class TsCodegenPluginTest extends munit.FunSuite {
 
     assert(clue(out).contains("brand<'com_example_a_ProfileId'>()"))
     assert(out.contains("brand<'com_example_b_ProfileId'>()"))
+  }
+
+  // --- pathPrefix ------------------------------------------------------------
+
+  private val prefixModel =
+    """|$version: "2"
+       |namespace com.example
+       |
+       |service Svc {
+       |  version: "v1"
+       |  operations: [GetThing]
+       |}
+       |
+       |@http(method: "GET", uri: "/things/{id}")
+       |operation GetThing {
+       |  input := {
+       |    @required
+       |    @httpLabel
+       |    id: String
+       |  }
+       |  output := {
+       |    name: String
+       |  }
+       |}
+       |""".stripMargin
+
+  test("no pathPrefix leaves the @http uri untouched") {
+    val out = generate(prefixModel)
+    assert(clue(out).contains("const url = `/things/${encodeURIComponent(String(input.id))}`"))
+  }
+
+  test("pathPrefix is prepended to the @http uri") {
+    val out = generate(prefixModel, pathPrefix = "/internal/v1")
+    assert(
+      clue(out).contains(
+        "const url = `/internal/v1/things/${encodeURIComponent(String(input.id))}`"
+      )
+    )
+  }
+
+  test("pathPrefix reaches the mock router as literal segments, so mocks still match") {
+    val out = generate(prefixModel, pathPrefix = "/internal/v1")
+    assert(
+      clue(out).contains(
+        "segments: [{ literal: 'internal' }, { literal: 'v1' }, { literal: 'things' }, { label: 'id' }],"
+      )
+    )
+  }
+
+  test("a pathPrefix without a leading slash is still prepended as a path") {
+    val out = generate(prefixModel, pathPrefix = "internal/v1")
+    assert(clue(out).contains("const url = `/internal/v1/things/"))
+  }
+
+  test("a trailing slash on pathPrefix does not double the uri's own slash") {
+    val out = generate(prefixModel, pathPrefix = "/internal/v1/")
+    assert(clue(out).contains("const url = `/internal/v1/things/"))
+    assert(!out.contains("v1//things"))
+  }
+
+  test("a bare slash pathPrefix is the same as none") {
+    assertEquals(generate(prefixModel, pathPrefix = "/"), generate(prefixModel))
+  }
+
+  test("whitespace-only pathPrefix is the same as none") {
+    assertEquals(generate(prefixModel, pathPrefix = "  "), generate(prefixModel))
+  }
+
+  test("pathPrefix applies to an operation whose uri is just /") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |service Svc {
+         |  version: "v1"
+         |  operations: [Ping]
+         |}
+         |
+         |@http(method: "GET", uri: "/")
+         |operation Ping {
+         |  output := {
+         |    ok: Boolean
+         |  }
+         |}
+         |""".stripMargin,
+      pathPrefix = "/internal",
+    )
+    assert(clue(out).contains("const url = `/internal`"))
+  }
+
+  test("normalizePathPrefix") {
+    assertEquals(TsCodegenPlugin.normalizePathPrefix(""), "")
+    assertEquals(TsCodegenPlugin.normalizePathPrefix("/"), "")
+    assertEquals(TsCodegenPlugin.normalizePathPrefix("  "), "")
+    assertEquals(TsCodegenPlugin.normalizePathPrefix("/internal"), "/internal")
+    assertEquals(TsCodegenPlugin.normalizePathPrefix("internal"), "/internal")
+    assertEquals(TsCodegenPlugin.normalizePathPrefix("/internal/"), "/internal")
+    assertEquals(TsCodegenPlugin.normalizePathPrefix("internal/v1/"), "/internal/v1")
   }
 
 }
