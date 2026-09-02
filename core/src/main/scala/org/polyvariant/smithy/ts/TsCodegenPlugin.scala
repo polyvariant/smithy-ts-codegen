@@ -83,11 +83,11 @@ class TsCodegenPlugin extends SmithyBuildPlugin {
 
 object TsCodegenPlugin {
 
-  /** `org.polyvariant.smithy.ts#mapToString`, defined as a plain smithy model in the
+  /** `org.polyvariant.smithy.ts#lossless`, defined as a plain smithy model in the
     * `smithy-ts-codegen-traits` artifact. There is no generated Java class for it, so it is looked
     * up by id.
     */
-  private val MapToStringTraitId = ShapeId.from("org.polyvariant.smithy.ts#mapToString")
+  private val LosslessTraitId = ShapeId.from("org.polyvariant.smithy.ts#lossless")
 
   /** `smithy.api#Unit`. Special only as an operation input/output, where it means "no body"; as a
     * member target it is an ordinary empty structure.
@@ -624,19 +624,21 @@ object TsCodegenPlugin {
       s"${w.tsName(target)}Schema"
   }
 
-  /** `@mapToString` (see the `smithy-ts-codegen-traits` model) asks for a numeric member to be
-    * represented as a string, because JS numbers cannot hold every value of the underlying shape
-    * losslessly. It is member-scoped, so it can only be honored where the member is in scope —
-    * hence this overload alongside the shape-only one above.
+  /** `@lossless` (see the `smithy-ts-codegen-traits` model) marks a numeric member whose exact
+    * value must survive, because JS numbers cannot hold every value of the underlying shape. Such a
+    * member is typed `number | string`: a lossless transport hands back a `number` when the value
+    * fits exactly and its decimal string when it does not, so the schema has to admit both. It is
+    * member-scoped, so it can only be honored where the member is in scope — hence this overload
+    * alongside the shape-only one above.
     */
   private def inlineSchemaExpr(w: TsWriter, target: Shape, member: MemberShape): String =
-    if (mapsToString(member))
-      "z.string()"
+    if (isLossless(member))
+      "z.union([z.number(), z.string()])"
     else
       inlineSchemaExpr(w, target)
 
-  private def mapsToString(member: MemberShape): Boolean =
-    member.hasTrait(MapToStringTraitId)
+  private def isLossless(member: MemberShape): Boolean =
+    member.hasTrait(LosslessTraitId)
 
   private def primitiveSchema(shape: Shape): String =
     shape match {
@@ -1186,10 +1188,12 @@ object TsCodegenPlugin {
           case Some(_) => "undefined"
           case None    =>
             payloadMember match {
-              case Some((memberName, _))       => s"input.$memberName"
+              case Some((memberName, member))  => coerceToBodyValue(member, s"input.$memberName")
               case None if bodyMembers.isEmpty => "undefined"
               case None                        =>
-                val pairs = bodyMembers.map { case (n, _) => s"$n: input.$n" }.mkString(", ")
+                val pairs = bodyMembers
+                  .map { case (n, m) => s"$n: ${coerceToBodyValue(m, s"input.$n")}" }
+                  .mkString(", ")
                 s"{ $pairs }"
             }
         }
@@ -1853,7 +1857,8 @@ object TsCodegenPlugin {
     * a blanket `as string | number | boolean` is a type error on those.
     */
   private def coerceToQueryValue(target: Shape, member: MemberShape, expr: String): String =
-    if (mapsToString(member))
+    if (isLossless(member))
+      // Already `number | string`, and a query value admits both.
       expr
     else
       coerceToQueryValue(target, expr)
@@ -1868,12 +1873,30 @@ object TsCodegenPlugin {
       case _                 => s"String($expr)"
     }
 
+  /** TS expression serialising a member into its JSON body value.
+    *
+    * Only `@lossless` members need anything: they are typed `number | string`, and a numeric string
+    * would be written back as a *quoted* string, changing the type the server sees. Converting to a
+    * `bigint` makes the lossless serializer emit a bare numeric literal instead, at the shape's
+    * full range rather than the ~2^53 a `number` could carry. An optional member is guarded, since
+    * `BigInt(undefined)` throws and an absent member has to stay absent.
+    */
+  private def coerceToBodyValue(member: MemberShape, expr: String): String =
+    if (!isLossless(member))
+      expr
+    else if (member.hasTrait(classOf[RequiredTrait]))
+      s"BigInt($expr)"
+    else
+      s"($expr === undefined ? undefined : BigInt($expr))"
+
   /** TS expression that coerces a raw string (from a path label or query param) into the value the
     * input schema expects before branding/parsing. Numbers and booleans are converted; everything
     * else is left as a string.
     */
   private def coerceFromString(target: Shape, member: MemberShape, expr: String): String =
-    if (mapsToString(member))
+    if (isLossless(member))
+      // `Number(...)` is exactly the rounding the trait exists to avoid: keep the raw string and
+      // let the `number | string` schema accept it.
       expr
     else
       coerceFromString(target, expr)

@@ -704,12 +704,12 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(!out.contains("z.record(z.string(), z.unknown())"), out)
   }
 
-  test("@mapToString maps a numeric member to a string, per member and not per shape") {
+  test("@lossless widens a numeric member to number | string, per member and not per shape") {
     val out = generate(
       """|$version: "2"
          |namespace test
          |
-         |use org.polyvariant.smithy.ts#mapToString
+         |use org.polyvariant.smithy.ts#lossless
          |
          |structure Measurement {
          |  sequence: Integer
@@ -721,23 +721,25 @@ class TsCodegenPluginTest extends munit.FunSuite {
          |  total: Long
          |}
          |
-         |apply Measurement$seed @mapToString
+         |apply Measurement$seed @lossless
          |""".stripMargin
     )
 
-    assert(out.contains("seed: z.string().optional()"), out)
-    // Same `Long`, no trait — still a number.
+    // A lossless transport hands back a number when the value fits and its exact
+    // decimal string when it does not, so the schema has to admit both.
+    assert(out.contains("seed: z.union([z.number(), z.string()]).optional()"), out)
+    // Same `Long`, no trait — still a plain number.
     assert(out.contains("total: z.number().int()"), out)
     assert(out.contains("sequence: z.number().int().optional()"), out)
   }
 
-  test("a @mapToString member bound to a header or query is not coerced with Number()") {
+  test("a @lossless member bound to a header or query is not coerced with Number()") {
     val out = generate(
       """|$version: "2"
          |namespace test
          |
          |use alloy#simpleRestJson
-         |use org.polyvariant.smithy.ts#mapToString
+         |use org.polyvariant.smithy.ts#lossless
          |
          |@simpleRestJson
          |service Directory {
@@ -756,14 +758,80 @@ class TsCodegenPluginTest extends munit.FunSuite {
          |  }
          |}
          |
-         |apply MeasureInput$offset @mapToString
-         |apply MeasureOutput$total @mapToString
+         |apply MeasureInput$offset @lossless
+         |apply MeasureOutput$total @lossless
          |""".stripMargin
     )
 
-    // The schema now expects a string, so coercing the header would break parsing.
+    // `Number(...)` is the rounding the trait exists to avoid, and the schema
+    // accepts the raw string anyway.
     assert(out.contains("raw['total'] = res.headers['x-total']"), out)
     assert(!out.contains("Number(res.headers['x-total'])"), out)
+  }
+
+  test("a @lossless body member is sent as a bigint, so it serialises unquoted") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |use org.polyvariant.smithy.ts#lossless
+         |
+         |@simpleRestJson
+         |service Seeder {
+         |  operations: [Sequence]
+         |}
+         |
+         |@http(method: "POST", uri: "/sequence")
+         |operation Sequence {
+         |  input := {
+         |    @required
+         |    seed: Long
+         |
+         |    @required
+         |    count: Integer
+         |  }
+         |}
+         |
+         |apply SequenceInput$seed @lossless
+         |""".stripMargin
+    )
+
+    // A numeric string would be written back as a *quoted* string, changing the
+    // type the server sees; a bigint serialises as a bare literal at full range.
+    // The member is required, so it needs no undefined guard.
+    assert(out.contains("seed: BigInt(input.seed)"), out)
+    // The untagged member is untouched.
+    assert(out.contains("count: input.count"), out)
+  }
+
+  test("an optional @lossless body member stays absent rather than becoming BigInt(undefined)") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |use org.polyvariant.smithy.ts#lossless
+         |
+         |@simpleRestJson
+         |service Seeder {
+         |  operations: [Sequence]
+         |}
+         |
+         |@http(method: "POST", uri: "/sequence")
+         |operation Sequence {
+         |  input := {
+         |    seed: Long
+         |  }
+         |}
+         |
+         |apply SequenceInput$seed @lossless
+         |""".stripMargin
+    )
+
+    // `BigInt(undefined)` throws, so the guard is what keeps an absent optional
+    // member absent instead of failing the request.
+    assert(out.contains("input.seed === undefined ? undefined : BigInt(input.seed)"), out)
   }
 
   test("a @discriminated union dispatches on its discriminator property") {

@@ -262,42 +262,61 @@ one. Keep the union closed where you want the stricter errors.
 Members are flattened into the encoded object, so they have to target structures; a member pointing
 at a string or a list fails codegen with an error naming it.
 
-## Large numbers: `@mapToString`
+## Large numbers: `@lossless`
 
 JavaScript numbers are IEEE-754 doubles, so an integer outside ±(2^53 - 1) cannot be represented
-exactly — reading one into a `number` silently rounds it. A `long`, `bigInteger` or `bigDecimal`
-whose values reach that far therefore has no lossless `number` form on the client.
+exactly. `JSON.parse` rounds such a value on the way in, before any schema can see it, and the
+original is unrecoverable — a `long` or `bigInteger` whose values reach that far therefore has no
+lossless `number` form on the client.
 
-`@mapToString`, from the `smithy-ts-codegen-traits` artifact, maps such a member to
-`z.string()` / `string` instead, leaving the value exactly as it arrived:
+`@lossless`, from the `smithy-ts-codegen-traits` artifact, marks a member whose exact value must
+survive:
 
 ```
 $version: "2"
 
 namespace example
 
-use org.polyvariant.smithy.ts#mapToString
+use org.polyvariant.smithy.ts#lossless
 
 structure Measurement {
     sequence: Integer
     seed: Long
 }
 
-apply Measurement$seed @mapToString
+apply Measurement$seed @lossless
 ```
 
 ```ts
 export const MeasurementSchema = z.object({
   sequence: z.number().int().optional(),
-  seed: z.string().optional(),
+  seed: z.union([z.number(), z.string()]).optional(),
 })
 ```
+
+The type is `number | string` because the representation is decided per value at runtime: anything
+that fits exactly arrives as a `number`, so ordinary values stay ordinary, and only a value that
+would lose precision surfaces as its exact decimal string. On the way out the generated client
+converts the member to a `bigint`, which the serializer writes as a bare numeric literal — so
+`number`, `string` and `bigint` are all accepted, and all reach the wire unquoted.
+
+**This requires a lossless transport.** `@polyvariant/smithy-ts-runtime` is one. A transport built
+on plain `JSON.parse` / `JSON.stringify` cannot honor the trait: `JSON.parse` will have rounded the
+value before the schema runs, and `JSON.stringify` throws on a `bigint`. A hand-rolled transport
+should use the exported `parseLossless` / `stringifyLossless` in place of the built-ins. Nothing in
+the generated code can detect the difference, so this is on you to wire up.
 
 The trait is member-scoped, not shape-scoped: whether a field can exceed the safe range is a
 property of that field, and the same numeric shape is usually reused for values that stay well
 inside it. Applying it to `Measurement$seed` above leaves every other `Long` in the model a
-`number`. It applies in HTTP bindings too — a `@mapToString` member bound to a label, query
-parameter or header is passed through as-is rather than coerced with `Number(...)`.
+`number`. It applies in HTTP bindings too — a `@lossless` member bound to a label, query parameter
+or header is passed through as-is rather than coerced with `Number(...)`, since those are strings on
+the wire and were never lossy.
+
+It is restricted to integral shapes (`byte` through `long`, and `bigInteger`). The exact value
+travels as a `bigint`, which has no fractional form, so `float`, `double` and `bigDecimal` would
+need a different carrier and the selector rejects them rather than promising something it cannot
+deliver.
 
 Depend on the traits artifact to `apply` it:
 

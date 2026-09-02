@@ -121,18 +121,19 @@ export const GetPersonInputSchema = z.object({
 export type GetPersonInput = z.infer<typeof GetPersonInputSchema>
 
 export const MeasureInputSchema = z.object({
-  seed: z.string(),
-  offset: z.string().optional(),
-  revision: z.string().optional(),
+  seed: z.union([z.number(), z.string()]),
+  offset: z.union([z.number(), z.string()]).optional(),
+  revision: z.union([z.number(), z.string()]).optional(),
 })
 export type MeasureInput = z.infer<typeof MeasureInputSchema>
 
 export const MeasurementSchema = z.object({
   /** Stays a `number` — an Integer always fits in a JS number. */
   sequence: z.number().int().optional(),
-  /** Exceeds the JS safe-integer range, so it is carried as a string. */
-  seed: z.string().optional(),
-  precise: z.string().optional(),
+  /** Can exceed the JS safe-integer range, so it is typed `number | string`. */
+  seed: z.union([z.number(), z.string()]).optional(),
+  /** A `bigInteger` is unbounded, so it needs the trait even more than a `long`. */
+  precise: z.union([z.number(), z.string()]).optional(),
   label: z.string(),
 })
 export type Measurement = z.infer<typeof MeasurementSchema>
@@ -163,6 +164,13 @@ export const SearchInputSchema = z.object({
   q: z.string().optional(),
 })
 export type SearchInput = z.infer<typeof SearchInputSchema>
+
+export const SequenceInputSchema = z.object({
+  seed: z.union([z.number(), z.string()]),
+  cursor: z.union([z.number(), z.string()]).optional(),
+  count: z.number().int(),
+})
+export type SequenceInput = z.infer<typeof SequenceInputSchema>
 
 export const UploadOutputSchema = z.object({
   stored: z.number().int(),
@@ -240,9 +248,14 @@ export type Zone = z.infer<typeof ZoneSchema>
 
 export const MeasureOutputSchema = z.object({
   measurement: MeasurementSchema,
-  total: z.string().optional(),
+  total: z.union([z.number(), z.string()]).optional(),
 })
 export type MeasureOutput = z.infer<typeof MeasureOutputSchema>
+
+export const SequenceOutputSchema = z.object({
+  measurement: MeasurementSchema,
+})
+export type SequenceOutput = z.infer<typeof SequenceOutputSchema>
 
 export const PersonSchema = z.object({
   /** The person's name, e.g. the value of `Person$name`. The `$` here is deliberate: doc text is model data, not a format string. */
@@ -585,7 +598,7 @@ export class DirectoryClient {
     throw new UnexpectedResponseError('DirectoryClient.getPerson', res.status, res.body, res.headers)
   }
 
-  /** Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member is carried as a string. */
+  /** Exercises `@lossless` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member admits a string. */
   async measure(input: MeasureInput, opts?: TransportOptions): Promise<MeasureOutput> {
     const url = `/measurements/${encodeURIComponent(String(input.seed))}`
     const query: Record<string, string | number | boolean | undefined> = {}
@@ -673,6 +686,25 @@ export class DirectoryClient {
       throw new NotFoundError(NotFoundSchema.parse(res.body))
     }
     throw new UnexpectedResponseError('DirectoryClient.search', res.status, res.body, res.headers)
+  }
+
+  /** Exercises `@lossless` *in* a JSON body, which is where a numeric string would otherwise be written back quoted — changing the type the server sees. The required member proves the coercion, the optional one proves an absent member stays absent rather than becoming `BigInt(undefined)`. */
+  async sequence(input: SequenceInput, opts?: TransportOptions): Promise<SequenceOutput> {
+    const url = `/sequences`
+    const res = await this.transport.request({
+      operation: 'DirectoryClient.sequence',
+      method: 'POST',
+      url,
+      body: { seed: BigInt(input.seed), cursor: (input.cursor === undefined ? undefined : BigInt(input.cursor)), count: input.count },
+      options: opts,
+    })
+    if (res.status >= 200 && res.status < 300) {
+      return SequenceOutputSchema.parse(res.body)
+    }
+    if (res.status === 404) {
+      throw new NotFoundError(NotFoundSchema.parse(res.body))
+    }
+    throw new UnexpectedResponseError('DirectoryClient.sequence', res.status, res.body, res.headers)
   }
 }
 
@@ -974,12 +1006,14 @@ export const mockServices = (
 
 export interface DirectoryHandlers {
   getPerson(input: GetPersonInput): GetPersonOutput | Promise<GetPersonOutput>
-  /** Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member is carried as a string. */
+  /** Exercises `@lossless` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member admits a string. */
   measure(input: MeasureInput): MeasureOutput | Promise<MeasureOutput>
   /** No input, no output. */
   ping(): void | Promise<void>
   putPerson(input: PutPersonInput): void | Promise<void>
   search(input: SearchInput): SearchOutput | Promise<SearchOutput>
+  /** Exercises `@lossless` *in* a JSON body, which is where a numeric string would otherwise be written back quoted — changing the type the server sees. The required member proves the coercion, the optional one proves an absent member stays absent rather than becoming `BigInt(undefined)`. */
+  sequence(input: SequenceInput): SequenceOutput | Promise<SequenceOutput>
 }
 
 export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
@@ -1042,6 +1076,20 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
           raw['q'] = req.query['q'] as string
         }
         return SearchInputSchema.parse(raw) as SearchInput
+      },
+      encodeBody: (output) => output,
+    },
+    {
+      key: 'sequence',
+      method: 'POST',
+      segments: [{ literal: 'sequences' }],
+      decodeInput: (req) => {
+        const raw: Record<string, unknown> = {}
+        const body = (req.body ?? {}) as Record<string, unknown>
+        raw['seed'] = body['seed']
+        raw['cursor'] = body['cursor']
+        raw['count'] = body['count']
+        return SequenceInputSchema.parse(raw) as SequenceInput
       },
       encodeBody: (output) => output,
     },
