@@ -300,11 +300,70 @@ would lose precision surfaces as its exact decimal string. On the way out the ge
 converts the member to a `bigint`, which the serializer writes as a bare numeric literal — so
 `number`, `string` and `bigint` are all accepted, and all reach the wire unquoted.
 
-**This requires a lossless transport.** `@polyvariant/smithy-ts-runtime` is one. A transport built
-on plain `JSON.parse` / `JSON.stringify` cannot honor the trait: `JSON.parse` will have rounded the
-value before the schema runs, and `JSON.stringify` throws on a `bigint`. A hand-rolled transport
-should use the exported `parseLossless` / `stringifyLossless` in place of the built-ins. Nothing in
-the generated code can detect the difference, so this is on you to wire up.
+**This requires a lossless transport.** `@polyvariant/smithy-ts-runtime` provides one: if you use
+its `fetchTransport`, `@lossless` already works and there is nothing to wire up. The next section is
+only for a transport you write yourself.
+
+### Building a lossless transport
+
+A transport built on plain `JSON.parse` / `JSON.stringify` cannot honor the trait: `JSON.parse` will
+have rounded the value before the schema runs, and `JSON.stringify` throws outright on the `bigint`
+the generated client hands it. Nothing in the generated code can detect which you used, so getting
+this wrong fails *silently* on the read path — the schema validates, the field is a `number`, and it
+is the wrong number.
+
+The runtime exports the two replacements, so this is a substitution rather than a rewrite:
+
+```ts
+import { parseLossless, stringifyLossless } from '@polyvariant/smithy-ts-runtime'
+```
+
+They are drop-in. `parseLossless` returns a `number` for every value that round-trips exactly, so
+ordinary fields are untouched and only a value that would lose precision comes back as its exact
+decimal string — which is why `@lossless` members admit both. `stringifyLossless` writes a `bigint`
+as a bare numeric literal.
+
+Substitute at **every** JSON boundary the transport has. There are more than the obvious two:
+
+| Boundary | Use |
+| --- | --- |
+| Reading a response body | `parseLossless(await res.text())` |
+| Writing a request body | `stringifyLossless(req.body)` |
+| Reading an ndjson response line | `parseLossless(line)`, per line |
+| Writing an ndjson request element | `stringifyLossless(element) + '\n'`, per element |
+
+**Do not use `res.json()`.** It is the natural way to read a body and it cannot be fixed from the
+outside: the rounding happens inside it, before you ever hold the value. Read `text()` and parse it
+yourself.
+
+The last two rows apply only if the transport implements `StreamTransport`. Note that
+`StreamTransportResponse.stream` is specified as *already-parsed* ndjson elements — so parsing them
+losslessly is the transport's job, not something the generated client can do afterwards.
+
+Reading a body has two cases that are not about precision but are easy to get wrong, and the
+generated client depends on both:
+
+```ts
+const readBody = async (res: Response): Promise<unknown> => {
+  const text = await res.text()
+  if (text.length === 0) return undefined // 204, or an operation with no output members
+  try {
+    return parseLossless(text)
+  } catch {
+    return text // a proxy's HTML error page: let the status reach the caller
+  }
+}
+```
+
+An empty body is not valid JSON, and a non-2xx body is not necessarily JSON at all; throwing on
+either turns a useful status code into a parse error.
+
+Nothing else needs special handling — in particular, a `@lossless` member bound to a path, query or
+header parameter is passed through as-is by the generated client, since those are strings on the wire
+and were never lossy.
+
+For a complete reference, `runtime/src/fetch.ts` and `runtime/src/ndjson.ts` in this repository are
+these substitutions over an otherwise ordinary `fetch` transport.
 
 The trait is member-scoped, not shape-scoped: whether a field can exceed the safe range is a
 property of that field, and the same numeric shape is usually reused for values that stay well
