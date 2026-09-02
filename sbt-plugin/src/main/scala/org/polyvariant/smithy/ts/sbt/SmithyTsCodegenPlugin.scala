@@ -46,6 +46,9 @@ import scala.collection.JavaConverters._
   * }}}
   *
   * then run `tsCodegen`.
+  *
+  * `tsCodegenExtensions` puts extra artifacts on the forked classpath, which is how a
+  * `TsCodegenExtension` reaches the codegen — `ServiceLoader` finds it there.
   */
 object SmithyTsCodegenPlugin extends AutoPlugin {
 
@@ -70,6 +73,12 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
 
     val tsCodegenVersion =
       settingKey[String]("Version of the smithy-ts-codegen-cli artifact to resolve and run")
+
+    val tsCodegenExtensions = settingKey[Seq[ModuleID]](
+      "Artifacts to add to the forked codegen's classpath, for TsCodegenExtension " +
+        "implementations discovered via ServiceLoader"
+    )
+
   }
 
   import autoImport._
@@ -78,6 +87,7 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
     Seq(
       tsCodegenVersion := BuildInfo.smithyTsCodegenVersion,
       tsCodegenExcludeServices := Seq.empty,
+      tsCodegenExtensions := Seq.empty,
       tsCodegenSmithyDirs := Seq((Compile / sourceDirectory).value / "smithy"),
       tsCodegenOutputFile := (Compile / target).value / "generated.ts",
       tsCodegen := tsCodegenTask.value,
@@ -85,18 +95,23 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
 
   private val MainClass = "org.polyvariant.smithy.ts.cli.Main"
 
-  /** Resolve the CLI artifact + its transitive deps via coursier. `Dependency.of(org, name,
-    * version)` takes the coordinates verbatim (the artifact already carries its Scala 3 suffix),
-    * and `Fetch` runs its own resolution independent of any enclosing sbt/project state — so
-    * nothing rewrites the Scala library version onto the forked classpath.
+  /** Resolve the CLI artifact + its transitive deps via coursier, plus any extension artifacts.
+    * `Dependency.of(org, name, version)` takes the coordinates verbatim (the artifact already
+    * carries its Scala 3 suffix), and `Fetch` runs its own resolution independent of any enclosing
+    * sbt/project state — so nothing rewrites the Scala library version onto the forked classpath.
+    *
+    * Extensions are resolved in the same `Fetch` as the CLI rather than appended afterwards, so a
+    * dependency they share with the codegen (`smithy-model`, `smithy-ts-codegen-api`) is reconciled
+    * to one version instead of landing on the classpath twice.
     */
-  private def resolveCliClasspath(version: String): Seq[File] = {
-    val dep = Dependency.of(
+  private def resolveCliClasspath(version: String, extensions: Seq[ModuleID]): Seq[File] = {
+    val cli = Dependency.of(
       BuildInfo.smithyTsCodegenOrganization,
       s"smithy-ts-codegen-cli_${BuildInfo.smithyTsCodegenScalaBinaryVersion}",
       version,
     )
-    Fetch
+    val extensionDeps = extensions.map(coursierDependency)
+    val fetch = Fetch
       .create()
       .addRepositories(
         // Snapshot versions live on Central Snapshots; the local Ivy repo backs
@@ -108,10 +123,26 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
             "[revision]/[type]s/[artifact](-[classifier]).[ext]"
         ),
       )
-      .addDependencies(dep)
-      .fetch()
-      .asScala
-      .toVector
+      .addDependencies(cli)
+    extensionDeps.foreach(d => fetch.addDependencies(d))
+    fetch.fetch().asScala.toVector
+  }
+
+  /** An sbt `ModuleID` as a coursier `Dependency`.
+    *
+    * An extension is a plain JVM artifact, so `%` (no suffix) and `%%` (the codegen's own Scala 3
+    * suffix) are both meaningful — but the enclosing project's `scalaVersion` is not, since nothing
+    * here runs on it. So `%%` is resolved against the *codegen's* binary version, which is what an
+    * extension compiled against `smithy-ts-codegen-api` actually carries.
+    */
+  private def coursierDependency(m: ModuleID): Dependency = {
+    val name =
+      m.crossVersion match {
+        case _: librarymanagement.Binary =>
+          s"${m.name}_${BuildInfo.smithyTsCodegenScalaBinaryVersion}"
+        case _ => m.name
+      }
+    Dependency.of(m.organization, name, m.revision)
   }
 
   private val tsCodegenTask: Def.Initialize[Task[File]] = Def.task {
@@ -122,7 +153,9 @@ object SmithyTsCodegenPlugin extends AutoPlugin {
     val version = tsCodegenVersion.value
     val cacheDir = streams.value.cacheDirectory / "smithy-ts-codegen"
 
-    val classpath = resolveCliClasspath(version)
+    // The extension jars land in the same classpath the fork runs with, which is
+    // where ServiceLoader looks for them.
+    val classpath = resolveCliClasspath(version, tsCodegenExtensions.value)
 
     val smithyInputs =
       smithyDirs

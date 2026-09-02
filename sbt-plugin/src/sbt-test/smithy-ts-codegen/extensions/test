@@ -1,0 +1,5 @@
+# Publish the extension so the forked codegen can resolve it, then generate and
+# assert the rewritten path reached both the client and the mocks.
+> ext/publishLocal
+> app/tsCodegen
+> app/checkOutput

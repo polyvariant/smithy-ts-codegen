@@ -77,6 +77,9 @@ version affects the codegen. Settings:
 - `tsCodegenSmithyDirs` — dirs scanned for `*.smithy` / `*.json` (default `src/main/smithy`).
 - `tsCodegenOutputFile` — where to write the TypeScript (default `target/generated.ts`).
 - `tsCodegenExcludeServices` — service shape ids to skip (see above).
+- `tsCodegenExtensions` — artifacts to put on the forked codegen's classpath, for
+  [extension](#extensions) implementations (default none). `%%` resolves against the codegen's
+  Scala version, not your project's.
 - `tsCodegenVersion` — override the codegen version to resolve (defaults to the plugin's own).
 
 ### Programmatically (`TsCodegenPlugin.generate`)
@@ -102,6 +105,66 @@ Main <smithyDirs (path-separator-joined)> <outFile> [<excludeServices (comma-joi
 ```
 
 This is what the sbt plugin forks; the smithy-build plugin is discovered via the SPI.
+
+## Extensions
+
+Some codegen decisions depend on conventions the model does not describe. The most common is a
+service mounted under a path prefix that appears nowhere in the model — a server framework that
+derives one from a trait, or a reverse proxy — after which every generated request misses the
+prefix and 404s.
+
+That prefix cannot be a plain setting: one codegen run can emit several services, and they need
+not share one. And it should not be a trait the generator knows about, because that bakes one
+organization's conventions into it. So it is an interface you implement instead. Depend on
+`smithy-ts-codegen-api` (just `smithy-model`, not the generator):
+
+```scala
+libraryDependencies += "org.polyvariant" %% "smithy-ts-codegen-api" % "<version>"
+```
+
+```scala
+import org.polyvariant.smithy.ts.api.{PathSegment, TsCodegenExtension}
+import software.amazon.smithy.model.shapes.{OperationShape, ServiceShape}
+
+class InternalPrefix extends TsCodegenExtension {
+  override def transformPath(
+    service: ServiceShape,
+    operation: OperationShape,
+    path: List[PathSegment],
+  ): List[PathSegment] =
+    if (service.hasTrait(classOf[ApiInternalTrait]))
+      PathSegment.Literal("internal") :: PathSegment.Literal(service.getVersion) :: path
+    else
+      path
+}
+```
+
+Extensions are discovered with `java.util.ServiceLoader`, so list the implementation in
+`META-INF/services/org.polyvariant.smithy.ts.api.TsCodegenExtension` and put its artifact on the
+codegen's classpath. From sbt that is `tsCodegenExtensions`:
+
+```scala
+tsCodegenExtensions := Seq("myorg" %% "my-extension" % "1.0.0")
+```
+
+which resolves the artifact with coursier and adds it to the forked codegen's classpath. Under
+smithy-build, add it to the same classpath as the plugin itself.
+
+Notes:
+
+- **`transformPath` replaces the whole path**, so an extension can prepend, reorder or drop
+  segments — not only prefix. Returning `Nil` means `/`.
+- **A path is segments, not a string.** The client interpolates a `Label` as
+  `${encodeURIComponent(…)}` while the Storybook mock router matches it as a wildcard, so the two
+  have to stay distinguishable. A `Literal` may not contain `/` — return several segments.
+- **Both consumers resolve through the same call**, so the generated client and the generated
+  mocks cannot drift apart on a route.
+- **A `Label` must name a member bound with `@httpLabel`.** Inventing one fails codegen with an
+  error naming it, rather than emitting a client that references a field that isn't there.
+- **Every method has a no-op default**, so an implementation overrides only what it needs and
+  keeps compiling as methods are added.
+- Several extensions apply in an unspecified order, each seeing the previous one's result. Put
+  competing rules in one extension rather than relying on classpath order.
 
 ## Streaming
 
@@ -454,8 +517,9 @@ rights on the `@polyvariant` scope.
 
 `smithy-build`, `smithy-codegen-core`, `smithy-model`, `alloy-core`, `smithy4s-protocol`,
 `smithy4s-ndjson-protocol` (the trait definition only — nothing Scala-specific from
-smithy4s-ndjson is needed, since the codegen keys off `@streaming` members), and
-`smithy-ts-codegen-traits` (this project's own codegen-controlling traits).
+smithy4s-ndjson is needed, since the codegen keys off `@streaming` members), `smithy-ts-codegen-traits` (this project's own codegen-controlling traits), and
+`smithy-ts-codegen-api` (the extension interface — see [Extensions](#extensions); it depends on
+`smithy-model` alone, so an implementor does not take the generator).
 
 ## License
 

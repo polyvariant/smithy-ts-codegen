@@ -15,6 +15,14 @@ pull_request_rules:
   - status-success=Test (ubuntu-22.04, 3, temurin@11, rootJVM)
   actions:
     merge: {}
+- name: Label api PRs
+  conditions:
+  - files~=^api/
+  actions:
+    label:
+      add:
+      - api
+      remove: []
 - name: Label cli PRs
   conditions:
   - files~=^cli/

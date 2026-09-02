@@ -16,7 +16,11 @@
 
 package org.polyvariant.smithy.ts
 
+import org.polyvariant.smithy.ts.api.PathSegment
+import org.polyvariant.smithy.ts.api.TsCodegenExtension
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 
 import scala.jdk.CollectionConverters.*
 
@@ -30,8 +34,12 @@ class TsCodegenPluginTest extends munit.FunSuite {
       .assemble()
       .unwrap()
 
-  private def generate(smithy: String, exclude: Set[String] = Set.empty): String =
-    TsCodegenPlugin.generate(model(smithy), exclude)
+  private def generate(
+    smithy: String,
+    exclude: Set[String] = Set.empty,
+    extensions: List[TsCodegenExtension] = Nil,
+  ): String =
+    TsCodegenPlugin.generate(model(smithy), exclude, extensions)
 
   /** Several model files at once — the only way to put two namespaces in one model, since a
     * `.smithy` file declares exactly one.
@@ -41,7 +49,7 @@ class TsCodegenPluginTest extends munit.FunSuite {
     sources.zipWithIndex.foreach { case (src, i) =>
       val _ = assembler.addUnparsedModel(s"test-$i.smithy", src)
     }
-    TsCodegenPlugin.generate(assembler.assemble().unwrap(), Set.empty)
+    TsCodegenPlugin.generate(assembler.assemble().unwrap(), Set.empty, Nil)
   }
 
   /** A service streaming a union out, over the ndjson protocol. */
@@ -1096,6 +1104,213 @@ class TsCodegenPluginTest extends munit.FunSuite {
 
     assert(clue(out).contains("brand<'com_example_a_ProfileId'>()"))
     assert(out.contains("brand<'com_example_b_ProfileId'>()"))
+  }
+
+  // --- transformPath ---------------------------------------------------------
+
+  /** An extension built from a plain function, so a test can state just the rewrite. */
+  private def pathExt(
+    f: (ServiceShape, OperationShape, List[PathSegment]) => List[PathSegment]
+  ): List[TsCodegenExtension] =
+    List(
+      new TsCodegenExtension {
+        override def transformPath(
+          service: ServiceShape,
+          operation: OperationShape,
+          path: List[PathSegment],
+        ): List[PathSegment] = f(service, operation, path)
+      }
+    )
+
+  /** Prepends literal segments to every operation, ignoring which service it belongs to. */
+  private def prefixExt(segments: String*): List[TsCodegenExtension] = pathExt((_, _, path) =>
+    segments.map(PathSegment.Literal(_)).toList ++ path
+  )
+
+  private val prefixModel =
+    """|$version: "2"
+       |namespace com.example
+       |
+       |service Svc {
+       |  version: "v1"
+       |  operations: [GetThing]
+       |}
+       |
+       |@http(method: "GET", uri: "/things/{id}")
+       |operation GetThing {
+       |  input := {
+       |    @required
+       |    @httpLabel
+       |    id: String
+       |  }
+       |  output := {
+       |    name: String
+       |  }
+       |}
+       |""".stripMargin
+
+  private val twoServiceModel =
+    """|$version: "2"
+       |namespace com.example
+       |
+       |service Public {
+       |  version: "v1"
+       |  operations: [GetThing]
+       |}
+       |
+       |service Internal {
+       |  version: "v2"
+       |  operations: [GetOther]
+       |}
+       |
+       |@http(method: "GET", uri: "/things/{id}")
+       |operation GetThing {
+       |  input := {
+       |    @required
+       |    @httpLabel
+       |    id: String
+       |  }
+       |  output := {
+       |    name: String
+       |  }
+       |}
+       |
+       |@http(method: "GET", uri: "/others")
+       |operation GetOther {
+       |  output := {
+       |    name: String
+       |  }
+       |}
+       |""".stripMargin
+
+  test("no extensions leave the @http uri untouched") {
+    val out = generate(prefixModel)
+    assert(clue(out).contains("const url = `/things/${encodeURIComponent(String(input.id))}`"))
+  }
+
+  test("an extension can prepend literal segments to the uri") {
+    val out = generate(prefixModel, extensions = prefixExt("internal", "v1"))
+    assert(
+      clue(out).contains(
+        "const url = `/internal/v1/things/${encodeURIComponent(String(input.id))}`"
+      )
+    )
+  }
+
+  test("a rewritten path reaches the mock router as segments, so mocks still match") {
+    val out = generate(prefixModel, extensions = prefixExt("internal", "v1"))
+    assert(
+      clue(out).contains(
+        "segments: [{ literal: 'internal' }, { literal: 'v1' }, { literal: 'things' }, { label: 'id' }],"
+      )
+    )
+  }
+
+  test("an extension sees the service, so two services in one run can differ") {
+    // The reason this is an extension and not a setting: one codegen run emits
+    // both services, and they are mounted differently.
+    val out = generate(
+      twoServiceModel,
+      extensions = pathExt((service, _, path) =>
+        if (service.getId.getName == "Internal")
+          PathSegment.Literal("internal") :: PathSegment.Literal(service.getVersion) :: path
+        else
+          path
+      ),
+    )
+    assert(clue(out).contains("const url = `/things/${encodeURIComponent(String(input.id))}`"))
+    assert(clue(out).contains("const url = `/internal/v2/others`"))
+  }
+
+  test("an extension sees the operation") {
+    val out = generate(
+      prefixModel,
+      extensions = pathExt((_, operation, path) =>
+        PathSegment.Literal(operation.getId.getName) :: path
+      ),
+    )
+    assert(clue(out).contains("const url = `/GetThing/things/"))
+  }
+
+  test("an extension can rewrite an operation whose uri is just /") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |service Svc {
+         |  version: "v1"
+         |  operations: [Ping]
+         |}
+         |
+         |@http(method: "GET", uri: "/")
+         |operation Ping {
+         |  output := {
+         |    ok: Boolean
+         |  }
+         |}
+         |""".stripMargin,
+      extensions = prefixExt("internal"),
+    )
+    assert(clue(out).contains("const url = `/internal`"))
+  }
+
+  test("an extension returning Nil means the root path") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |service Svc {
+         |  version: "v1"
+         |  operations: [Ping]
+         |}
+         |
+         |@http(method: "GET", uri: "/ping")
+         |operation Ping {
+         |  output := {
+         |    ok: Boolean
+         |  }
+         |}
+         |""".stripMargin,
+      extensions = pathExt((_, _, _) => Nil),
+    )
+    assert(clue(out).contains("const url = `/`"))
+    assert(clue(out).contains("segments: [],"))
+  }
+
+  test("an extension can reorder and drop segments") {
+    val out = generate(
+      prefixModel,
+      extensions = pathExt((_, _, path) => path.reverse),
+    )
+    assert(clue(out).contains("const url = `/${encodeURIComponent(String(input.id))}/things`"))
+    assert(clue(out).contains("segments: [{ label: 'id' }, { literal: 'things' }],"))
+  }
+
+  test("extensions compose, each seeing the previous one's result") {
+    val out = generate(
+      prefixModel,
+      extensions = prefixExt("v1") ++ prefixExt("internal"),
+    )
+    assert(clue(out).contains("const url = `/internal/v1/things/"))
+  }
+
+  test("a label an extension invents is rejected, naming it") {
+    val e = intercept[Exception](
+      generate(
+        prefixModel,
+        extensions = pathExt((_, _, path) => PathSegment.Label("nope") :: path),
+      )
+    )
+    assert(clue(e.getMessage).contains("nope"))
+    assert(clue(e.getMessage).contains("@httpLabel"))
+  }
+
+  test("a literal containing a slash is rejected — the mock router would never match it") {
+    val e = intercept[Exception](
+      generate(prefixModel, extensions = prefixExt("internal/v1"))
+    )
+    assert(clue(e.getMessage).contains("internal/v1"))
+    assert(clue(e.getMessage).contains("GetThing"))
   }
 
 }

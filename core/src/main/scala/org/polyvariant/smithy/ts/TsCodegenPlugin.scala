@@ -20,6 +20,8 @@ import alloy.DiscriminatedUnionTrait
 import alloy.JsonUnknownTrait
 import alloy.NullableTrait
 import alloy.OpenEnumTrait
+import org.polyvariant.smithy.ts.api.PathSegment
+import org.polyvariant.smithy.ts.api.TsCodegenExtension
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ImportContainer
@@ -251,7 +253,24 @@ object TsCodegenPlugin {
 
   }
 
-  def generate(model: Model, excludeServices: Set[String]): String = {
+  /** Loads the `TsCodegenExtension` implementations visible on the current classpath via
+    * `ServiceLoader`. This is what [[generate]] uses when not given an explicit list.
+    */
+  def loadExtensions(): List[TsCodegenExtension] =
+    java
+      .util
+      .ServiceLoader
+      .load(classOf[TsCodegenExtension])
+      .iterator
+      .asScala
+      .toList
+
+  def generate(
+    model: Model,
+    excludeServices: Set[String],
+    extensions: List[TsCodegenExtension] = loadExtensions(),
+  ): String = {
+    val paths = new PathResolver(extensions)
     // `model.shapes` iterates a hash map keyed by ShapeId, so its order varies
     // between environments (JVM, classpath, filesystem). Sort by shape id to give
     // the topological sort below a deterministic starting order — otherwise the
@@ -299,12 +318,12 @@ object TsCodegenPlugin {
       w.line("")
       w.line("// --- Service clients ---")
       w.line("")
-      servicesToEmit.foreach(svc => writeClient(w, model, svc))
+      servicesToEmit.foreach(svc => writeClient(w, model, svc, paths))
       w.line("")
       w.line("// --- Storybook mock server ---")
       w.line("")
       writeMockRuntime(w, servicesToEmit.exists(hasStreamingOperation(w, model, _)))
-      servicesToEmit.foreach(svc => writeMockService(w, model, svc))
+      servicesToEmit.foreach(svc => writeMockService(w, model, svc, paths))
     }
 
     w.toString
@@ -1048,7 +1067,12 @@ object TsCodegenPlugin {
   // Service clients
   // --------------------------------------------------------------------------
 
-  private def writeClient(w: TsWriter, model: Model, service: ServiceShape): Unit = {
+  private def writeClient(
+    w: TsWriter,
+    model: Model,
+    service: ServiceShape,
+    paths: PathResolver,
+  ): Unit = {
     val svcName = service.getId.getName
     val ops = serviceOperations(model, service)
     // Each half of the transport is taken only when some operation actually
@@ -1080,13 +1104,18 @@ object TsCodegenPlugin {
         if (streaming)
           w.line("this.streamTransport = streamTransport")
       }
-      ops.foreach(op => writeOperation(w, model, op, service))
+      ops.foreach(op => writeOperation(w, model, op, service, paths))
     }
     w.line("")
   }
 
-  private def writeOperation(w: TsWriter, model: Model, op: OperationShape, service: ServiceShape)
-    : Unit = {
+  private def writeOperation(
+    w: TsWriter,
+    model: Model,
+    op: OperationShape,
+    service: ServiceShape,
+    paths: PathResolver,
+  ): Unit = {
     val svcName = service.getId.getName
     val opName = op.getId.getName
     val methodName = lowerFirst(opName)
@@ -1159,7 +1188,10 @@ object TsCodegenPlugin {
       // urlExpression returns a TS template literal containing `${...}`; route
       // through the $L (literal) formatter so smithy's `$`-parser doesn't try
       // to interpret it.
-      w.line("const url = $L", urlExpression(http.getUri, labelMembers.map(_._1).toSet))
+      w.line(
+        "const url = $L",
+        urlExpression(paths.resolve(service, op, http.getUri, labelMembers.map(_._1).toSet)),
+      )
 
       if (queryMembers.nonEmpty) {
         w.line("const query: Record<string, string | number | boolean | undefined> = {}")
@@ -1264,33 +1296,71 @@ object TsCodegenPlugin {
     }
   }
 
-  private def urlExpression(
-    uri: software.amazon.smithy.model.pattern.UriPattern,
-    labelNames: Set[String],
-  ): String = {
-    val segments = uri.getSegments.asScala
-    val rendered =
-      segments
-        .iterator
+  /** Resolves an operation's final URI path: parses the `@http` URI into [[PathSegment]]s, runs the
+    * extensions over it, and validates what they hand back.
+    *
+    * Both the client and the Storybook mocks resolve through this one place, so an extension cannot
+    * make them disagree about a route.
+    */
+  private[ts] final class PathResolver(extensions: List[TsCodegenExtension]) {
+
+    /** The `@http` URI as segments, before any extension sees it. */
+    private def parse(uri: software.amazon.smithy.model.pattern.UriPattern): List[PathSegment] =
+      uri
+        .getSegments
+        .asScala
+        .toList
         .map { seg =>
           if (seg.isLiteral)
-            "/" + seg.getContent
-          else {
-            val name = seg.getContent
-            if (!labelNames.contains(name))
-              sys.error(
-                s"URI references label {$name} but no input member is bound with @httpLabel"
-              )
-            s"/$${encodeURIComponent(String(input.$name))}"
-          }
+            PathSegment.Literal(seg.getContent)
+          else
+            PathSegment.Label(seg.getContent)
         }
-        .mkString
-    val final_ =
+
+    /** Applies every extension in turn, then checks the result is renderable: each label must be
+      * bound with `@httpLabel`, and a literal must not smuggle in a `/` (which would read as one
+      * segment to the client but never match the mock router's segment-by-segment comparison).
+      */
+    def resolve(
+      service: ServiceShape,
+      operation: OperationShape,
+      uri: software.amazon.smithy.model.pattern.UriPattern,
+      labelNames: Set[String],
+    ): List[PathSegment] = {
+      val out =
+        extensions.foldLeft(parse(uri))((path, ext) => ext.transformPath(service, operation, path))
+      out.foreach {
+        case PathSegment.Label(name) =>
+          if (!labelNames.contains(name))
+            sys.error(
+              s"URI references label {$name} but no input member is bound with @httpLabel"
+            )
+        case PathSegment.Literal(value) =>
+          if (value.contains("/"))
+            sys.error(
+              s"path segment '$value' for ${operation.getId} contains '/': " +
+                "return several Literal segments instead of one with a slash in it"
+            )
+      }
+      out
+    }
+
+  }
+
+  /** The client's URL as a TS template literal, e.g. `` `/things/${encodeURIComponent(...)}` ``. */
+  private def urlExpression(path: List[PathSegment]): String = {
+    val rendered =
+      path.map {
+        case PathSegment.Literal(value) => "/" + value
+        case PathSegment.Label(name)    => s"/$${encodeURIComponent(String(input.$name))}"
+      }.mkString
+    // An empty path — an extension returned Nil, or the URI was just `/` — is the root.
+    val body =
       if (rendered.isEmpty)
         "/"
       else
         rendered
-    "`" + final_ + "`"
+    "`" + body + "`"
   }
 
   /** Member names of `shape` that are bound to a non-body HTTP location (`@httpHeader`,
@@ -1643,7 +1713,12 @@ object TsCodegenPlugin {
     w.line("")
   }
 
-  private def writeMockService(w: TsWriter, model: Model, service: ServiceShape): Unit = {
+  private def writeMockService(
+    w: TsWriter,
+    model: Model,
+    service: ServiceShape,
+    paths: PathResolver,
+  ): Unit = {
     val svcName = service.getId.getName
     val ops = serviceOperations(model, service)
 
@@ -1679,13 +1754,19 @@ object TsCodegenPlugin {
     w.block(s"export const ${svcName}Mock: MockServiceDescriptor<${svcName}Handlers> = {", "}") {
       w.line(s"serviceName: ${jsString(svcName)},")
       w.block("operations: [", "],") {
-        ops.foreach(op => writeMockOperation(w, model, op))
+        ops.foreach(op => writeMockOperation(w, model, op, service, paths))
       }
     }
     w.line("")
   }
 
-  private def writeMockOperation(w: TsWriter, model: Model, op: OperationShape): Unit = {
+  private def writeMockOperation(
+    w: TsWriter,
+    model: Model,
+    op: OperationShape,
+    service: ServiceShape,
+    paths: PathResolver,
+  ): Unit = {
     val opName = op.getId.getName
     val methodName = lowerFirst(opName)
     val http = op
@@ -1716,7 +1797,10 @@ object TsCodegenPlugin {
     w.block("{", "},") {
       w.line(s"key: ${jsString(methodName)},")
       w.line(s"method: ${jsString(http.getMethod)},")
-      w.line("segments: $L,", segmentsArrayExpr(http.getUri, labelMembers.map(_._1).toSet))
+      w.line(
+        "segments: $L,",
+        segmentsArrayExpr(paths.resolve(service, op, http.getUri, labelMembers.map(_._1).toSet)),
+      )
       writeMockDecodeInput(
         w,
         model,
@@ -1913,24 +1997,11 @@ object TsCodegenPlugin {
   /** Renders the operation's URI as a `MockUriSegment[]` array literal: literals become
     * `{ literal: '...' }`, `@httpLabel` captures `{ label: '...' }`.
     */
-  private def segmentsArrayExpr(
-    uri: software.amazon.smithy.model.pattern.UriPattern,
-    labelNames: Set[String],
-  ): String = {
-    val segs = uri
-      .getSegments
-      .asScala
-      .toList
-      .map { seg =>
-        if (seg.isLiteral)
-          s"{ literal: ${jsString(seg.getContent)} }"
-        else {
-          val name = seg.getContent
-          if (!labelNames.contains(name))
-            sys.error(s"URI references label {$name} but no input member is bound with @httpLabel")
-          s"{ label: ${jsString(name)} }"
-        }
-      }
+  private def segmentsArrayExpr(path: List[PathSegment]): String = {
+    val segs = path.map {
+      case PathSegment.Literal(value) => s"{ literal: ${jsString(value)} }"
+      case PathSegment.Label(name)    => s"{ label: ${jsString(name)} }"
+    }
     "[" + segs.mkString(", ") + "]"
   }
 
