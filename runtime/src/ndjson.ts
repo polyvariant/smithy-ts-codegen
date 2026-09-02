@@ -8,14 +8,17 @@ import { NdjsonParseError } from './errors.js'
  * this framing to interoperate with the generated clients.
  */
 
-/** Serialise values as ndjson: one `JSON.stringify` per element, each
- * newline-terminated. The reverse of {@link decodeNdjson}. */
+import { parseLossless, stringifyLossless } from './json.js'
+
+/** Serialise values as ndjson: one element per line, each newline-terminated,
+ * using the same lossless codec as the unary body so a `@lossless` member
+ * survives here too. The reverse of {@link decodeNdjson}. */
 export const encodeNdjson = async function* (
   source: AsyncIterable<unknown>,
 ): AsyncGenerator<Uint8Array, void, undefined> {
   const encoder = new TextEncoder()
   for await (const element of source) {
-    yield encoder.encode(JSON.stringify(element) + '\n')
+    yield encoder.encode(stringifyLossless(element) + '\n')
   }
 }
 
@@ -30,7 +33,7 @@ export const encodeBinary = async function* (
   }
 }
 
-/** Split a byte stream on newlines and `JSON.parse` each non-empty line,
+/** Split a byte stream on newlines and parse each non-empty line losslessly,
  * lazily — one line is decoded per pull, so a long-lived stream never buffers
  * more than the partial line in flight.
  *
@@ -47,7 +50,7 @@ export const decodeNdjson = async function* (
 
   const parse = (line: string): unknown => {
     try {
-      return JSON.parse(line)
+      return parseLossless(line)
     } catch (err) {
       throw new NdjsonParseError(operation, line, err)
     }

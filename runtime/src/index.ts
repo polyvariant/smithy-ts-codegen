@@ -41,6 +41,11 @@ export {
 
 export { NdjsonParseError, StreamRequestError, UnauthenticatedError } from './errors.js'
 
+// Exported so a hand-rolled transport can honor `@lossless` members: plain
+// `JSON.parse` / `JSON.stringify` cannot, and using them silently rounds a
+// value the model declares must survive exactly.
+export { parseLossless, stringifyLossless } from './json.js'
+
 export type {
   FullTransport,
   HttpMethod,
