@@ -164,36 +164,35 @@ lazy val tsCodegenSampleCheck =
 
 ThisBuild / tsCodegenSampleFile := (ThisBuild / baseDirectory).value / "typecheck" / "src" / "generated.ts"
 
-tsCodegenSample := {
+tsCodegenSample := Def.taskDyn {
+  val out = tsCodegenSampleFile.value
+  val log = streams.value.log
+  sampleCodegenRunTo(out).map { _ =>
+    log.info(s"wrote $out")
+  }
+}.value
+
+// Runs the sample codegen, writing to `out`. Parameterised on the output path so
+// the check can generate into a temp file instead of overwriting the committed
+// sample it is supposed to be comparing against.
+def sampleCodegenRunTo(out: File) = Def.taskDyn {
   // `runMain` is an InputTask, so its argument string has to be built outside
   // the task body (sbt's macro can't close over a val bound in here).
-  val _ = sampleCodegenRun.value
-  streams.value.log.info(s"wrote ${tsCodegenSampleFile.value}")
-}
-
-lazy val sampleCodegenRun = taskKey[Unit]("Run the sample codegen")
-
-sampleCodegenRun := Def.taskDyn {
   val model = (ThisBuild / baseDirectory).value / "typecheck" / "model.smithy"
-  val out = tsCodegenSampleFile.value
   (core / Compile / runMain).toTask(
     s" org.polyvariant.smithy.ts.SampleCodegen $model $out"
   )
-}.value
-
-tsCodegenSampleCheck := {
-  val out = tsCodegenSampleFile.value
-  val before =
-    if (out.exists)
-      IO.read(out)
-    else
-      ""
-  val _ = sampleCodegenRun.value
-  val after = IO.read(out)
-  if (before != after)
-    sys.error(
-      s"$out is out of date — run `sbt tsCodegenSample` and commit the result"
-    )
 }
+
+tsCodegenSampleCheck := Def.taskDyn {
+  val out = tsCodegenSampleFile.value
+  val tmp = IO.createTemporaryDirectory / "generated.ts"
+  sampleCodegenRunTo(tmp).map { _ =>
+    if (!out.exists || IO.read(out) != IO.read(tmp))
+      sys.error(
+        s"$out is out of date — run `sbt tsCodegenSample` and commit the result"
+      )
+  }
+}.value
 
 lazy val root = tlCrossRootProject.aggregate(traits, core, cli, sbtPlugin)
