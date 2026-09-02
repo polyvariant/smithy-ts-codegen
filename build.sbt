@@ -85,13 +85,28 @@ lazy val traits = project
     tlMimaPreviousVersions := Set.empty,
   )
 
+// The extension SPI: the interface a third party implements to steer codegen
+// decisions that the model itself does not describe (currently URI paths).
+// Kept separate from [[core]] for the same reason as [[traits]] — an
+// implementor needs only `smithy-model` to inspect shapes, not the generator
+// and its smithy-build/alloy/codegen-core dependencies.
+lazy val api = project
+  .in(file("api"))
+  .settings(
+    name := "smithy-ts-codegen-api",
+    commonSettings,
+    libraryDependencies ++= Seq(
+      "software.amazon.smithy" % "smithy-model" % smithyVersion
+    ),
+  )
+
 // A standalone smithy-build plugin that emits a single `generated.ts` of zod
 // schemas + TypeScript types + typed HTTP clients (and Storybook mock stubs)
 // for a `simpleRestJson` smithy model. JVM-only: it is discovered by
 // smithy-build via the SPI file under `META-INF/services`.
 lazy val core = project
   .in(file("core"))
-  .dependsOn(traits)
+  .dependsOn(traits, api)
   .settings(
     name := "smithy-ts-codegen",
     commonSettings,
@@ -144,9 +159,15 @@ lazy val sbtPlugin = project
     scriptedBufferLog := false,
     // Scripted resolves the CLI artifact at the plugin's version from the local
     // Ivy repo, so publish it and everything it depends on there first — `core`,
-    // and `traits` for the trait definitions `core` resolves the model against.
+    // `traits` for the trait definitions `core` resolves the model against, and
+    // `api` for the extension the `extensions` test compiles against.
     scripted := scripted
-      .dependsOn(cli / publishLocal, core / publishLocal, traits / publishLocal)
+      .dependsOn(
+        cli / publishLocal,
+        core / publishLocal,
+        traits / publishLocal,
+        api / publishLocal,
+      )
       .evaluated,
   )
 
@@ -195,4 +216,4 @@ tsCodegenSampleCheck := Def.taskDyn {
   }
 }.value
 
-lazy val root = tlCrossRootProject.aggregate(traits, core, cli, sbtPlugin)
+lazy val root = tlCrossRootProject.aggregate(traits, api, core, cli, sbtPlugin)
