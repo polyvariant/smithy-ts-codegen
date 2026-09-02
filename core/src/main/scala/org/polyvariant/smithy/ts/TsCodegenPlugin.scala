@@ -24,6 +24,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ImportContainer
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.SymbolWriter
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.*
@@ -82,13 +83,22 @@ class TsCodegenPlugin extends SmithyBuildPlugin {
 
 object TsCodegenPlugin {
 
-  /** `org.polyvariant.smithy.ts#mapToString`, defined as a plain smithy model in the
+  /** `org.polyvariant.smithy.ts#lossless`, defined as a plain smithy model in the
     * `smithy-ts-codegen-traits` artifact. There is no generated Java class for it, so it is looked
     * up by id.
     */
-  private val MapToStringTraitId = ShapeId.from("org.polyvariant.smithy.ts#mapToString")
+  private val LosslessTraitId = ShapeId.from("org.polyvariant.smithy.ts#lossless")
 
-  /** Single-file output, so we never import anything. */
+  /** `smithy.api#Unit`. Special only as an operation input/output, where it means "no body"; as a
+    * member target it is an ordinary empty structure.
+    */
+  private val UnitId = ShapeId.from("smithy.api#Unit")
+
+  /** The output is a single self-contained file, so there is nothing to import: every symbol is
+    * declared in the same scope it is referenced from. The one thing that scope cannot do is hold
+    * two declarations of the same name, and that is handled before a symbol ever gets here — see
+    * [[TsSymbolProvider]].
+    */
   private final class TsImports extends ImportContainer {
     override def importSymbol(symbol: Symbol, alias: String): Unit = ()
   }
@@ -98,8 +108,38 @@ object TsCodegenPlugin {
     * `block(open, close)(body)` wraps `openBlock` so Scala 3 doesn't resolve the underlying Java
     * varargs overload and treat `close` as a format arg.
     */
-  private final class TsWriter extends SymbolWriter[TsWriter, TsImports](new TsImports) {
+  private final class TsWriter(symbols: SymbolProvider)
+    extends SymbolWriter[TsWriter, TsImports](new TsImports) {
+
+    /** The TS name of a shape, unique across the file. Almost every name in the output is a *part*
+      * of an identifier rather than the whole of one — `XSchema`, `XError`, `brand<'X'>` — which is
+      * why this returns a String to interpolate rather than a Symbol to format with `$T`.
+      */
+    def tsName(shape: Shape): String = symbols.toSymbol(shape).getName
+
     putFormatter('S', StringFormatter)
+    // `$T` is registered by SymbolWriter itself, but its default formatter renders a symbol as
+    // either `Symbol.relativize(ns)` or `Symbol.toString`, and both spell a symbol from another
+    // namespace as `namespace#Name` — not a TS identifier. Since a single-file output has exactly
+    // one scope and `TsSymbolProvider` has already made every name unique within it, the correct
+    // rendering here is simply the name. Overridden rather than left alone so that formatting a
+    // Symbol can never silently emit `ns#Name` into the output.
+    putFormatter(
+      'T',
+      new BiFunction[Object, String, String] {
+
+        def apply(value: Object, indent: String): String = {
+          val _ = indent
+          value match {
+            case sym: Symbol =>
+              val _ = addUseImports(sym)
+              sym.getName
+            case other => sys.error(s"$$T expects a Symbol, got: $other")
+          }
+        }
+
+      },
+    )
     trimTrailingSpaces()
     setIndentText("  ")
 
@@ -153,6 +193,54 @@ object TsCodegenPlugin {
 
   }
 
+  /** Names every emitted shape, uniquely, within the single scope of the output file.
+    *
+    * Smithy shape ids are unique but TS declarations are named by the unqualified part, so two
+    * shapes from different namespaces — `com.example.a#ProfileId` and `com.example.b#ProfileId` —
+    * would both want to be `ProfileId`. A model that aggregates many namespaces hits this
+    * immediately, while a single-namespace model never can.
+    *
+    * The scheme: a name owned by exactly one shape is used bare, which is the overwhelmingly common
+    * case; when several shapes want the same name, *every* one of them is qualified with its
+    * namespace. Qualifying all of them rather than picking a winner keeps a name's meaning stable —
+    * if one kept the bare name, adding a new namespace that happens to reuse it would silently
+    * change what the bare name refers to and quietly break downstream code that imported it.
+    *
+    * Namespace dots become underscores, since a TS identifier cannot contain a dot.
+    */
+  private[ts] final class TsSymbolProvider(shapes: List[Shape]) extends SymbolProvider {
+
+    private val namesById: Map[ShapeId, String] = {
+      val byName = shapes.map(_.getId).groupBy(_.getName)
+      byName
+        .iterator
+        .flatMap { case (name, ids) =>
+          if (ids.sizeIs == 1)
+            ids.map(_ -> name)
+          else
+            ids.map(id => id -> s"${id.getNamespace.replace('.', '_')}_$name")
+        }
+        .toMap
+    }
+
+    def toSymbol(shape: Shape): Symbol = {
+      val id = shape.getId
+      val name = namesById.getOrElse(
+        id,
+        sys.error(s"no TS name for $id — it was not among the shapes this provider was built from"),
+      )
+      Symbol
+        .builder()
+        .name(name)
+        // The Smithy namespace, kept for provenance in errors and in `getFullName`. It is
+        // deliberately *not* used to render references: see the `$T` formatter in `TsWriter`.
+        .namespace(id.getNamespace, ".")
+        .putProperty("shapeId", id)
+        .build()
+    }
+
+  }
+
   private object StringFormatter extends BiFunction[Object, String, String] {
 
     def apply(value: Object, indent: String): String = {
@@ -171,7 +259,9 @@ object TsCodegenPlugin {
     val emittables =
       model.shapes.iterator.asScala.filter(emittable).toList.sortBy(_.getId.toString)
     val ordered = topoSort(emittables)
-    val w = new TsWriter
+    // The provider is built from everything that will be emitted, so it can see the whole set of
+    // wanted names at once and decide which of them collide.
+    val w = new TsWriter(new TsSymbolProvider(ordered))
 
     w.line("// Generated by smithy-ts-codegen — do not edit.")
     w.line("")
@@ -204,7 +294,7 @@ object TsCodegenPlugin {
       writeTransport(w)
       // The streaming half of the transport is only emitted when some operation
       // actually streams, so models without streaming are unaffected.
-      if (servicesToEmit.exists(hasStreamingOperation(model, _)))
+      if (servicesToEmit.exists(hasStreamingOperation(w, model, _)))
         writeStreamTransport(w)
       w.line("")
       w.line("// --- Service clients ---")
@@ -213,7 +303,7 @@ object TsCodegenPlugin {
       w.line("")
       w.line("// --- Storybook mock server ---")
       w.line("")
-      writeMockRuntime(w, servicesToEmit.exists(hasStreamingOperation(model, _)))
+      writeMockRuntime(w, servicesToEmit.exists(hasStreamingOperation(w, model, _)))
       servicesToEmit.foreach(svc => writeMockService(w, model, svc))
     }
 
@@ -259,11 +349,13 @@ object TsCodegenPlugin {
 
   private def emittable(shape: Shape): Boolean = {
     val id = shape.getId
+    // Prelude shapes are the primitives, spelled inline by `primitiveSchema` — with the
+    // exception of `Unit`, which is a structure like any other and is emitted as one. It
+    // only means "nothing" as an operation input/output; as a member target it is a real
+    // (empty) value, which is how a valueless union variant is spelled in Smithy.
     if (id.getNamespace == "smithy.api")
-      false
+      id == UnitId
     else if (id.getNamespace.startsWith("smithy4s"))
-      false
-    else if (id.getNamespace.startsWith("alloy"))
       false
     else if (shape.hasTrait(classOf[MixinTrait]))
       false
@@ -312,12 +404,12 @@ object TsCodegenPlugin {
     }
 
   private def writeStructure(w: TsWriter, model: Model, shape: StructureShape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     // A `@streaming` member is the body of a stream, not a value in an object:
     // it has no schema to sit in this one (a streamed blob has no schema at
     // all), and validating it would mean consuming the stream. It is left out
     // here and re-attached, as an `AsyncIterable`, by the client and the mock.
-    val streamed = streamInfo(model, shape).map(_.memberName)
+    val streamed = streamInfo(w, model, shape).map(_.memberName)
     w.block(s"export const ${name}Schema = z.object({", "})") {
       shape.getAllMembers.asScala.toList.filterNot { case (n, _) => streamed.contains(n) }.foreach {
         case (memberName, member) =>
@@ -325,7 +417,7 @@ object TsCodegenPlugin {
             w.lit(s"/** ${t.getValue.replace("\n", " ").trim} */")
           }
           val target = model.expectShape(member.getTarget)
-          val schemaExpr = inlineSchemaExpr(target, member)
+          val schemaExpr = inlineSchemaExpr(w, target, member)
           val required = member.hasTrait(classOf[RequiredTrait])
           val nullable = member.hasTrait(classOf[NullableTrait])
           val finalExpr =
@@ -344,7 +436,7 @@ object TsCodegenPlugin {
     streamed match {
       case None             => w.line(s"export type $name = z.infer<typeof ${name}Schema>")
       case Some(memberName) =>
-        val info = streamInfo(model, shape).get
+        val info = streamInfo(w, model, shape).get
         val streamMember = s"{ $memberName: ${info.streamType} }"
         // `z.infer` of an empty `z.object({})` is `Record<string, never>`, which
         // would make every property of the intersection `never`. When the stream
@@ -377,7 +469,7 @@ object TsCodegenPlugin {
     *     falls back to `z.union` and trial dispatch, catch-all last.
     */
   private def writeUnion(w: TsWriter, model: Model, shape: UnionShape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     val (unknownMembers, knownMembers) =
       shape
         .getAllMembers
@@ -403,11 +495,11 @@ object TsCodegenPlugin {
     knownMembers: List[(String, MemberShape)],
     open: Boolean,
   ): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     w.block(s"export const ${name}Schema = z.union([", "])") {
       knownMembers.foreach { case (memberName, member) =>
         val target = model.expectShape(member.getTarget)
-        val variant = inlineSchemaExpr(target, member)
+        val variant = inlineSchemaExpr(w, target, member)
         w.line(s"z.object({ $memberName: $variant }),")
       }
       if (open)
@@ -436,7 +528,7 @@ object TsCodegenPlugin {
     knownMembers: List[(String, MemberShape)],
     open: Boolean,
   ): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     knownMembers.foreach { case (memberName, member) =>
       val target = model.expectShape(member.getTarget)
       if (!target.isStructureShape)
@@ -457,7 +549,7 @@ object TsCodegenPlugin {
     w.block(s"export const ${name}Schema = $opener", "])") {
       knownMembers.foreach { case (memberName, member) =>
         val target = model.expectShape(member.getTarget)
-        val variant = inlineSchemaExpr(target, member)
+        val variant = inlineSchemaExpr(w, target, member)
         w.line(s"$variant.extend({ ${jsString(field)}: z.literal(${jsString(memberName)}) }),")
       }
       // Last, so trial dispatch reaches the known arms first. Note the consequence: a known
@@ -478,7 +570,7 @@ object TsCodegenPlugin {
     * them — the `& {}` stops TypeScript from eagerly widening the whole union to `string`.
     */
   private def writeEnum(w: TsWriter, shape: EnumShape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     val values = shape.getEnumValues.asScala.values.toList
     val literals = values.map(jsString).mkString(", ")
     if (shape.hasTrait(classOf[OpenEnumTrait])) {
@@ -492,23 +584,23 @@ object TsCodegenPlugin {
   }
 
   private def writeList(w: TsWriter, model: Model, shape: ListShape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     val target = model.expectShape(shape.getMember.getTarget)
-    val elem = inlineSchemaExpr(target)
+    val elem = inlineSchemaExpr(w, target)
     w.line(s"export const ${name}Schema = z.array($elem)")
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
   private def writeMap(w: TsWriter, model: Model, shape: MapShape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     val value = model.expectShape(shape.getValue.getTarget)
-    val valueExpr = inlineSchemaExpr(value)
+    val valueExpr = inlineSchemaExpr(w, value)
     w.line(s"export const ${name}Schema = z.record(z.string(), $valueExpr)")
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
   private def writeAlias(w: TsWriter, shape: Shape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     val base = primitiveSchema(shape)
     val branded = s"$base.brand<'$name'>()"
     w.line(s"export const ${name}Schema = $branded")
@@ -520,31 +612,33 @@ object TsCodegenPlugin {
     * were a value.
     */
   private def writeStreamingBlobAlias(w: TsWriter, shape: Shape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     w.line(s"export type $name = AsyncIterable<Uint8Array>")
   }
 
-  private def inlineSchemaExpr(target: Shape): String = {
+  private def inlineSchemaExpr(w: TsWriter, target: Shape): String = {
     val id = target.getId
-    if (id.getNamespace == "smithy.api")
+    if (id.getNamespace == "smithy.api" && id != UnitId)
       primitiveSchema(target)
     else
-      s"${id.getName}Schema"
+      s"${w.tsName(target)}Schema"
   }
 
-  /** `@mapToString` (see the `smithy-ts-codegen-traits` model) asks for a numeric member to be
-    * represented as a string, because JS numbers cannot hold every value of the underlying shape
-    * losslessly. It is member-scoped, so it can only be honored where the member is in scope —
-    * hence this overload alongside the shape-only one above.
+  /** `@lossless` (see the `smithy-ts-codegen-traits` model) marks a numeric member whose exact
+    * value must survive, because JS numbers cannot hold every value of the underlying shape. Such a
+    * member is typed `number | string`: a lossless transport hands back a `number` when the value
+    * fits exactly and its decimal string when it does not, so the schema has to admit both. It is
+    * member-scoped, so it can only be honored where the member is in scope — hence this overload
+    * alongside the shape-only one above.
     */
-  private def inlineSchemaExpr(target: Shape, member: MemberShape): String =
-    if (mapsToString(member))
-      "z.string()"
+  private def inlineSchemaExpr(w: TsWriter, target: Shape, member: MemberShape): String =
+    if (isLossless(member))
+      "z.union([z.number(), z.string()])"
     else
-      inlineSchemaExpr(target)
+      inlineSchemaExpr(w, target)
 
-  private def mapsToString(member: MemberShape): Boolean =
-    member.hasTrait(MapToStringTraitId)
+  private def isLossless(member: MemberShape): Boolean =
+    member.hasTrait(LosslessTraitId)
 
   private def primitiveSchema(shape: Shape): String =
     shape match {
@@ -627,7 +721,7 @@ object TsCodegenPlugin {
     * checked. A structure with more than one streaming member is rejected: the stream is the body,
     * and there is only one body.
     */
-  private def streamInfo(model: Model, shape: StructureShape): Option[StreamInfo] = {
+  private def streamInfo(w: TsWriter, model: Model, shape: StructureShape): Option[StreamInfo] = {
     val streaming = shape
       .getAllMembers
       .asScala
@@ -645,7 +739,7 @@ object TsCodegenPlugin {
       val framing =
         target match {
           case _: BlobShape  => StreamFraming.Binary
-          case u: UnionShape => StreamFraming.Ndjson(u.getId.getName)
+          case u: UnionShape => StreamFraming.Ndjson(w.tsName(u))
           case other         =>
             sys.error(
               s"@streaming member ${shape.getId}$$$memberName targets ${other.getId} (${other.getType}); only blob and union are supported"
@@ -660,9 +754,9 @@ object TsCodegenPlugin {
     def isStreaming: Boolean = input.isDefined || output.isDefined
   }
 
-  private def opStreams(model: Model, op: OperationShape): OpStreams = OpStreams(
-    input = streamInfo(model, model.expectShape(op.getInputShape, classOf[StructureShape])),
-    output = streamInfo(model, model.expectShape(op.getOutputShape, classOf[StructureShape])),
+  private def opStreams(w: TsWriter, model: Model, op: OperationShape): OpStreams = OpStreams(
+    input = streamInfo(w, model, model.expectShape(op.getInputShape, classOf[StructureShape])),
+    output = streamInfo(w, model, model.expectShape(op.getOutputShape, classOf[StructureShape])),
   )
 
   private def serviceOperations(model: Model, service: ServiceShape): List[OperationShape] =
@@ -673,8 +767,8 @@ object TsCodegenPlugin {
       .map(model.expectShape(_, classOf[OperationShape]))
       .sortBy(_.getId.toString)
 
-  private def hasStreamingOperation(model: Model, service: ServiceShape): Boolean =
-    serviceOperations(model, service).exists(opStreams(model, _).isStreaming)
+  private def hasStreamingOperation(w: TsWriter, model: Model, service: ServiceShape): Boolean =
+    serviceOperations(model, service).exists(opStreams(w, model, _).isStreaming)
 
   /** Emits the expression that adapts a stream of typed elements into the stream of values the
     * transport frames — i.e. the encode half. Binary streams pass through untouched; ndjson streams
@@ -702,7 +796,7 @@ object TsCodegenPlugin {
   // --------------------------------------------------------------------------
 
   private def writeErrorClass(w: TsWriter, shape: StructureShape): Unit = {
-    val name = shape.getId.getName
+    val name = w.tsName(shape)
     val className = name + "Error"
     val hasMessage = shape.getAllMembers.asScala.contains("message")
     val msgExpr =
@@ -963,8 +1057,8 @@ object TsCodegenPlugin {
     // up front (rather than an optional second argument) keeps a streaming call
     // from failing at runtime on a transport that can't serve it, but requiring
     // a half nothing calls would just force callers to invent a stub.
-    val streaming = ops.exists(opStreams(model, _).isStreaming)
-    val unary = ops.exists(!opStreams(model, _).isStreaming)
+    val streaming = ops.exists(opStreams(w, model, _).isStreaming)
+    val unary = ops.exists(!opStreams(w, model, _).isStreaming)
     // A service with no operations at all still takes the unary half: an empty
     // constructor would make the client look like it needs no transport, and a
     // later operation would silently change its signature.
@@ -1016,10 +1110,10 @@ object TsCodegenPlugin {
       (labelMembers ++ queryMembers ++ headerMembers ++ payloadMembers).map(_._1).toSet
     val bodyMembers = inputMembers.filterNot { case (n, _) => httpBoundMembers.contains(n) }
 
-    val inputTypeName = input.getId.getName
-    val isUnitInput = input.getId.toString == "smithy.api#Unit"
+    val inputTypeName = w.tsName(input)
+    val isUnitInput = input.getId == UnitId
 
-    val streams = opStreams(model, op)
+    val streams = opStreams(w, model, op)
     val opLabel = jsString(s"${svcName}Client.$methodName")
 
     w.line("")
@@ -1054,7 +1148,7 @@ object TsCodegenPlugin {
     // The generated input/output types already declare a streamed member as an
     // `AsyncIterable` (see `writeStructure`), so they describe a streaming
     // operation's signature as-is.
-    val resultType = returnType(output)
+    val resultType = returnType(w, output)
     val signature =
       if (isUnitInput)
         s"async $methodName(opts?: TransportOptions): Promise<$resultType> {"
@@ -1094,10 +1188,12 @@ object TsCodegenPlugin {
           case Some(_) => "undefined"
           case None    =>
             payloadMember match {
-              case Some((memberName, _))       => s"input.$memberName"
+              case Some((memberName, member))  => coerceToBodyValue(member, s"input.$memberName")
               case None if bodyMembers.isEmpty => "undefined"
               case None                        =>
-                val pairs = bodyMembers.map { case (n, _) => s"$n: input.$n" }.mkString(", ")
+                val pairs = bodyMembers
+                  .map { case (n, m) => s"$n: ${coerceToBodyValue(m, s"input.$n")}" }
+                  .mkString(", ")
                 s"{ $pairs }"
             }
         }
@@ -1150,12 +1246,12 @@ object TsCodegenPlugin {
       errsByStatus.toList.sortBy(_._1).foreach { case (code, candidates) =>
         w.block(s"if (res.status === $code) {", "}") {
           if (candidates.sizeIs == 1) {
-            val name = candidates.head.getId.getName
+            val name = w.tsName(candidates.head)
             w.line(s"throw new ${name}Error(${name}Schema.parse(res.body))")
           } else {
             w.line("const errorType = res.headers['x-error-type']")
             candidates.foreach { err =>
-              val name = err.getId.getName
+              val name = w.tsName(err)
               w.line(
                 s"if (errorType === ${jsString(name)}) throw new ${name}Error(${name}Schema.parse(res.body))"
               )
@@ -1222,9 +1318,9 @@ object TsCodegenPlugin {
   /** A Zod expression for `shape`'s body: its full schema with any HTTP-bound (non-body) members
     * omitted.
     */
-  private def bodySchemaExpr(shape: StructureShape): String = {
+  private def bodySchemaExpr(w: TsWriter, shape: StructureShape): String = {
     val excluded = httpBodyExcludedMembers(shape)
-    val base = s"${shape.getId.getName}Schema"
+    val base = s"${w.tsName(shape)}Schema"
     if (excluded.isEmpty)
       base
     else {
@@ -1239,7 +1335,7 @@ object TsCodegenPlugin {
     * object against the full output schema.
     */
   private def writeResponseParse(w: TsWriter, model: Model, output: StructureShape): Unit = {
-    if (output.getId.toString == "smithy.api#Unit") {
+    if (output.getId == UnitId) {
       w.line("return undefined")
       return
     }
@@ -1254,8 +1350,8 @@ object TsCodegenPlugin {
       payload match {
         case Some((memberName, m)) =>
           val target = model.expectShape(m.getTarget)
-          s"{ ${memberName}: ${inlineSchemaExpr(target)}.parse(res.body) }"
-        case None => s"${bodySchemaExpr(output)}.parse(res.body)"
+          s"{ ${memberName}: ${inlineSchemaExpr(w, target)}.parse(res.body) }"
+        case None => s"${bodySchemaExpr(w, output)}.parse(res.body)"
       }
 
     if (headerMembers.isEmpty && responseCodeMembers.isEmpty) {
@@ -1278,14 +1374,15 @@ object TsCodegenPlugin {
     responseCodeMembers.foreach { case (memberName, _) =>
       w.line(s"raw[${jsString(memberName)}] = res.status")
     }
-    w.line(s"return ${output.getId.getName}Schema.parse(raw) as ${output.getId.getName}")
+    val outName = w.tsName(output)
+    w.line(s"return ${outName}Schema.parse(raw) as $outName")
   }
 
-  private def returnType(output: StructureShape): String =
-    if (output.getId.toString == "smithy.api#Unit")
+  private def returnType(w: TsWriter, output: StructureShape): String =
+    if (output.getId == UnitId)
       "void"
     else
-      output.getId.getName
+      w.tsName(output)
 
   /** Human-readable framing, for the generated doc comments. */
   private def framingLabel(info: StreamInfo): String =
@@ -1312,7 +1409,7 @@ object TsCodegenPlugin {
     val members = output.getAllMembers.asScala.toList
     val headerMembers = members.filter(_._2.hasTrait(classOf[HttpHeaderTrait]))
     val responseCodeMembers = members.filter(_._2.hasTrait(classOf[HttpResponseCodeTrait]))
-    val outName = output.getId.getName
+    val outName = w.tsName(output)
 
     w.ifBlock("res.stream === undefined") {
       w.line(s"throw new MissingStreamError($opLabel)")
@@ -1324,7 +1421,7 @@ object TsCodegenPlugin {
       val lookup = s"res.headers[${jsString(headerName.toLowerCase)}]"
       w.block(s"if ($lookup !== undefined) {", "}") {
         w.line(
-          s"raw[${jsString(memberName)}] = ${inlineSchemaExpr(target, member)}.parse(${coerceFromString(target, member, lookup)})"
+          s"raw[${jsString(memberName)}] = ${inlineSchemaExpr(w, target, member)}.parse(${coerceFromString(target, member, lookup)})"
         )
       }
     }
@@ -1558,11 +1655,11 @@ object TsCodegenPlugin {
         val methodName = lowerFirst(opName)
         val input = model.expectShape(op.getInputShape, classOf[StructureShape])
         val output = model.expectShape(op.getOutputShape, classOf[StructureShape])
-        val isUnitInput = input.getId.toString == "smithy.api#Unit"
+        val isUnitInput = input.getId == UnitId
         // A handler mirrors the client method. The generated input/output types
         // already declare streamed members as `AsyncIterable`s, so a story
         // implements such an operation as an async generator with no ceremony.
-        val outTy = returnType(output)
+        val outTy = returnType(w, output)
         val ret =
           if (outTy == "void")
             "void | Promise<void>"
@@ -1574,7 +1671,7 @@ object TsCodegenPlugin {
         if (isUnitInput)
           w.line(s"$methodName(): $ret")
         else
-          w.line(s"$methodName(input: ${input.getId.getName}): $ret")
+          w.line(s"$methodName(input: ${w.tsName(input)}): $ret")
       }
     }
     w.line("")
@@ -1610,10 +1707,10 @@ object TsCodegenPlugin {
     val httpBoundMembers =
       (labelMembers ++ queryMembers ++ headerMembers ++ payloadMembers).map(_._1).toSet
     val bodyMembers = inputMembers.filterNot { case (n, _) => httpBoundMembers.contains(n) }
-    val isUnitInput = input.getId.toString == "smithy.api#Unit"
-    val inputTypeName = input.getId.getName
+    val isUnitInput = input.getId == UnitId
+    val inputTypeName = w.tsName(input)
 
-    val streams = opStreams(model, op)
+    val streams = opStreams(w, model, op)
     val opLabel = jsString(s"${op.getId.getName}")
 
     w.block("{", "},") {
@@ -1722,7 +1819,7 @@ object TsCodegenPlugin {
     output: StructureShape,
     outputStream: Option[StreamInfo],
   ): Unit = {
-    if (output.getId.toString == "smithy.api#Unit") {
+    if (output.getId == UnitId) {
       w.line("encodeBody: () => ({}),")
       return
     }
@@ -1760,7 +1857,8 @@ object TsCodegenPlugin {
     * a blanket `as string | number | boolean` is a type error on those.
     */
   private def coerceToQueryValue(target: Shape, member: MemberShape, expr: String): String =
-    if (mapsToString(member))
+    if (isLossless(member))
+      // Already `number | string`, and a query value admits both.
       expr
     else
       coerceToQueryValue(target, expr)
@@ -1775,12 +1873,30 @@ object TsCodegenPlugin {
       case _                 => s"String($expr)"
     }
 
+  /** TS expression serialising a member into its JSON body value.
+    *
+    * Only `@lossless` members need anything: they are typed `number | string`, and a numeric string
+    * would be written back as a *quoted* string, changing the type the server sees. Converting to a
+    * `bigint` makes the lossless serializer emit a bare numeric literal instead, at the shape's
+    * full range rather than the ~2^53 a `number` could carry. An optional member is guarded, since
+    * `BigInt(undefined)` throws and an absent member has to stay absent.
+    */
+  private def coerceToBodyValue(member: MemberShape, expr: String): String =
+    if (!isLossless(member))
+      expr
+    else if (member.hasTrait(classOf[RequiredTrait]))
+      s"BigInt($expr)"
+    else
+      s"($expr === undefined ? undefined : BigInt($expr))"
+
   /** TS expression that coerces a raw string (from a path label or query param) into the value the
     * input schema expects before branding/parsing. Numbers and booleans are converted; everything
     * else is left as a string.
     */
   private def coerceFromString(target: Shape, member: MemberShape, expr: String): String =
-    if (mapsToString(member))
+    if (isLossless(member))
+      // `Number(...)` is exactly the rounding the trait exists to avoid: keep the raw string and
+      // let the `number | string` schema accept it.
       expr
     else
       coerceFromString(target, expr)

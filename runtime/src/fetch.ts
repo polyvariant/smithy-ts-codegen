@@ -1,4 +1,5 @@
 import { StreamRequestError, UnauthenticatedError } from './errors.js'
+import { parseLossless, stringifyLossless } from './json.js'
 import {
   asyncIterableToReadable,
   collectBytes,
@@ -86,7 +87,7 @@ const readBody = async (res: Response): Promise<unknown> => {
   const text = await res.text()
   if (text.length === 0) return undefined
   try {
-    return JSON.parse(text)
+    return parseLossless(text)
   } catch {
     return text
   }
@@ -146,7 +147,7 @@ export const fetchTransport = (options: FetchTransportOptions = {}): FullTranspo
       // Spread rather than assign `undefined`: with
       // `exactOptionalPropertyTypes`, `body: undefined` is not a valid
       // `RequestInit` (and a GET must have no body at all).
-      ...(req.body !== undefined ? { body: JSON.stringify(req.body) } : {}),
+      ...(req.body !== undefined ? { body: stringifyLossless(req.body) } : {}),
     })
 
     checkUnauthenticated(res, req.operation, unauthenticated)
@@ -237,7 +238,7 @@ const streamBody = async (
 ): Promise<{ body: BodyInit | undefined; duplex: boolean }> => {
   if (req.requestStreamEncoding === undefined || req.stream === undefined) {
     return {
-      body: req.body !== undefined ? JSON.stringify(req.body) : undefined,
+      body: req.body !== undefined ? stringifyLossless(req.body) : undefined,
       duplex: false,
     }
   }

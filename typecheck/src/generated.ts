@@ -4,18 +4,82 @@ import { z } from 'zod'
 
 // --- Data types ---
 
+export const DataExampleSchema = z.union([
+  z.object({ smithy: z.unknown() }),
+  z.object({ json: z.unknown() }),
+  z.object({ string: z.string() }),
+])
+export type DataExample = z.infer<typeof DataExampleSchema>
+
+export const UnitSchema = z.object({
+})
+export type Unit = z.infer<typeof UnitSchema>
+
+export const DurationSchema = z.number().brand<'Duration'>()
+export type Duration = z.infer<typeof DurationSchema>
+
+export const LocalDateSchema = z.string().brand<'LocalDate'>()
+export type LocalDate = z.infer<typeof LocalDateSchema>
+
+export const LocalDateTimeSchema = z.string().brand<'LocalDateTime'>()
+export type LocalDateTime = z.infer<typeof LocalDateTimeSchema>
+
+export const LocalTimeSchema = z.string().brand<'LocalTime'>()
+export type LocalTime = z.infer<typeof LocalTimeSchema>
+
+export const MonthDaySchema = z.string().brand<'MonthDay'>()
+export type MonthDay = z.infer<typeof MonthDaySchema>
+
+export const OffsetDateTimeSchema = z.coerce.date().brand<'OffsetDateTime'>()
+export type OffsetDateTime = z.infer<typeof OffsetDateTimeSchema>
+
+export const OffsetTimeSchema = z.string().brand<'OffsetTime'>()
+export type OffsetTime = z.infer<typeof OffsetTimeSchema>
+
+export const UUIDSchema = z.string().brand<'UUID'>()
+export type UUID = z.infer<typeof UUIDSchema>
+
+export const UncheckedExampleSchema = z.object({
+  title: z.string(),
+  documentation: z.string().optional(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
+})
+export type UncheckedExample = z.infer<typeof UncheckedExampleSchema>
+
+export const YearSchema = z.number().int().brand<'Year'>()
+export type Year = z.infer<typeof YearSchema>
+
+export const YearMonthSchema = z.string().brand<'YearMonth'>()
+export type YearMonth = z.infer<typeof YearMonthSchema>
+
+export const ZoneIdSchema = z.string().brand<'ZoneId'>()
+export type ZoneId = z.infer<typeof ZoneIdSchema>
+
+export const ZoneOffsetSchema = z.string().brand<'ZoneOffset'>()
+export type ZoneOffset = z.infer<typeof ZoneOffsetSchema>
+
+export const ZonedDateTimeSchema = z.string().brand<'ZonedDateTime'>()
+export type ZonedDateTime = z.infer<typeof ZonedDateTimeSchema>
+
+export const ProtobufAnySchema = z.object({
+  typeUrl: z.string().optional(),
+  value: z.string().optional(),
+})
+export type ProtobufAny = z.infer<typeof ProtobufAnySchema>
+
+export const RangeSchema = z.object({
+  start: z.number().int(),
+  end: z.number().int(),
+})
+export type Range = z.infer<typeof RangeSchema>
+
 export const AlreadyExistsSchema = z.object({
   message: z.string(),
 })
 export type AlreadyExists = z.infer<typeof AlreadyExistsSchema>
 
 export type Bytes = AsyncIterable<Uint8Array>
-
-/**
- * An open enum: unrecognized values pass through as plain strings.
- */
-export const CategorySchema = z.union([z.enum(['book', 'film']), z.string()])
-export type Category = "book" | "film" | (string & {})
 
 export const CircleSchema = z.object({
   radius: z.number().int(),
@@ -56,22 +120,20 @@ export const GetPersonInputSchema = z.object({
 })
 export type GetPersonInput = z.infer<typeof GetPersonInputSchema>
 
-export const KindSchema = z.enum(['admin', 'user'])
-export type Kind = z.infer<typeof KindSchema>
-
 export const MeasureInputSchema = z.object({
-  seed: z.string(),
-  offset: z.string().optional(),
-  revision: z.string().optional(),
+  seed: z.union([z.number(), z.string()]),
+  offset: z.union([z.number(), z.string()]).optional(),
+  revision: z.union([z.number(), z.string()]).optional(),
 })
 export type MeasureInput = z.infer<typeof MeasureInputSchema>
 
 export const MeasurementSchema = z.object({
   /** Stays a `number` — an Integer always fits in a JS number. */
   sequence: z.number().int().optional(),
-  /** Exceeds the JS safe-integer range, so it is carried as a string. */
-  seed: z.string().optional(),
-  precise: z.string().optional(),
+  /** Can exceed the JS safe-integer range, so it is typed `number | string`. */
+  seed: z.union([z.number(), z.string()]).optional(),
+  /** A `bigInteger` is unbounded, so it needs the trait even more than a `long`. */
+  precise: z.union([z.number(), z.string()]).optional(),
   label: z.string(),
 })
 export type Measurement = z.infer<typeof MeasurementSchema>
@@ -103,6 +165,13 @@ export const SearchInputSchema = z.object({
 })
 export type SearchInput = z.infer<typeof SearchInputSchema>
 
+export const SequenceInputSchema = z.object({
+  seed: z.union([z.number(), z.string()]),
+  cursor: z.union([z.number(), z.string()]).optional(),
+  count: z.number().int(),
+})
+export type SequenceInput = z.infer<typeof SequenceInputSchema>
+
 export const UploadOutputSchema = z.object({
   stored: z.number().int(),
 })
@@ -113,6 +182,34 @@ export const WatchInputSchema = z.object({
   since: z.coerce.date().optional(),
 })
 export type WatchInput = z.infer<typeof WatchInputSchema>
+
+export const DayOfWeekSchema = z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'])
+export type DayOfWeek = z.infer<typeof DayOfWeekSchema>
+
+export const MonthSchema = z.enum(['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'])
+export type Month = z.infer<typeof MonthSchema>
+
+export const GrpcStatusCodeSchema = z.number().int().brand<'GrpcStatusCode'>()
+export type GrpcStatusCode = z.infer<typeof GrpcStatusCodeSchema>
+
+/**
+ * An open enum: unrecognized values pass through as plain strings.
+ */
+export const CategorySchema = z.union([z.enum(['book', 'film']), z.string()])
+export type Category = "book" | "film" | (string & {})
+
+export const KindSchema = z.enum(['admin', 'user'])
+export type Kind = z.infer<typeof KindSchema>
+
+export const ProtobufAnyListSchema = z.array(ProtobufAnySchema)
+export type ProtobufAnyList = z.infer<typeof ProtobufAnyListSchema>
+
+export const ReservedFieldsDefinitionSchema = z.union([
+  z.object({ name: z.string() }),
+  z.object({ number: z.number().int() }),
+  z.object({ range: RangeSchema }),
+])
+export type ReservedFieldsDefinition = z.infer<typeof ReservedFieldsDefinitionSchema>
 
 export const UploadInputSchema = z.object({
   id: z.string(),
@@ -151,9 +248,14 @@ export type Zone = z.infer<typeof ZoneSchema>
 
 export const MeasureOutputSchema = z.object({
   measurement: MeasurementSchema,
-  total: z.string().optional(),
+  total: z.union([z.number(), z.string()]).optional(),
 })
 export type MeasureOutput = z.infer<typeof MeasureOutputSchema>
+
+export const SequenceOutputSchema = z.object({
+  measurement: MeasurementSchema,
+})
+export type SequenceOutput = z.infer<typeof SequenceOutputSchema>
 
 export const PersonSchema = z.object({
   /** The person's name, e.g. the value of `Person$name`. The `$` here is deliberate: doc text is model data, not a format string. */
@@ -168,6 +270,13 @@ export const PersonSchema = z.object({
   payload: z.unknown().optional(),
 })
 export type Person = z.infer<typeof PersonSchema>
+
+export const GoogleRpcStatusSchema = z.object({
+  code: z.number().int().optional(),
+  message: z.string().optional(),
+  details: ProtobufAnyListSchema.optional(),
+})
+export type GoogleRpcStatus = z.infer<typeof GoogleRpcStatusSchema>
 
 export const FeedEventSchema = z.union([
   z.object({ item: PersonSchema }),
@@ -489,7 +598,7 @@ export class DirectoryClient {
     throw new UnexpectedResponseError('DirectoryClient.getPerson', res.status, res.body, res.headers)
   }
 
-  /** Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member is carried as a string. */
+  /** Exercises `@lossless` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member admits a string. */
   async measure(input: MeasureInput, opts?: TransportOptions): Promise<MeasureOutput> {
     const url = `/measurements/${encodeURIComponent(String(input.seed))}`
     const query: Record<string, string | number | boolean | undefined> = {}
@@ -577,6 +686,25 @@ export class DirectoryClient {
       throw new NotFoundError(NotFoundSchema.parse(res.body))
     }
     throw new UnexpectedResponseError('DirectoryClient.search', res.status, res.body, res.headers)
+  }
+
+  /** Exercises `@lossless` *in* a JSON body, which is where a numeric string would otherwise be written back quoted — changing the type the server sees. The required member proves the coercion, the optional one proves an absent member stays absent rather than becoming `BigInt(undefined)`. */
+  async sequence(input: SequenceInput, opts?: TransportOptions): Promise<SequenceOutput> {
+    const url = `/sequences`
+    const res = await this.transport.request({
+      operation: 'DirectoryClient.sequence',
+      method: 'POST',
+      url,
+      body: { seed: BigInt(input.seed), cursor: (input.cursor === undefined ? undefined : BigInt(input.cursor)), count: input.count },
+      options: opts,
+    })
+    if (res.status >= 200 && res.status < 300) {
+      return SequenceOutputSchema.parse(res.body)
+    }
+    if (res.status === 404) {
+      throw new NotFoundError(NotFoundSchema.parse(res.body))
+    }
+    throw new UnexpectedResponseError('DirectoryClient.sequence', res.status, res.body, res.headers)
   }
 }
 
@@ -878,12 +1006,14 @@ export const mockServices = (
 
 export interface DirectoryHandlers {
   getPerson(input: GetPersonInput): GetPersonOutput | Promise<GetPersonOutput>
-  /** Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member is carried as a string. */
+  /** Exercises `@lossless` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member admits a string. */
   measure(input: MeasureInput): MeasureOutput | Promise<MeasureOutput>
   /** No input, no output. */
   ping(): void | Promise<void>
   putPerson(input: PutPersonInput): void | Promise<void>
   search(input: SearchInput): SearchOutput | Promise<SearchOutput>
+  /** Exercises `@lossless` *in* a JSON body, which is where a numeric string would otherwise be written back quoted — changing the type the server sees. The required member proves the coercion, the optional one proves an absent member stays absent rather than becoming `BigInt(undefined)`. */
+  sequence(input: SequenceInput): SequenceOutput | Promise<SequenceOutput>
 }
 
 export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
@@ -946,6 +1076,20 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
           raw['q'] = req.query['q'] as string
         }
         return SearchInputSchema.parse(raw) as SearchInput
+      },
+      encodeBody: (output) => output,
+    },
+    {
+      key: 'sequence',
+      method: 'POST',
+      segments: [{ literal: 'sequences' }],
+      decodeInput: (req) => {
+        const raw: Record<string, unknown> = {}
+        const body = (req.body ?? {}) as Record<string, unknown>
+        raw['seed'] = body['seed']
+        raw['cursor'] = body['cursor']
+        raw['count'] = body['count']
+        return SequenceInputSchema.parse(raw) as SequenceInput
       },
       encodeBody: (output) => output,
     },

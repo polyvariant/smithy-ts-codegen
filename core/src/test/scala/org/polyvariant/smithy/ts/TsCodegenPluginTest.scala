@@ -33,6 +33,17 @@ class TsCodegenPluginTest extends munit.FunSuite {
   private def generate(smithy: String, exclude: Set[String] = Set.empty): String =
     TsCodegenPlugin.generate(model(smithy), exclude)
 
+  /** Several model files at once — the only way to put two namespaces in one model, since a
+    * `.smithy` file declares exactly one.
+    */
+  private def generateAll(sources: String*): String = {
+    val assembler = Model.assembler().discoverModels(this.getClass.getClassLoader)
+    sources.zipWithIndex.foreach { case (src, i) =>
+      val _ = assembler.addUnparsedModel(s"test-$i.smithy", src)
+    }
+    TsCodegenPlugin.generate(assembler.assemble().unwrap(), Set.empty)
+  }
+
   /** A service streaming a union out, over the ndjson protocol. */
   private val ndjsonModel =
     """|$version: "2"
@@ -693,12 +704,12 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(!out.contains("z.record(z.string(), z.unknown())"), out)
   }
 
-  test("@mapToString maps a numeric member to a string, per member and not per shape") {
+  test("@lossless widens a numeric member to number | string, per member and not per shape") {
     val out = generate(
       """|$version: "2"
          |namespace test
          |
-         |use org.polyvariant.smithy.ts#mapToString
+         |use org.polyvariant.smithy.ts#lossless
          |
          |structure Measurement {
          |  sequence: Integer
@@ -710,23 +721,25 @@ class TsCodegenPluginTest extends munit.FunSuite {
          |  total: Long
          |}
          |
-         |apply Measurement$seed @mapToString
+         |apply Measurement$seed @lossless
          |""".stripMargin
     )
 
-    assert(out.contains("seed: z.string().optional()"), out)
-    // Same `Long`, no trait — still a number.
+    // A lossless transport hands back a number when the value fits and its exact
+    // decimal string when it does not, so the schema has to admit both.
+    assert(out.contains("seed: z.union([z.number(), z.string()]).optional()"), out)
+    // Same `Long`, no trait — still a plain number.
     assert(out.contains("total: z.number().int()"), out)
     assert(out.contains("sequence: z.number().int().optional()"), out)
   }
 
-  test("a @mapToString member bound to a header or query is not coerced with Number()") {
+  test("a @lossless member bound to a header or query is not coerced with Number()") {
     val out = generate(
       """|$version: "2"
          |namespace test
          |
          |use alloy#simpleRestJson
-         |use org.polyvariant.smithy.ts#mapToString
+         |use org.polyvariant.smithy.ts#lossless
          |
          |@simpleRestJson
          |service Directory {
@@ -745,14 +758,80 @@ class TsCodegenPluginTest extends munit.FunSuite {
          |  }
          |}
          |
-         |apply MeasureInput$offset @mapToString
-         |apply MeasureOutput$total @mapToString
+         |apply MeasureInput$offset @lossless
+         |apply MeasureOutput$total @lossless
          |""".stripMargin
     )
 
-    // The schema now expects a string, so coercing the header would break parsing.
+    // `Number(...)` is the rounding the trait exists to avoid, and the schema
+    // accepts the raw string anyway.
     assert(out.contains("raw['total'] = res.headers['x-total']"), out)
     assert(!out.contains("Number(res.headers['x-total'])"), out)
+  }
+
+  test("a @lossless body member is sent as a bigint, so it serialises unquoted") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |use org.polyvariant.smithy.ts#lossless
+         |
+         |@simpleRestJson
+         |service Seeder {
+         |  operations: [Sequence]
+         |}
+         |
+         |@http(method: "POST", uri: "/sequence")
+         |operation Sequence {
+         |  input := {
+         |    @required
+         |    seed: Long
+         |
+         |    @required
+         |    count: Integer
+         |  }
+         |}
+         |
+         |apply SequenceInput$seed @lossless
+         |""".stripMargin
+    )
+
+    // A numeric string would be written back as a *quoted* string, changing the
+    // type the server sees; a bigint serialises as a bare literal at full range.
+    // The member is required, so it needs no undefined guard.
+    assert(out.contains("seed: BigInt(input.seed)"), out)
+    // The untagged member is untouched.
+    assert(out.contains("count: input.count"), out)
+  }
+
+  test("an optional @lossless body member stays absent rather than becoming BigInt(undefined)") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |use org.polyvariant.smithy.ts#lossless
+         |
+         |@simpleRestJson
+         |service Seeder {
+         |  operations: [Sequence]
+         |}
+         |
+         |@http(method: "POST", uri: "/sequence")
+         |operation Sequence {
+         |  input := {
+         |    seed: Long
+         |  }
+         |}
+         |
+         |apply SequenceInput$seed @lossless
+         |""".stripMargin
+    )
+
+    // `BigInt(undefined)` throws, so the guard is what keeps an absent optional
+    // member absent instead of failing the request.
+    assert(out.contains("input.seed === undefined ? undefined : BigInt(input.seed)"), out)
   }
 
   test("a @discriminated union dispatches on its discriminator property") {
@@ -854,6 +933,169 @@ class TsCodegenPluginTest extends munit.FunSuite {
 
     assert(e.getMessage.contains("test#Region"), e.getMessage)
     assert(e.getMessage.contains("label"), e.getMessage)
+  }
+
+  // --------------------------------------------------------------------------
+  // smithy.api#Unit as a member target
+  // --------------------------------------------------------------------------
+
+  test("a union member targeting Unit is an empty object, not a failure") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |union Result {
+         |  found: Item
+         |  notFound: Unit
+         |}
+         |
+         |structure Item {
+         |  @required
+         |  name: String
+         |}
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("export const UnitSchema = z.object({"))
+    assert(out.contains("z.object({ notFound: UnitSchema })"))
+  }
+
+  test("Unit is still 'no body' as an operation input and output") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#simpleRestJson
+         |
+         |@simpleRestJson
+         |service Pinger {
+         |  operations: [Ping]
+         |}
+         |
+         |@http(method: "POST", uri: "/ping")
+         |operation Ping {}
+         |""".stripMargin
+    )
+
+    // No input parameter, and `void` rather than `Unit` as the result type.
+    assert(clue(out).contains("async ping(opts?: TransportOptions): Promise<void>"))
+    assert(!out.contains("input: Unit"))
+  }
+
+  // --------------------------------------------------------------------------
+  // Trait definitions are never emitted
+  // --------------------------------------------------------------------------
+
+  test("a trait definition is not emitted, but a plain shape beside it is") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |@trait(selector: "member")
+         |structure sensitiveHint {
+         |  reason: String
+         |}
+         |
+         |structure Payload {
+         |  @required
+         |  value: String
+         |}
+         |""".stripMargin
+    )
+
+    assert(!clue(out).contains("sensitiveHint"))
+    assert(out.contains("export const PayloadSchema = z.object({"))
+  }
+
+  test("a non-prelude namespace's data shapes are emitted even when it also defines traits") {
+    // `alloy#UUID` is a plain `string` shape living in a namespace that mostly holds protocol
+    // traits. Filtering by namespace rather than by trait-ness would drop it while members still
+    // referenced its schema.
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use alloy#UUID
+         |
+         |structure Holder {
+         |  @required
+         |  id: UUID
+         |}
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("export const UUIDSchema"))
+    assert(out.contains("id: UUIDSchema,"))
+  }
+
+  // --------------------------------------------------------------------------
+  // Cross-namespace name deconfliction
+  // --------------------------------------------------------------------------
+
+  test("a name owned by one shape is emitted bare") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example.a
+         |
+         |string ProfileId
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("export const ProfileIdSchema = z.string().brand<'ProfileId'>()"))
+  }
+
+  test("same name in two namespaces: both are qualified, neither keeps the bare name") {
+    val out = generateAll(
+      """|$version: "2"
+         |namespace com.example.a
+         |
+         |string ProfileId
+         |
+         |structure Holder {
+         |  @required
+         |  mine: ProfileId
+         |
+         |  @required
+         |  theirs: com.example.b#ProfileId
+         |}
+         |""".stripMargin,
+      """|$version: "2"
+         |namespace com.example.b
+         |
+         |string ProfileId
+         |""".stripMargin,
+    )
+
+    assert(clue(out).contains("export const com_example_a_ProfileIdSchema"))
+    assert(out.contains("export const com_example_b_ProfileIdSchema"))
+    // Neither may claim the bare name — that is what makes the scheme stable when a namespace
+    // is added later.
+    assert(!out.contains("export const ProfileIdSchema"))
+    assert(out.contains("mine: com_example_a_ProfileIdSchema,"))
+    assert(out.contains("theirs: com_example_b_ProfileIdSchema,"))
+  }
+
+  test("colliding aliases get distinct brands, so they are not mutually assignable") {
+    val out = generateAll(
+      """|$version: "2"
+         |namespace com.example.a
+         |
+         |string ProfileId
+         |
+         |structure Holder {
+         |  @required
+         |  theirs: com.example.b#ProfileId
+         |}
+         |""".stripMargin,
+      """|$version: "2"
+         |namespace com.example.b
+         |
+         |string ProfileId
+         |""".stripMargin,
+    )
+
+    assert(clue(out).contains("brand<'com_example_a_ProfileId'>()"))
+    assert(out.contains("brand<'com_example_b_ProfileId'>()"))
   }
 
 }

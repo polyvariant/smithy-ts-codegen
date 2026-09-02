@@ -11,7 +11,7 @@ use alloy#jsonUnknown
 use alloy#openEnum
 use alloy#simpleRestJson
 use org.polyvariant.ndjson#ndjsonRestJson
-use org.polyvariant.smithy.ts#mapToString
+use org.polyvariant.smithy.ts#lossless
 
 // --- Data shapes: one of every kind the generator handles ---
 
@@ -94,6 +94,7 @@ service Directory {
         Search
         Ping
         Measure
+        Sequence
     ]
     errors: [
         NotFound
@@ -294,23 +295,24 @@ structure Square {
     side: Integer
 }
 
-// --- @mapToString: numeric members with no lossless JS `number` form ---
+// --- @lossless: numeric members with no lossless JS `number` form ---
 
 structure Measurement {
     /// Stays a `number` — an Integer always fits in a JS number.
     sequence: Integer
 
-    /// Exceeds the JS safe-integer range, so it is carried as a string.
+    /// Can exceed the JS safe-integer range, so it is typed `number | string`.
     seed: Long
 
-    precise: BigDecimal
+    /// A `bigInteger` is unbounded, so it needs the trait even more than a `long`.
+    precise: BigInteger
 
     @required
     label: String
 }
 
-apply Measurement$seed @mapToString
-apply Measurement$precise @mapToString
+apply Measurement$seed @lossless
+apply Measurement$precise @lossless
 
 /// A structure reusing the same `Long` shape *without* the trait, proving the
 /// mapping is per-member and not per-shape.
@@ -319,9 +321,9 @@ structure Counter {
     total: Long
 }
 
-/// Exercises `@mapToString` outside a JSON body: as a `@httpLabel`, a
+/// Exercises `@lossless` outside a JSON body: as a `@httpLabel`, a
 /// `@httpQuery` and a `@httpHeader`, none of which may be coerced with
-/// `Number(...)` once the member is carried as a string.
+/// `Number(...)` once the member admits a string.
 @http(method: "GET", uri: "/measurements/{seed}")
 operation Measure {
     input := {
@@ -345,10 +347,35 @@ operation Measure {
     }
 }
 
-apply MeasureInput$seed @mapToString
-apply MeasureInput$offset @mapToString
-apply MeasureInput$revision @mapToString
-apply MeasureOutput$total @mapToString
+apply MeasureInput$seed @lossless
+apply MeasureInput$offset @lossless
+apply MeasureInput$revision @lossless
+apply MeasureOutput$total @lossless
+
+/// Exercises `@lossless` *in* a JSON body, which is where a numeric string
+/// would otherwise be written back quoted — changing the type the server sees.
+/// The required member proves the coercion, the optional one proves an absent
+/// member stays absent rather than becoming `BigInt(undefined)`.
+@http(method: "POST", uri: "/sequences")
+operation Sequence {
+    input := {
+        @required
+        seed: Long
+
+        cursor: Long
+
+        @required
+        count: Integer
+    }
+
+    output := {
+        @required
+        measurement: Measurement
+    }
+}
+
+apply SequenceInput$seed @lossless
+apply SequenceInput$cursor @lossless
 
 // --- Discriminated unions: the variant is flattened and labelled ---
 
