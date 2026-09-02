@@ -69,9 +69,13 @@ export interface StreamTransportResponse {
   status: number
   headers: Record<string, string>
   /** The deframed response body — present exactly when the operation streams
-   * its output and the status was 2xx. Already `JSON.parse`d for `'ndjson'`,
-   * raw `Uint8Array` chunks for `'binary'`. The generated client validates
-   * ndjson elements against the operation's schema. */
+   * its output and the status was 2xx. Already parsed for `'ndjson'`, raw
+   * `Uint8Array` chunks for `'binary'`. The generated client validates ndjson
+   * elements against the operation's schema.
+   *
+   * Parse ndjson lines with `parseLossless`, not `JSON.parse`: elements are
+   * parsed here, before the client sees them, so a `@lossless` member would
+   * already have been rounded by the time any schema runs. */
   stream?: AsyncIterable<unknown>
   /** The fully-read body, for a non-2xx response (so declared errors can be
    * parsed and thrown) or an operation with a unary response body. */
