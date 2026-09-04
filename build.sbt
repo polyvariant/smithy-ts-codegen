@@ -10,7 +10,7 @@ ThisBuild / githubWorkflowPublishTargetBranches := Seq(
   RefPredicate.StartsWith(Ref.Tag("v")),
 )
 
-val scala3 = "3.3.8"
+val scala3 = "3.9.0"
 val scala212 = "2.12.21"
 
 ThisBuild / scalaVersion := scala3
