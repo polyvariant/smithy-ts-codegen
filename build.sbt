@@ -57,7 +57,7 @@ ThisBuild / githubWorkflowBuildPostamble ++= Seq(
 
 val smithyVersion = "1.74.0"
 val alloyVersion = "0.3.40"
-val smithy4sVersion = "0.19.12"
+val smithy4sVersion = "0.19.13"
 val smithy4sNdjsonVersion = "0.3.2"
 
 val commonSettings = Seq(
@@ -148,7 +148,7 @@ lazy val sbtPlugin = project
     name := "sbt-smithy-ts-codegen",
     scalaVersion := scala212,
     crossScalaVersions := Seq(scala212),
-    libraryDependencies += "io.get-coursier" % "interface" % "1.0.29",
+    libraryDependencies += "io.get-coursier" % "interface" % "1.0.30",
     buildInfoPackage := "org.polyvariant.smithy.ts.sbt",
     buildInfoKeys := Seq[BuildInfoKey](
       "smithyTsCodegenVersion" -> version.value,
