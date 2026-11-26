@@ -2313,27 +2313,27 @@ export class RestJsonClient {
   async allQueryStringTypes(input: AllQueryStringTypesInput, opts?: TransportOptions): Promise<void> {
     const url = `/AllQueryStringTypesInput`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.queryParamsMapOfStringList !== undefined) for (const [k, v] of Object.entries(input.queryParamsMapOfStringList)) query[k] = v
-    if (input.queryString !== undefined) query['String'] = String(input.queryString)
-    if (input.queryStringList !== undefined) query['StringList'] = input.queryStringList.map((e) => String(e))
-    if (input.queryStringSet !== undefined) query['StringSet'] = input.queryStringSet.map((e) => String(e))
-    if (input.queryByte !== undefined) query['Byte'] = String(input.queryByte)
-    if (input.queryShort !== undefined) query['Short'] = String(input.queryShort)
-    if (input.queryInteger !== undefined) query['Integer'] = String(input.queryInteger)
-    if (input.queryIntegerList !== undefined) query['IntegerList'] = input.queryIntegerList.map((e) => String(e))
-    if (input.queryIntegerSet !== undefined) query['IntegerSet'] = input.queryIntegerSet.map((e) => String(e))
-    if (input.queryLong !== undefined) query['Long'] = String(input.queryLong)
-    if (input.queryFloat !== undefined) query['Float'] = String(input.queryFloat)
-    if (input.queryDouble !== undefined) query['Double'] = String(input.queryDouble)
-    if (input.queryDoubleList !== undefined) query['DoubleList'] = input.queryDoubleList.map((e) => String(e))
-    if (input.queryBoolean !== undefined) query['Boolean'] = String(input.queryBoolean)
-    if (input.queryBooleanList !== undefined) query['BooleanList'] = input.queryBooleanList.map((e) => String(e))
-    if (input.queryTimestamp !== undefined) query['Timestamp'] = wireDateTime(input.queryTimestamp)
-    if (input.queryTimestampList !== undefined) query['TimestampList'] = input.queryTimestampList.map((e) => wireDateTime(e))
-    if (input.queryEnum !== undefined) query['Enum'] = String(input.queryEnum)
-    if (input.queryEnumList !== undefined) query['EnumList'] = input.queryEnumList.map((e) => String(e))
-    if (input.queryIntegerEnum !== undefined) query['IntegerEnum'] = String(input.queryIntegerEnum)
-    if (input.queryIntegerEnumList !== undefined) query['IntegerEnumList'] = input.queryIntegerEnumList.map((e) => String(e))
+    if (input.queryParamsMapOfStringList != null) for (const [k, v] of Object.entries(input.queryParamsMapOfStringList)) query[k] = v
+    if (input.queryString != null) query['String'] = String(input.queryString)
+    if (input.queryStringList != null) query['StringList'] = input.queryStringList.map((e) => String(e))
+    if (input.queryStringSet != null) query['StringSet'] = input.queryStringSet.map((e) => String(e))
+    if (input.queryByte != null) query['Byte'] = String(input.queryByte)
+    if (input.queryShort != null) query['Short'] = String(input.queryShort)
+    if (input.queryInteger != null) query['Integer'] = String(input.queryInteger)
+    if (input.queryIntegerList != null) query['IntegerList'] = input.queryIntegerList.map((e) => String(e))
+    if (input.queryIntegerSet != null) query['IntegerSet'] = input.queryIntegerSet.map((e) => String(e))
+    if (input.queryLong != null) query['Long'] = String(input.queryLong)
+    if (input.queryFloat != null) query['Float'] = String(input.queryFloat)
+    if (input.queryDouble != null) query['Double'] = String(input.queryDouble)
+    if (input.queryDoubleList != null) query['DoubleList'] = input.queryDoubleList.map((e) => String(e))
+    if (input.queryBoolean != null) query['Boolean'] = String(input.queryBoolean)
+    if (input.queryBooleanList != null) query['BooleanList'] = input.queryBooleanList.map((e) => String(e))
+    if (input.queryTimestamp != null) query['Timestamp'] = wireDateTime(input.queryTimestamp)
+    if (input.queryTimestampList != null) query['TimestampList'] = input.queryTimestampList.map((e) => wireDateTime(e))
+    if (input.queryEnum != null) query['Enum'] = String(input.queryEnum)
+    if (input.queryEnumList != null) query['EnumList'] = input.queryEnumList.map((e) => String(e))
+    if (input.queryIntegerEnum != null) query['IntegerEnum'] = String(input.queryIntegerEnum)
+    if (input.queryIntegerEnumList != null) query['IntegerEnumList'] = input.queryIntegerEnumList.map((e) => String(e))
     const res = await this.transport.request({
       operation: 'RestJsonClient.allQueryStringTypes',
       method: 'GET',
@@ -2352,8 +2352,8 @@ export class RestJsonClient {
   async constantAndVariableQueryString(input: ConstantAndVariableQueryStringInput, opts?: TransportOptions): Promise<void> {
     const url = `/ConstantAndVariableQueryString?foo=bar`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.baz !== undefined) query['baz'] = String(input.baz)
-    if (input.maybeSet !== undefined) query['maybeSet'] = String(input.maybeSet)
+    if (input.baz != null) query['baz'] = String(input.baz)
+    if (input.maybeSet != null) query['maybeSet'] = String(input.maybeSet)
     const res = await this.transport.request({
       operation: 'RestJsonClient.constantAndVariableQueryString',
       method: 'GET',
@@ -2552,8 +2552,8 @@ export class RestJsonClient {
   async httpPrefixHeaders(input: HttpPrefixHeadersInput, opts?: TransportOptions): Promise<HttpPrefixHeadersOutput> {
     const url = `/HttpPrefixHeaders`
     const headers: Record<string, string> = {}
-    if (input.fooMap !== undefined) for (const [k, v] of Object.entries(input.fooMap)) headers['x-foo-' + k] = v
-    if (input.foo !== undefined) headers['x-foo'] = String(input.foo)
+    if (input.fooMap != null) for (const [k, v] of Object.entries(input.fooMap)) headers['x-foo-' + k] = v
+    if (input.foo != null) headers['x-foo'] = String(input.foo)
     const res = await this.transport.request({
       operation: 'RestJsonClient.httpPrefixHeaders',
       method: 'GET',
@@ -2825,8 +2825,8 @@ export class RestJsonClient {
   async omitsNullSerializesEmptyString(input: OmitsNullSerializesEmptyStringInput, opts?: TransportOptions): Promise<void> {
     const url = `/OmitsNullSerializesEmptyString`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.nullValue !== undefined) query['Null'] = String(input.nullValue)
-    if (input.emptyString !== undefined) query['Empty'] = String(input.emptyString)
+    if (input.nullValue != null) query['Null'] = String(input.nullValue)
+    if (input.emptyString != null) query['Empty'] = String(input.emptyString)
     const res = await this.transport.request({
       operation: 'RestJsonClient.omitsNullSerializesEmptyString',
       method: 'GET',
@@ -2845,13 +2845,13 @@ export class RestJsonClient {
   async omitsSerializingEmptyLists(input: OmitsSerializingEmptyListsInput, opts?: TransportOptions): Promise<void> {
     const url = `/OmitsSerializingEmptyLists`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.queryStringList !== undefined) query['StringList'] = input.queryStringList.map((e) => String(e))
-    if (input.queryIntegerList !== undefined) query['IntegerList'] = input.queryIntegerList.map((e) => String(e))
-    if (input.queryDoubleList !== undefined) query['DoubleList'] = input.queryDoubleList.map((e) => String(e))
-    if (input.queryBooleanList !== undefined) query['BooleanList'] = input.queryBooleanList.map((e) => String(e))
-    if (input.queryTimestampList !== undefined) query['TimestampList'] = input.queryTimestampList.map((e) => wireDateTime(e))
-    if (input.queryEnumList !== undefined) query['EnumList'] = input.queryEnumList.map((e) => String(e))
-    if (input.queryIntegerEnumList !== undefined) query['IntegerEnumList'] = input.queryIntegerEnumList.map((e) => String(e))
+    if (input.queryStringList != null) query['StringList'] = input.queryStringList.map((e) => String(e))
+    if (input.queryIntegerList != null) query['IntegerList'] = input.queryIntegerList.map((e) => String(e))
+    if (input.queryDoubleList != null) query['DoubleList'] = input.queryDoubleList.map((e) => String(e))
+    if (input.queryBooleanList != null) query['BooleanList'] = input.queryBooleanList.map((e) => String(e))
+    if (input.queryTimestampList != null) query['TimestampList'] = input.queryTimestampList.map((e) => wireDateTime(e))
+    if (input.queryEnumList != null) query['EnumList'] = input.queryEnumList.map((e) => String(e))
+    if (input.queryIntegerEnumList != null) query['IntegerEnumList'] = input.queryIntegerEnumList.map((e) => String(e))
     const res = await this.transport.request({
       operation: 'RestJsonClient.omitsSerializingEmptyLists',
       method: 'POST',
@@ -2902,7 +2902,7 @@ export class RestJsonClient {
   async queryIdempotencyTokenAutoFill(input: QueryIdempotencyTokenAutoFillInput, opts?: TransportOptions): Promise<void> {
     const url = `/QueryIdempotencyTokenAutoFill`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.token !== undefined) query['token'] = String(input.token)
+    if (input.token != null) query['token'] = String(input.token)
     const res = await this.transport.request({
       operation: 'RestJsonClient.queryIdempotencyTokenAutoFill',
       method: 'POST',
@@ -2920,8 +2920,8 @@ export class RestJsonClient {
   async queryParamsAsStringListMap(input: QueryParamsAsStringListMapInput, opts?: TransportOptions): Promise<void> {
     const url = `/StringListMap`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.foo !== undefined) for (const [k, v] of Object.entries(input.foo)) query[k] = v
-    if (input.qux !== undefined) query['corge'] = String(input.qux)
+    if (input.foo != null) for (const [k, v] of Object.entries(input.foo)) query[k] = v
+    if (input.qux != null) query['corge'] = String(input.qux)
     const res = await this.transport.request({
       operation: 'RestJsonClient.queryParamsAsStringListMap',
       method: 'POST',
@@ -2939,8 +2939,8 @@ export class RestJsonClient {
   async queryPrecedence(input: QueryPrecedenceInput, opts?: TransportOptions): Promise<void> {
     const url = `/Precedence`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.baz !== undefined) for (const [k, v] of Object.entries(input.baz)) query[k] = v
-    if (input.foo !== undefined) query['bar'] = String(input.foo)
+    if (input.baz != null) for (const [k, v] of Object.entries(input.baz)) query[k] = v
+    if (input.foo != null) query['bar'] = String(input.foo)
     const res = await this.transport.request({
       operation: 'RestJsonClient.queryPrecedence',
       method: 'POST',
@@ -2974,7 +2974,7 @@ export class RestJsonClient {
   async simpleScalarProperties(input: SimpleScalarPropertiesInputOutput, opts?: TransportOptions): Promise<SimpleScalarPropertiesInputOutput> {
     const url = `/SimpleScalarProperties`
     const headers: Record<string, string> = {}
-    if (input.foo !== undefined) headers['X-Foo'] = String(input.foo)
+    if (input.foo != null) headers['X-Foo'] = String(input.foo)
     const res = await this.transport.request({
       operation: 'RestJsonClient.simpleScalarProperties',
       method: 'PUT',
@@ -3009,7 +3009,7 @@ export class RestJsonClient {
   async testBodyStructure(input: TestBodyStructureInputOutput, opts?: TransportOptions): Promise<TestBodyStructureInputOutput> {
     const url = `/body`
     const headers: Record<string, string> = {}
-    if (input.testId !== undefined) headers['x-amz-test-id'] = String(input.testId)
+    if (input.testId != null) headers['x-amz-test-id'] = String(input.testId)
     const res = await this.transport.request({
       operation: 'RestJsonClient.testBodyStructure',
       method: 'POST',
@@ -3028,7 +3028,7 @@ export class RestJsonClient {
   async testPayloadStructure(input: TestPayloadStructureInputOutput, opts?: TransportOptions): Promise<TestPayloadStructureInputOutput> {
     const url = `/payload`
     const headers: Record<string, string> = {}
-    if (input.testId !== undefined) headers['x-amz-test-id'] = String(input.testId)
+    if (input.testId != null) headers['x-amz-test-id'] = String(input.testId)
     const res = await this.transport.request({
       operation: 'RestJsonClient.testPayloadStructure',
       method: 'POST',
@@ -3047,13 +3047,13 @@ export class RestJsonClient {
   async timestampFormatHeaders(input: TimestampFormatHeadersIO, opts?: TransportOptions): Promise<TimestampFormatHeadersIO> {
     const url = `/TimestampFormatHeaders`
     const headers: Record<string, string> = {}
-    if (input.memberEpochSeconds !== undefined) headers['X-memberEpochSeconds'] = String(wireEpochSeconds(input.memberEpochSeconds))
-    if (input.memberHttpDate !== undefined) headers['X-memberHttpDate'] = wireHttpDate(input.memberHttpDate)
-    if (input.memberDateTime !== undefined) headers['X-memberDateTime'] = wireDateTime(input.memberDateTime)
-    if (input.defaultFormat !== undefined) headers['X-defaultFormat'] = wireHttpDate(input.defaultFormat)
-    if (input.targetEpochSeconds !== undefined) headers['X-targetEpochSeconds'] = String(wireEpochSeconds(input.targetEpochSeconds))
-    if (input.targetHttpDate !== undefined) headers['X-targetHttpDate'] = wireHttpDate(input.targetHttpDate)
-    if (input.targetDateTime !== undefined) headers['X-targetDateTime'] = wireDateTime(input.targetDateTime)
+    if (input.memberEpochSeconds != null) headers['X-memberEpochSeconds'] = String(wireEpochSeconds(input.memberEpochSeconds))
+    if (input.memberHttpDate != null) headers['X-memberHttpDate'] = wireHttpDate(input.memberHttpDate)
+    if (input.memberDateTime != null) headers['X-memberDateTime'] = wireDateTime(input.memberDateTime)
+    if (input.defaultFormat != null) headers['X-defaultFormat'] = wireHttpDate(input.defaultFormat)
+    if (input.targetEpochSeconds != null) headers['X-targetEpochSeconds'] = String(wireEpochSeconds(input.targetEpochSeconds))
+    if (input.targetHttpDate != null) headers['X-targetHttpDate'] = wireHttpDate(input.targetHttpDate)
+    if (input.targetDateTime != null) headers['X-targetDateTime'] = wireDateTime(input.targetDateTime)
     const res = await this.transport.request({
       operation: 'RestJsonClient.timestampFormatHeaders',
       method: 'POST',

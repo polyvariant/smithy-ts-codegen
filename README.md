@@ -507,6 +507,7 @@ sbt test                  # unit tests
 sbt sbtPlugin/scripted    # the sbt plugin, end to end
 sbt tsCodegenSample       # regenerate typecheck/src/generated.ts
 sbt complianceCodegen     # regenerate compliance/generated
+sbt complianceRoundTrip   # the compliance clients against a real smithy4s server (needs node)
 nix flake check           # type-check + test the TypeScript side
 pnpm check                # the same, without nix (needs `pnpm install` first)
 ```
@@ -531,6 +532,17 @@ The TypeScript lives in a pnpm workspace of three packages:
   `compliance-codegen/`). The only cases allowed to fail are listed in `known-failures.txt`,
   where we deliberately behave like smithy4s instead; a listed case that starts passing fails
   the run.
+
+  The same cases also run against smithy4s itself: `sbt complianceRoundTrip` (from
+  `compliance-roundtrip/`) serves each suite's services with smithy4s's `simpleRestJson`
+  implementation, built dynamically from the same model, and runs `compliance/roundtrip`
+  against it. A request case is decoded by smithy4s and compared with the case's `params` the way
+  smithy4s's own compliance suite compares them; a response case is encoded by smithy4s and
+  decoded by the generated client. So it checks agreement with smithy4s rather than with each
+  test's expected bytes — catching, say, a request smithy4s would misread that the offline
+  suite has no assertion for. Its own `roundtrip/known-failures.txt` lists the cases where a
+  client-side expectation can't be compared against a server. It needs a JVM and node together,
+  so it runs in CI inside `nix develop` rather than in `nix flake check`.
 
 `nix flake check` runs both under `strict` + `erasableSyntaxOnly`.
 

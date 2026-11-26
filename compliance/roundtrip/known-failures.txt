@@ -1,0 +1,21 @@
+# Compliance cases where the generated client and a smithy4s server are known
+# to disagree, as <suite>/<kind>/<id>. Same rules as ../known-failures.txt:
+# a listed case that passes, or no longer exists, fails the run.
+#
+# Every entry also passes the offline suite (except where it is listed there
+# too), so these are differences between what a client-side case expects and
+# what a real server does — not encoding bugs.
+
+# --- The client-side case can't be compared against a server ---
+# smithy4s puts every query parameter in the @httpQueryParams map, including
+# the ones bound with @httpQuery, as smithy's server-side cases require
+# (RestJsonServersQueryParamsStringListMap, RestJsonServersPutAllQueryParamsInMap).
+# The client-side params list only the map's own entries, so what smithy4s
+# decodes never equals them, though the request is exactly what they expect.
+restJson1/request/RestJsonQueryParamsStringListMap
+restJson1/request/RestJsonQueryPrecedence
+
+# An @httpPrefixHeaders map with an empty prefix collects every response
+# header — including the ones a real server adds (date, connection,
+# content-length...), which the case's expected map does not list.
+restJson1/response/HttpPrefixHeadersResponse

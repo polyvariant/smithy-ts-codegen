@@ -1313,7 +1313,7 @@ export class DirectoryClient {
   async getPerson(input: GetPersonInput, opts?: TransportOptions): Promise<GetPersonOutput> {
     const url = `/people/${wireEncodeLabel(String(input.id))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.verbose !== undefined) query['verbose'] = String(input.verbose)
+    if (input.verbose != null) query['verbose'] = String(input.verbose)
     const res = await this.transport.request({
       operation: 'DirectoryClient.getPerson',
       method: 'GET',
@@ -1340,9 +1340,9 @@ export class DirectoryClient {
   async measure(input: MeasureInput, opts?: TransportOptions): Promise<MeasureOutput> {
     const url = `/measurements/${wireEncodeLabel(String(input.seed))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.offset !== undefined) query['offset'] = String(input.offset)
+    if (input.offset != null) query['offset'] = String(input.offset)
     const headers: Record<string, string> = {}
-    if (input.revision !== undefined) headers['x-revision'] = String(input.revision)
+    if (input.revision != null) headers['x-revision'] = String(input.revision)
     const res = await this.transport.request({
       operation: 'DirectoryClient.measure',
       method: 'GET',
@@ -1383,7 +1383,7 @@ export class DirectoryClient {
   async putPerson(input: PutPersonInput, opts?: TransportOptions): Promise<void> {
     const url = `/people/${wireEncodeLabel(String(input.id))}`
     const headers: Record<string, string> = {}
-    if (input.ifMatch !== undefined) headers['if-match'] = String(input.ifMatch)
+    if (input.ifMatch != null) headers['if-match'] = String(input.ifMatch)
     const res = await this.transport.request({
       operation: 'DirectoryClient.putPerson',
       method: 'PUT',
@@ -1404,7 +1404,7 @@ export class DirectoryClient {
   async search(input: SearchInput, opts?: TransportOptions): Promise<SearchOutput> {
     const url = `/search`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.q !== undefined) query['q'] = String(input.q)
+    if (input.q != null) query['q'] = String(input.q)
     const res = await this.transport.request({
       operation: 'DirectoryClient.search',
       method: 'GET',
@@ -1584,7 +1584,7 @@ export class FeedClient {
   async watch(input: WatchInput, opts?: TransportOptions): Promise<WatchOutput> {
     const url = `/watch/${wireEncodeLabel(String(input.id))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.since !== undefined) query['since'] = wireDateTime(input.since)
+    if (input.since != null) query['since'] = wireDateTime(input.since)
     const res = await this.streamTransport.requestStream({
       operation: 'FeedClient.watch',
       method: 'GET',

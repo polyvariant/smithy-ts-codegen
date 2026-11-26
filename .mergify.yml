@@ -39,6 +39,14 @@ pull_request_rules:
       add:
       - compliance-codegen
       remove: []
+- name: Label compliance-roundtrip PRs
+  conditions:
+  - files~=^compliance-roundtrip/
+  actions:
+    label:
+      add:
+      - compliance-roundtrip
+      remove: []
 - name: Label core PRs
   conditions:
   - files~=^core/

@@ -1353,19 +1353,21 @@ object TsCodegenPlugin {
         ),
       )
 
+      // Bound members are skipped when absent — `!= null`, so an explicit `null` (which the
+      // protocol treats as absent too) isn't sent as the string "null".
       val hasQuery = queryMembers.nonEmpty || queryParamsMember.isDefined
       if (hasQuery) {
         w.line("const query: Record<string, string | readonly string[] | undefined> = {}")
         // The map first, so a member bound with `@httpQuery` wins over a map entry of the same name.
         queryParamsMember.foreach { case (memberName, _) =>
           w.lit(
-            s"if (input.$memberName !== undefined) for (const [k, v] of Object.entries(input.$memberName)) query[k] = v"
+            s"if (input.$memberName != null) for (const [k, v] of Object.entries(input.$memberName)) query[k] = v"
           )
         }
         queryMembers.foreach { case (memberName, member) =>
           val queryName = member.expectTrait(classOf[HttpQueryTrait]).getValue
           w.lit(
-            s"if (input.$memberName !== undefined) query[${jsString(queryName)}] = ${WireCodec.queryValueExpr(model, member, s"input.$memberName")}"
+            s"if (input.$memberName != null) query[${jsString(queryName)}] = ${WireCodec.queryValueExpr(model, member, s"input.$memberName")}"
           )
         }
       }
@@ -1375,13 +1377,13 @@ object TsCodegenPlugin {
         prefixHeadersMember.foreach { case (memberName, member) =>
           val prefix = member.expectTrait(classOf[HttpPrefixHeadersTrait]).getValue
           w.lit(
-            s"if (input.$memberName !== undefined) for (const [k, v] of Object.entries(input.$memberName)) headers[${jsString(prefix)} + k] = v"
+            s"if (input.$memberName != null) for (const [k, v] of Object.entries(input.$memberName)) headers[${jsString(prefix)} + k] = v"
           )
         }
         headerMembers.foreach { case (memberName, member) =>
           val headerName = member.expectTrait(classOf[HttpHeaderTrait]).getValue
           w.lit(
-            s"if (input.$memberName !== undefined) headers[${jsString(headerName)}] = ${WireCodec.headerValueExpr(model, member, s"input.$memberName")}"
+            s"if (input.$memberName != null) headers[${jsString(headerName)}] = ${WireCodec.headerValueExpr(model, member, s"input.$memberName")}"
           )
         }
       }
