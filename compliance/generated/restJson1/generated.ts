@@ -28,16 +28,16 @@ export type Range = z.infer<typeof RangeSchema>
 /**
  * A string representing a service's ARN namespace.
  */
-export const ArnNamespaceSchema = z.string().brand<'ArnNamespace'>()
+export const ArnNamespaceSchema = z.string().refine((v) => new RegExp('^[a-z0-9.\\-]{1,63}\x24').test(v), 'must match ' + '^[a-z0-9.\\-]{1,63}\x24').brand<'ArnNamespace'>()
 export type ArnNamespace = z.infer<typeof ArnNamespaceSchema>
 
 /**
  * A string representing a CloudFormation service name.
  */
-export const CloudFormationNameSchema = z.string().brand<'CloudFormationName'>()
+export const CloudFormationNameSchema = z.string().refine((v) => new RegExp('^[A-Z][A-Za-z0-9]+\x24').test(v), 'must match ' + '^[A-Z][A-Za-z0-9]+\x24').brand<'CloudFormationName'>()
 export type CloudFormationName = z.infer<typeof CloudFormationNameSchema>
 
-export const CloudWatchMetricNamespaceSchema = z.string().brand<'CloudWatchMetricNamespace'>()
+export const CloudWatchMetricNamespaceSchema = z.string().refine((v) => v.length >= 1, 'length must be at least 1').refine((v) => v.length <= 255, 'length must be at most 255').refine((v) => new RegExp('^[^:].*\x24').test(v), 'must match ' + '^[^:].*\x24').brand<'CloudWatchMetricNamespace'>()
 export type CloudWatchMetricNamespace = z.infer<typeof CloudWatchMetricNamespaceSchema>
 
 export const UnitSchema = z.object({
@@ -332,7 +332,7 @@ export const HttpMalformedResponseBodyAssertionSchema = z.union([
 ])
 export type HttpMalformedResponseBodyAssertion = z.infer<typeof HttpMalformedResponseBodyAssertionSchema>
 
-export const NonEmptyStringSchema = z.string().brand<'NonEmptyString'>()
+export const NonEmptyStringSchema = z.string().refine((v) => v.length >= 1, 'length must be at least 1').brand<'NonEmptyString'>()
 export type NonEmptyString = z.infer<typeof NonEmptyStringSchema>
 
 /**
@@ -571,9 +571,9 @@ export type EventHeaders = z.infer<typeof EventHeadersSchema>
 
 export const HttpMalformedRequestDefinitionSchema = z.object({
   /** The HTTP request method. */
-  method: z.string(),
+  method: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The request-target of the HTTP request, not including the query string (for example, "/foo/bar"). */
-  uri: z.string(),
+  uri: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The host / endpoint provided to the client, not including the path or scheme (for example, "example.com"). */
   host: z.string().optional(),
   /** A list of the serialized query string parameters to include in the request.  Each element in the list is a query string key value pair that starts with the query string parameter name optionally followed by "=", optionally followed by the query string parameter value. For example, "foo=bar", "foo=", and "foo" are all valid values. The query string parameter name and the value MUST appear in the format in which it is expected to be sent over the wire; if a key or value needs to be percent-encoded, then it MUST appear percent-encoded in this list. */
@@ -607,7 +607,7 @@ export const TestExpectationSchema = z.union([
 ])
 export type TestExpectation = z.infer<typeof TestExpectationSchema>
 
-export const ChecksumAlgorithmSetSchema = z.array(ChecksumAlgorithmSchema)
+export const ChecksumAlgorithmSetSchema = z.array(ChecksumAlgorithmSchema).refine((v) => v.length >= 1, 'length must be at least 1')
 export type ChecksumAlgorithmSet = z.infer<typeof ChecksumAlgorithmSetSchema>
 
 export const PostPlayerActionInputSchema = z.object({
@@ -711,7 +711,7 @@ export const HttpMalformedResponseDefinitionSchema = z.object({
   /** Defines a map of expected HTTP headers.  Headers that are not listed in this map are ignored. */
   headers: smithy_test_StringMapSchema.optional(),
   /** Defines the HTTP response code. */
-  code: z.number().int(),
+  code: z.number().int().refine((v) => Number(v) >= 100, 'must be at least 100').refine((v) => Number(v) <= 599, 'must be at most 599'),
   /** The expected response body. */
   body: HttpMalformedResponseBodyDefinitionSchema.optional(),
 })
@@ -732,9 +732,9 @@ export const HttpRequestTestCaseSchema = z.object({
   /** The media type of the `body`.  This is used to help test runners to parse and validate the expected data against generated data. */
   bodyMediaType: z.string().optional(),
   /** The expected serialized HTTP request method. */
-  method: z.string(),
+  method: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The request-target of the HTTP request, not including the query string (for example, "/foo/bar"). */
-  uri: z.string(),
+  uri: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The host / endpoint provided to the client, not including the path or scheme (for example, "example.com"). */
   host: z.string().optional(),
   /** The host / endpoint that the client should send to, not including the path or scheme (for example, "prefix.example.com").  This can differ from the host provided to the client if the `hostPrefix` member of the `endpoint` trait is set, for instance. */
@@ -746,7 +746,7 @@ export const HttpRequestTestCaseSchema = z.object({
   /** A list of query string parameter names that MUST appear in the serialized request URI, but no assertion is made on the value.  Each value MUST appear in the format in which it is sent over the wire; if a key needs to be percent-encoded, then it MUST appear percent-encoded in this list. */
   requireQueryParams: smithy_test_StringListSchema.optional(),
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two `httpRequestTests` test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The name of the protocol to test. */
   protocol: z.string(),
   /** The optional authentication scheme shape ID to assume. It's possible that specific authentication schemes might influence the serialization logic of an HTTP request. */
@@ -781,9 +781,9 @@ export const HttpResponseTestCaseSchema = z.object({
   /** The media type of the `body`.  This is used to help test runners to parse and validate the expected data against generated data. */
   bodyMediaType: z.string().optional(),
   /** Defines the HTTP response code. */
-  code: z.number().int(),
+  code: z.number().int().refine((v) => Number(v) >= 100, 'must be at least 100').refine((v) => Number(v) <= 599, 'must be at most 599'),
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two `httpResponseTests` test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The shape ID of the protocol to test. */
   protocol: z.string(),
   /** The optional authentication scheme shape ID to assume. It's possible that specific authentication schemes might influence the serialization logic of an HTTP response. */
@@ -888,7 +888,7 @@ export type Events = z.infer<typeof EventsSchema>
 
 export const HttpMalformedRequestTestCaseSchema = z.object({
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two `httpMalformedRequestTests` test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The name of the protocol to test. */
   protocol: z.string(),
   /** The malformed request to send. */
@@ -909,7 +909,7 @@ export type HttpMalformedRequestTestCase = z.infer<typeof HttpMalformedRequestTe
  */
 export const EventStreamTestCaseSchema = z.object({
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The protocol to test. */
   protocol: z.string(),
   /** The input parameters used to generate the initial request.  These parameters MUST be compatible with the input shape of the operation. */

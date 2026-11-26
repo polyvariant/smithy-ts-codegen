@@ -28,16 +28,16 @@ export type Range = z.infer<typeof RangeSchema>
 /**
  * A string representing a service's ARN namespace.
  */
-export const ArnNamespaceSchema = z.string().brand<'ArnNamespace'>()
+export const ArnNamespaceSchema = z.string().refine((v) => new RegExp('^[a-z0-9.\\-]{1,63}\x24').test(v), 'must match ' + '^[a-z0-9.\\-]{1,63}\x24').brand<'ArnNamespace'>()
 export type ArnNamespace = z.infer<typeof ArnNamespaceSchema>
 
 /**
  * A string representing a CloudFormation service name.
  */
-export const CloudFormationNameSchema = z.string().brand<'CloudFormationName'>()
+export const CloudFormationNameSchema = z.string().refine((v) => new RegExp('^[A-Z][A-Za-z0-9]+\x24').test(v), 'must match ' + '^[A-Z][A-Za-z0-9]+\x24').brand<'CloudFormationName'>()
 export type CloudFormationName = z.infer<typeof CloudFormationNameSchema>
 
-export const CloudWatchMetricNamespaceSchema = z.string().brand<'CloudWatchMetricNamespace'>()
+export const CloudWatchMetricNamespaceSchema = z.string().refine((v) => v.length >= 1, 'length must be at least 1').refine((v) => v.length <= 255, 'length must be at most 255').refine((v) => new RegExp('^[^:].*\x24').test(v), 'must match ' + '^[^:].*\x24').brand<'CloudWatchMetricNamespace'>()
 export type CloudWatchMetricNamespace = z.infer<typeof CloudWatchMetricNamespaceSchema>
 
 export const UnitSchema = z.object({
@@ -63,8 +63,8 @@ export const aws_protocols_StringListSchema = z.array(z.string())
 export type aws_protocols_StringList = z.infer<typeof aws_protocols_StringListSchema>
 
 export const AddSchema = z.object({
-  key: z.string(),
-  weight: z.number().int().optional(),
+  key: z.string().refine((v) => v.length >= 1, 'length must be at least 1').refine((v) => v.length <= 8, 'length must be at most 8').refine((v) => new RegExp('^[a-z]+\x24').test(v), 'must match ' + '^[a-z]+\x24'),
+  weight: z.number().int().refine((v) => Number(v) >= 1, 'must be at least 1').refine((v) => Number(v) <= 10, 'must be at most 10').optional(),
 })
 export type Add = z.infer<typeof AddSchema>
 
@@ -150,7 +150,7 @@ export type Seconds = z.infer<typeof SecondsSchema>
 export const TimeOfDaySchema = z.string().brand<'TimeOfDay'>()
 export type TimeOfDay = z.infer<typeof TimeOfDaySchema>
 
-export const UuidSchema = z.string().brand<'Uuid'>()
+export const UuidSchema = z.string().refine((v) => new RegExp('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\x24').test(v), 'must be a UUID').brand<'Uuid'>()
 export type Uuid = z.infer<typeof UuidSchema>
 
 export const GetBlobInputSchema = z.object({
@@ -175,7 +175,7 @@ export const NotFoundSchema = z.object({
 export type NotFound = z.infer<typeof NotFoundSchema>
 
 export const ProgressSchema = z.object({
-  soFar: z.number().int(),
+  soFar: z.number().int().refine((v) => Number(v) >= 0, 'must be at least 0'),
 })
 export type Progress = z.infer<typeof ProgressSchema>
 
@@ -259,7 +259,7 @@ export const HttpMalformedResponseBodyAssertionSchema = z.union([
 ])
 export type HttpMalformedResponseBodyAssertion = z.infer<typeof HttpMalformedResponseBodyAssertionSchema>
 
-export const NonEmptyStringSchema = z.string().brand<'NonEmptyString'>()
+export const NonEmptyStringSchema = z.string().refine((v) => v.length >= 1, 'length must be at least 1').brand<'NonEmptyString'>()
 export type NonEmptyString = z.infer<typeof NonEmptyStringSchema>
 
 /**
@@ -459,9 +459,9 @@ export type EventHeaders = z.infer<typeof EventHeadersSchema>
 
 export const HttpMalformedRequestDefinitionSchema = z.object({
   /** The HTTP request method. */
-  method: z.string(),
+  method: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The request-target of the HTTP request, not including the query string (for example, "/foo/bar"). */
-  uri: z.string(),
+  uri: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The host / endpoint provided to the client, not including the path or scheme (for example, "example.com"). */
   host: z.string().optional(),
   /** A list of the serialized query string parameters to include in the request.  Each element in the list is a query string key value pair that starts with the query string parameter name optionally followed by "=", optionally followed by the query string parameter value. For example, "foo=bar", "foo=", and "foo" are all valid values. The query string parameter name and the value MUST appear in the format in which it is expected to be sent over the wire; if a key or value needs to be percent-encoded, then it MUST appear percent-encoded in this list. */
@@ -490,9 +490,9 @@ export const InitialHttpRequestSchema = z.object({
   /** The media type of the `body`.  This is used to help test runners to parse and validate the expected data against generated data. */
   bodyMediaType: z.string().optional(),
   /** The expected serialized HTTP request method. */
-  method: z.string(),
+  method: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The request-target of the HTTP request, not including the query string (for example, "/foo/bar"). */
-  uri: z.string(),
+  uri: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The host / endpoint provided to the client, not including the path or scheme (for example, "example.com"). */
   host: z.string().optional(),
   /** The host / endpoint that the client should send to, not including the path or scheme (for example, "prefix.example.com").  This can differ from the host provided to the client if the `hostPrefix` member of the `endpoint` trait is set, for instance. */
@@ -521,7 +521,7 @@ export const InitialHttpResponseSchema = z.object({
   /** The media type of the `body`.  This is used to help test runners to parse and validate the expected data against generated data. */
   bodyMediaType: z.string().optional(),
   /** Defines the HTTP response code. */
-  code: z.number().int(),
+  code: z.number().int().refine((v) => Number(v) >= 100, 'must be at least 100').refine((v) => Number(v) <= 599, 'must be at most 599'),
 })
 export type InitialHttpResponse = z.infer<typeof InitialHttpResponseSchema>
 
@@ -545,7 +545,7 @@ export const TestExpectationSchema = z.union([
 ])
 export type TestExpectation = z.infer<typeof TestExpectationSchema>
 
-export const ChecksumAlgorithmSetSchema = z.array(ChecksumAlgorithmSchema)
+export const ChecksumAlgorithmSetSchema = z.array(ChecksumAlgorithmSchema).refine((v) => v.length >= 1, 'length must be at least 1')
 export type ChecksumAlgorithmSet = z.infer<typeof ChecksumAlgorithmSetSchema>
 
 export const EnumsSchema = z.object({
@@ -618,7 +618,7 @@ export const HttpMalformedResponseDefinitionSchema = z.object({
   /** Defines a map of expected HTTP headers.  Headers that are not listed in this map are ignored. */
   headers: smithy_test_StringMapSchema.optional(),
   /** Defines the HTTP response code. */
-  code: z.number().int(),
+  code: z.number().int().refine((v) => Number(v) >= 100, 'must be at least 100').refine((v) => Number(v) <= 599, 'must be at most 599'),
   /** The expected response body. */
   body: HttpMalformedResponseBodyDefinitionSchema.optional(),
 })
@@ -639,9 +639,9 @@ export const HttpRequestTestCaseSchema = z.object({
   /** The media type of the `body`.  This is used to help test runners to parse and validate the expected data against generated data. */
   bodyMediaType: z.string().optional(),
   /** The expected serialized HTTP request method. */
-  method: z.string(),
+  method: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The request-target of the HTTP request, not including the query string (for example, "/foo/bar"). */
-  uri: z.string(),
+  uri: z.string().refine((v) => v.length >= 1, 'length must be at least 1'),
   /** The host / endpoint provided to the client, not including the path or scheme (for example, "example.com"). */
   host: z.string().optional(),
   /** The host / endpoint that the client should send to, not including the path or scheme (for example, "prefix.example.com").  This can differ from the host provided to the client if the `hostPrefix` member of the `endpoint` trait is set, for instance. */
@@ -653,7 +653,7 @@ export const HttpRequestTestCaseSchema = z.object({
   /** A list of query string parameter names that MUST appear in the serialized request URI, but no assertion is made on the value.  Each value MUST appear in the format in which it is sent over the wire; if a key needs to be percent-encoded, then it MUST appear percent-encoded in this list. */
   requireQueryParams: smithy_test_StringListSchema.optional(),
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two `httpRequestTests` test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The name of the protocol to test. */
   protocol: z.string(),
   /** The optional authentication scheme shape ID to assume. It's possible that specific authentication schemes might influence the serialization logic of an HTTP request. */
@@ -688,9 +688,9 @@ export const HttpResponseTestCaseSchema = z.object({
   /** The media type of the `body`.  This is used to help test runners to parse and validate the expected data against generated data. */
   bodyMediaType: z.string().optional(),
   /** Defines the HTTP response code. */
-  code: z.number().int(),
+  code: z.number().int().refine((v) => Number(v) >= 100, 'must be at least 100').refine((v) => Number(v) <= 599, 'must be at most 599'),
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two `httpResponseTests` test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The shape ID of the protocol to test. */
   protocol: z.string(),
   /** The optional authentication scheme shape ID to assume. It's possible that specific authentication schemes might influence the serialization logic of an HTTP response. */
@@ -733,7 +733,7 @@ export type Events = z.infer<typeof EventsSchema>
 
 export const HttpMalformedRequestTestCaseSchema = z.object({
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two `httpMalformedRequestTests` test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The name of the protocol to test. */
   protocol: z.string(),
   /** The malformed request to send. */
@@ -762,7 +762,7 @@ export type EchoRecordsOutput = { records: AsyncIterable<Entry> }
  */
 export const EventStreamTestCaseSchema = z.object({
   /** The identifier of the test case. This identifier can be used by protocol test implementations to filter out unsupported test cases by ID, to generate test case names, etc. The provided `id` MUST match Smithy's `identifier` ABNF. No two test cases can share the same ID. */
-  id: z.string(),
+  id: z.string().refine((v) => new RegExp('^[A-Za-z_][A-Za-z0-9_]+\x24').test(v), 'must match ' + '^[A-Za-z_][A-Za-z0-9_]+\x24'),
   /** The protocol to test. */
   protocol: z.string(),
   /** The input parameters used to generate the initial request.  These parameters MUST be compatible with the input shape of the operation. */
@@ -947,19 +947,24 @@ export function decodeAdd(value: unknown): unknown {
   return { 'key': value['key'] ?? undefined, 'weight': value['weight'] ?? undefined }
 }
 
-/** `Amount` as it is written in a JSON body. */
+/** `Amount` as it is written in a JSON body: the active member's value alone. */
 export function encodeAmount(value: Amount): unknown {
   const fields = value as Record<string, unknown>
-  if (fields['number'] !== undefined) return { 'number': fields['number'] }
-  if (fields['text'] !== undefined) return { 'text': fields['text'] }
+  if (fields['number'] !== undefined) return fields['number']
+  if (fields['text'] !== undefined) return fields['text']
   return value
 }
 
-/** `Amount` read from a JSON body; validate the result with `AmountSchema`. */
+/** `Amount` read from a JSON body: the first member, in model order, that accepts it. */
 export function decodeAmount(value: unknown): unknown {
-  if (!wireIsRecord(value)) return value
-  if (value['number'] !== undefined && value['number'] !== null) return { 'number': value['number'] }
-  if (value['text'] !== undefined && value['text'] !== null) return { 'text': value['text'] }
+  {
+    const candidate = value
+    if (z.number().int().safeParse(candidate).success) return { 'number': candidate }
+  }
+  {
+    const candidate = value
+    if (z.string().safeParse(candidate).success) return { 'text': candidate }
+  }
   return value
 }
 
@@ -1376,13 +1381,15 @@ export function decodeEchoCsvOutput(value: unknown): unknown {
 
 /** `Extensible` as it is written in a JSON body. */
 export function encodeExtensible(value: Extensible): Record<string, unknown> {
-  return { 'name': value.name ?? undefined, 'rest': value.rest ?? undefined }
+  return { ...(value.rest == null ? {} : value.rest), 'name': value.name ?? undefined }
 }
 
 /** `Extensible` read from a JSON body; validate the result with `ExtensibleSchema`. */
 export function decodeExtensible(value: unknown): unknown {
   if (!wireIsRecord(value)) return value
-  return { 'name': value['name'] ?? undefined, 'rest': value['rest'] ?? undefined }
+  const declared: string[] = ['name']
+  const unknown = Object.fromEntries(Object.entries(value).filter(([k]) => !declared.includes(k)))
+  return { 'name': value['name'] ?? undefined, 'rest': Object.keys(unknown).length === 0 ? undefined : unknown }
 }
 
 /** `Formats` as it is written in a JSON body. */
@@ -1981,33 +1988,30 @@ export class MissingStreamError extends Error {
   }
 }
 
-/** Decodes each element of a deframed stream from its wire form (`decode`,
- * the union's wire codec) and validates it against the operation's element
- * schema, lazily — an element is parsed as it is
+/** Validates each element of a deframed ndjson stream against the
+ * operation's element schema, lazily — an element is parsed as it is
  * pulled, so a long-running stream doesn't buffer and a malformed element
  * fails at that element rather than silently truncating the stream. */
 export const decodeStream = async function* <T>(
   source: AsyncIterable<unknown>,
   schema: { parse: (value: unknown) => T },
   operation: string,
-  decode: (raw: unknown) => unknown = (raw) => raw,
 ): AsyncGenerator<T, void, undefined> {
   for await (const element of source) {
     try {
-      yield schema.parse(decode(element))
+      yield schema.parse(element)
     } catch (err) {
       throw new StreamDecodeError(operation, element, err)
     }
   }
 }
 
-/** Applies `f` to each element of a stream, lazily: the wire encoding of a
- * streamed union, one element at a time. */
-export const mapStream = async function* <A, B>(
+/** Applies `f` to each element of a stream as it is pulled. */
+const wireMapStream = async function* <A, B>(
   source: AsyncIterable<A>,
-  f: (a: A) => B,
+  f: (element: A) => B,
 ): AsyncGenerator<B, void, undefined> {
-  for await (const a of source) yield f(a)
+  for await (const element of source) yield f(element)
 }
 
 /** An empty stream, used when a request that declares a streamed input
@@ -2093,7 +2097,7 @@ export class NdjsonRestJsonComplianceClient {
       body: undefined,
       requestStreamEncoding: 'sse',
       requestStreamTerminator: '[DONE]',
-      stream: mapStream(input.notifications, encodeNotification),
+      stream: wireMapStream(input.notifications, encodeNotification),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
@@ -2143,7 +2147,7 @@ export class NdjsonRestJsonComplianceClient {
       url,
       body: undefined,
       requestStreamEncoding: 'ndjson',
-      stream: mapStream(input.records, encodeEntry),
+      stream: wireMapStream(input.records, encodeEntry),
       responseStreamEncoding: 'ndjson',
       options: opts,
     })
@@ -2152,7 +2156,7 @@ export class NdjsonRestJsonComplianceClient {
         throw new MissingStreamError('NdjsonRestJsonComplianceClient.echoRecords')
       }
       const raw: Record<string, unknown> = {}
-      raw['records'] = decodeStream(res.stream, EntrySchema, 'NdjsonRestJsonComplianceClient.echoRecords', decodeEntry)
+      raw['records'] = decodeStream(res.stream, { parse: (value: unknown) => EntrySchema.parse(decodeEntry(value)) }, 'NdjsonRestJsonComplianceClient.echoRecords')
       return raw as EchoRecordsOutput
     }
     throw new UnexpectedResponseError('NdjsonRestJsonComplianceClient.echoRecords', res.status, res.body, res.headers)
@@ -2167,7 +2171,7 @@ export class NdjsonRestJsonComplianceClient {
       url,
       body: undefined,
       requestStreamEncoding: 'sse',
-      stream: mapStream(input.signals, encodeSignal),
+      stream: wireMapStream(input.signals, encodeSignal),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
@@ -2220,7 +2224,7 @@ export class NdjsonRestJsonComplianceClient {
         throw new MissingStreamError('NdjsonRestJsonComplianceClient.listen')
       }
       const raw: Record<string, unknown> = {}
-      raw['signals'] = decodeStream(res.stream, SignalSchema, 'NdjsonRestJsonComplianceClient.listen', decodeSignal)
+      raw['signals'] = decodeStream(res.stream, { parse: (value: unknown) => SignalSchema.parse(decodeSignal(value)) }, 'NdjsonRestJsonComplianceClient.listen')
       return raw as ListenOutput
     }
     throw new UnexpectedResponseError('NdjsonRestJsonComplianceClient.listen', res.status, res.body, res.headers)
@@ -2233,7 +2237,7 @@ export class NdjsonRestJsonComplianceClient {
   async publish(input: PublishInput, opts?: TransportOptions): Promise<PublishOutput> {
     const url = `/publish/${wireEncodeLabel(String(input.channel))}`
     const headers: Record<string, string> = {}
-    if (input.batch !== undefined) headers['X-Batch'] = String(input.batch)
+    if (input.batch != null) headers['X-Batch'] = String(input.batch)
     const res = await this.streamTransport.requestStream({
       operation: 'NdjsonRestJsonComplianceClient.publish',
       method: 'POST',
@@ -2241,7 +2245,7 @@ export class NdjsonRestJsonComplianceClient {
       headers,
       body: undefined,
       requestStreamEncoding: 'ndjson',
-      stream: mapStream(input.commands, encodeCommand),
+      stream: wireMapStream(input.commands, encodeCommand),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
@@ -2257,7 +2261,7 @@ export class NdjsonRestJsonComplianceClient {
   async putBlob(input: PutBlobInput, opts?: TransportOptions): Promise<void> {
     const url = `/blob/${wireEncodeLabel(String(input.name))}`
     const headers: Record<string, string> = {}
-    if (input.checksum !== undefined) headers['X-Checksum'] = String(input.checksum)
+    if (input.checksum != null) headers['X-Checksum'] = String(input.checksum)
     const res = await this.streamTransport.requestStream({
       operation: 'NdjsonRestJsonComplianceClient.putBlob',
       method: 'POST',
@@ -2297,7 +2301,7 @@ export class NdjsonRestJsonComplianceClient {
         raw['subscription'] = z.string().parse(res.headers['x-subscription'])
       }
       raw['code'] = res.status
-      raw['updates'] = decodeStream(res.stream, UpdateSchema, 'NdjsonRestJsonComplianceClient.subscribe', decodeUpdate)
+      raw['updates'] = decodeStream(res.stream, { parse: (value: unknown) => UpdateSchema.parse(decodeUpdate(value)) }, 'NdjsonRestJsonComplianceClient.subscribe')
       return raw as SubscribeOutput
     }
     if (res.status === 404) {
@@ -2310,12 +2314,12 @@ export class NdjsonRestJsonComplianceClient {
   async unaryBindings(input: UnaryBindingsInput, opts?: TransportOptions): Promise<UnaryBindingsOutput> {
     const url = `/unary/${wireEncodeLabel(String(input.label))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.query !== undefined) query['q'] = String(input.query)
-    if (input.queryList !== undefined) query['list'] = input.queryList.map((e) => String(e))
+    if (input.query != null) query['q'] = String(input.query)
+    if (input.queryList != null) query['list'] = input.queryList.map((e) => String(e))
     const headers: Record<string, string> = {}
-    if (input.meta !== undefined) for (const [k, v] of Object.entries(input.meta)) headers['x-meta-' + k] = v
-    if (input.header !== undefined) headers['X-Header'] = String(input.header)
-    if (input.stamp !== undefined) headers['X-Stamp'] = wireHttpDate(input.stamp)
+    if (input.meta != null) for (const [k, v] of Object.entries(input.meta)) headers['x-meta-' + k] = v
+    if (input.header != null) headers['X-Header'] = String(input.header)
+    if (input.stamp != null) headers['X-Stamp'] = wireHttpDate(input.stamp)
     const res = await this.transport.request({
       operation: 'NdjsonRestJsonComplianceClient.unaryBindings',
       method: 'POST',
@@ -2354,7 +2358,7 @@ export class NdjsonRestJsonComplianceClient {
   async unaryQueryParams(input: UnaryQueryParamsInput, opts?: TransportOptions): Promise<void> {
     const url = `/unary-query`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.filters !== undefined) for (const [k, v] of Object.entries(input.filters)) query[k] = v
+    if (input.filters != null) for (const [k, v] of Object.entries(input.filters)) query[k] = v
     const res = await this.transport.request({
       operation: 'NdjsonRestJsonComplianceClient.unaryQueryParams',
       method: 'GET',
@@ -2386,7 +2390,7 @@ export class NdjsonRestJsonComplianceClient {
         throw new MissingStreamError('NdjsonRestJsonComplianceClient.watch')
       }
       const raw: Record<string, unknown> = {}
-      raw['notifications'] = decodeStream(res.stream, NotificationSchema, 'NdjsonRestJsonComplianceClient.watch', decodeNotification)
+      raw['notifications'] = decodeStream(res.stream, { parse: (value: unknown) => NotificationSchema.parse(decodeNotification(value)) }, 'NdjsonRestJsonComplianceClient.watch')
       return raw as WatchOutput
     }
     throw new UnexpectedResponseError('NdjsonRestJsonComplianceClient.watch', res.status, res.body, res.headers)
@@ -2614,7 +2618,7 @@ export const NdjsonRestJsonComplianceMock: MockServiceDescriptor<NdjsonRestJsonC
         const decoded = CollectInputSchema.parse(raw)
         return {
           ...decoded,
-          notifications: decodeStream((req.stream ?? emptyStream()), NotificationSchema, 'Collect', decodeNotification),
+          notifications: decodeStream((req.stream ?? emptyStream()), { parse: (value: unknown) => NotificationSchema.parse(decodeNotification(value)) }, 'Collect'),
         }
       },
       encodeBody: (output) => { const o = output as CollectOutput; return { 'received': o.received ?? undefined } },
@@ -2644,12 +2648,12 @@ export const NdjsonRestJsonComplianceMock: MockServiceDescriptor<NdjsonRestJsonC
         const decoded = EchoRecordsInputSchema.parse(raw)
         return {
           ...decoded,
-          records: decodeStream((req.stream ?? emptyStream()), EntrySchema, 'EchoRecords', decodeEntry),
+          records: decodeStream((req.stream ?? emptyStream()), { parse: (value: unknown) => EntrySchema.parse(decodeEntry(value)) }, 'EchoRecords'),
         }
       },
       encodeBody: () => undefined,
       responseStreamEncoding: 'ndjson',
-      encodeStream: (output) => mapStream((output as Record<string, unknown>)['records'] as AsyncIterable<Entry>, encodeEntry),
+      encodeStream: (output) => wireMapStream((output as Record<string, unknown>)['records'] as AsyncIterable<Entry>, encodeEntry),
     },
     {
       key: 'emit',
@@ -2660,7 +2664,7 @@ export const NdjsonRestJsonComplianceMock: MockServiceDescriptor<NdjsonRestJsonC
         const decoded = EmitInputSchema.parse(raw)
         return {
           ...decoded,
-          signals: decodeStream((req.stream ?? emptyStream()), SignalSchema, 'Emit', decodeSignal),
+          signals: decodeStream((req.stream ?? emptyStream()), { parse: (value: unknown) => SignalSchema.parse(decodeSignal(value)) }, 'Emit'),
         }
       },
       encodeBody: (output) => { const o = output as EmitOutput; return { 'received': o.received ?? undefined } },
@@ -2690,7 +2694,7 @@ export const NdjsonRestJsonComplianceMock: MockServiceDescriptor<NdjsonRestJsonC
       },
       encodeBody: () => undefined,
       responseStreamEncoding: 'sse',
-      encodeStream: (output) => mapStream((output as Record<string, unknown>)['signals'] as AsyncIterable<Signal>, encodeSignal),
+      encodeStream: (output) => wireMapStream((output as Record<string, unknown>)['signals'] as AsyncIterable<Signal>, encodeSignal),
     },
     {
       key: 'publish',
@@ -2702,7 +2706,7 @@ export const NdjsonRestJsonComplianceMock: MockServiceDescriptor<NdjsonRestJsonC
         const decoded = PublishInputSchema.parse(raw)
         return {
           ...decoded,
-          commands: decodeStream((req.stream ?? emptyStream()), CommandSchema, 'Publish', decodeCommand),
+          commands: decodeStream((req.stream ?? emptyStream()), { parse: (value: unknown) => CommandSchema.parse(decodeCommand(value)) }, 'Publish'),
         }
       },
       encodeBody: (output) => { const o = output as PublishOutput; return { 'accepted': o.accepted ?? undefined } },
@@ -2735,7 +2739,7 @@ export const NdjsonRestJsonComplianceMock: MockServiceDescriptor<NdjsonRestJsonC
       },
       encodeBody: () => undefined,
       responseStreamEncoding: 'ndjson',
-      encodeStream: (output) => mapStream((output as Record<string, unknown>)['updates'] as AsyncIterable<Update>, encodeUpdate),
+      encodeStream: (output) => wireMapStream((output as Record<string, unknown>)['updates'] as AsyncIterable<Update>, encodeUpdate),
     },
     {
       key: 'unaryBindings',
@@ -2791,7 +2795,7 @@ export const NdjsonRestJsonComplianceMock: MockServiceDescriptor<NdjsonRestJsonC
       encodeBody: () => undefined,
       responseStreamEncoding: 'sse',
       responseStreamTerminator: '[DONE]',
-      encodeStream: (output) => mapStream((output as Record<string, unknown>)['notifications'] as AsyncIterable<Notification>, encodeNotification),
+      encodeStream: (output) => wireMapStream((output as Record<string, unknown>)['notifications'] as AsyncIterable<Notification>, encodeNotification),
     },
   ],
 }

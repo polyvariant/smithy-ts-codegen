@@ -20,6 +20,7 @@ import alloy.DiscriminatedUnionTrait
 import alloy.JsonUnknownTrait
 import alloy.NullableTrait
 import alloy.OpenEnumTrait
+import alloy.UuidFormatTrait
 import org.polyvariant.ndjson.ServerSentEventsTrait
 import org.polyvariant.smithy.ts.api.PathSegment
 import org.polyvariant.smithy.ts.api.TsCodegenExtension
@@ -42,10 +43,13 @@ import software.amazon.smithy.model.traits.HttpQueryParamsTrait
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpResponseCodeTrait
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.MixinTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
+import software.amazon.smithy.model.traits.PatternTrait
+import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.TraitDefinition
@@ -698,7 +702,7 @@ object TsCodegenPlugin {
     val name = w.tsName(shape)
     val target = model.expectShape(shape.getMember.getTarget)
     val elem = inlineSchemaExpr(w, target, shape.getMember) + sparseSuffix(shape)
-    w.line(s"export const ${name}Schema = z.array($elem)")
+    w.line(s"export const ${name}Schema = z.array($elem)${constraintChecks(shape, shape)}")
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
@@ -706,7 +710,9 @@ object TsCodegenPlugin {
     val name = w.tsName(shape)
     val value = model.expectShape(shape.getValue.getTarget)
     val valueExpr = inlineSchemaExpr(w, value, shape.getValue) + sparseSuffix(shape)
-    w.line(s"export const ${name}Schema = z.record(z.string(), $valueExpr)")
+    w.line(
+      s"export const ${name}Schema = z.record(z.string(), $valueExpr)${constraintChecks(shape, shape)}"
+    )
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
@@ -720,7 +726,7 @@ object TsCodegenPlugin {
   private def writeAlias(w: TsWriter, shape: Shape): Unit = {
     val name = w.tsName(shape)
     val base = primitiveSchema(shape)
-    val branded = s"$base.brand<'$name'>()"
+    val branded = s"$base${constraintChecks(shape, shape)}.brand<'$name'>()"
     w.line(s"export const ${name}Schema = $branded")
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
@@ -749,11 +755,68 @@ object TsCodegenPlugin {
     * member-scoped, so it can only be honored where the member is in scope — hence this overload
     * alongside the shape-only one above.
     */
-  private def inlineSchemaExpr(w: TsWriter, target: Shape, member: MemberShape): String =
-    if (isLossless(member))
-      "z.union([z.number(), z.string()])"
-    else
-      inlineSchemaExpr(w, target)
+  private[ts] def inlineSchemaExpr(w: TsWriter, target: Shape, member: MemberShape): String = {
+    val base =
+      if (isLossless(member))
+        "z.union([z.number(), z.string()])"
+      else
+        inlineSchemaExpr(w, target)
+    base + constraintChecks(member, target)
+  }
+
+  /** The constraint traits `carrier` itself holds (`@range`, `@length`, `@pattern`, and alloy's
+    * `@uuidFormat`), as zod refinements on a value of `target`. A shape's own constraints are
+    * checked in its schema, a member's where the member uses it, so each is checked once.
+    *
+    * They are `refine`s rather than zod's own `.min`/`.regex`, which exist only on some schema
+    * kinds: `refine` keeps the inferred type and applies to a branded alias, a `@lossless` union or
+    * a record alike. As in smithy4s, which the client follows: a string's length is its UTF-16
+    * length, and a pattern matches anywhere unless it is anchored.
+    */
+  /** A regex as a JS string literal for `new RegExp`, with `$` spelled `\x24`: the same string at
+    * runtime, but none of the writer's `$` format markers, so it can go through `w.line` like any
+    * other schema expression.
+    */
+  private def regexSource(pattern: String): String = jsString(pattern).replace("$", "\\x24")
+
+  private def constraintChecks(carrier: Shape, target: Shape): String = {
+    val range = carrier.getTrait(classOf[RangeTrait]).toScala.toList.flatMap { t =>
+      t.getMin.toScala.map(min => s".refine((v) => Number(v) >= $min, 'must be at least $min')") ++
+        t.getMax.toScala.map(max => s".refine((v) => Number(v) <= $max, 'must be at most $max')")
+    }
+    val size =
+      target match {
+        case _: StringShape => "v.length"
+        case _: ListShape   => "v.length"
+        case _: MapShape    => "Object.keys(v).length"
+        case _              => ""
+      }
+    val length =
+      if (size.isEmpty)
+        Nil
+      else
+        carrier.getTrait(classOf[LengthTrait]).toScala.toList.flatMap { t =>
+          t.getMin
+            .toScala
+            .map(min => s".refine((v) => $size >= $min, 'length must be at least $min')") ++
+            t.getMax
+              .toScala
+              .map(max => s".refine((v) => $size <= $max, 'length must be at most $max')")
+        }
+    val pattern = carrier.getTrait(classOf[PatternTrait]).toScala.toList.map { t =>
+      val p = regexSource(t.getValue)
+      s".refine((v) => new RegExp($p).test(v), 'must match ' + $p)"
+    }
+    val uuid =
+      if (carrier.hasTrait(classOf[UuidFormatTrait])) {
+        val p = regexSource(
+          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        )
+        List(s".refine((v) => new RegExp($p).test(v), 'must be a UUID')")
+      } else
+        Nil
+    (range ++ length ++ pattern ++ uuid).mkString
+  }
 
   private def isLossless(member: MemberShape): Boolean =
     member.hasTrait(LosslessTraitId)
