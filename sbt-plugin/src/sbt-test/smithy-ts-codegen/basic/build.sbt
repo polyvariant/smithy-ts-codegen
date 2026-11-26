@@ -38,7 +38,9 @@ TaskKey[Unit]("checkOutput") := {
   require("constructor(transport: Transport) {")
   // an ndjson output stream, element-checked against the union schema
   require("responseStreamEncoding: 'ndjson',")
-  require("decodeStream(res.stream, FeedEventSchema,")
+  require(
+    "decodeStream(res.stream, { parse: (value: unknown) => FeedEventSchema.parse(decodeFeedEvent(value)) },"
+  )
   // a streamed member alongside a bound one: the stream is intersected in
   require(
     "export type WatchOutput = z.infer<typeof WatchOutputSchema> & { events: AsyncIterable<FeedEvent> }"

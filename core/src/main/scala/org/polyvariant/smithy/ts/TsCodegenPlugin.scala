@@ -908,24 +908,26 @@ object TsCodegenPlugin {
     serviceOperations(model, service).exists(opStreams(w, model, _).isStreaming)
 
   /** Emits the expression that adapts a stream of typed elements into the stream of values the
-    * transport frames — i.e. the encode half. Binary streams pass through untouched; ndjson streams
-    * are handed over as-is too (the transport does `JSON.stringify` per element), so this is a pure
-    * pass-through today, kept as a seam for future per-element encoding.
+    * transport frames — i.e. the encode half. Binary streams pass through untouched; a JSON stream
+    * (ndjson or server-sent events) has each element put in its wire form by the union's codec, as
+    * a unary body would be, and the transport serialises what comes out.
     */
-  private def streamEncodeExpr(info: StreamInfo, expr: String): String = {
-    val _ = info
-    expr
-  }
+  private def streamEncodeExpr(info: StreamInfo, expr: String): String =
+    info.framing match {
+      case StreamFraming.Binary  => expr
+      case j: StreamFraming.Json => s"wireMapStream($expr, encode${j.shapeName})"
+    }
 
-  /** Emits the expression that validates the transport's stream of already-framed values against
-    * the element schema. Binary streams are `Uint8Array` chunks and need no parsing; ndjson streams
-    * get the union schema applied per line, so a malformed element fails at the element, naming the
-    * operation.
+  /** Emits the expression that decodes and validates the transport's stream of already-framed
+    * values. Binary streams are `Uint8Array` chunks and need no parsing; a JSON stream gets each
+    * element decoded from its wire form and checked against the union schema, so a malformed
+    * element fails at the element, naming the operation.
     */
   private def streamDecodeExpr(info: StreamInfo, expr: String, opLabel: String): String =
     info.framing match {
       case StreamFraming.Binary  => s"$expr as AsyncIterable<Uint8Array>"
-      case j: StreamFraming.Json => s"decodeStream($expr, ${j.schemaExpr}, $opLabel)"
+      case j: StreamFraming.Json =>
+        s"decodeStream($expr, { parse: (value: unknown) => ${j.schemaExpr}.parse(decode${j.shapeName}(value)) }, $opLabel)"
     }
 
   // --------------------------------------------------------------------------
@@ -1171,6 +1173,14 @@ object TsCodegenPlugin {
           w.line("throw new StreamDecodeError(operation, element, err)")
         }
       }
+    }
+    w.line("")
+    w.line("/** Applies `f` to each element of a stream as it is pulled. */")
+    w.line("const wireMapStream = async function* <A, B>(")
+    w.line("  source: AsyncIterable<A>,")
+    w.line("  f: (element: A) => B,")
+    w.block("): AsyncGenerator<B, void, undefined> {", "}") {
+      w.line("for await (const element of source) yield f(element)")
     }
     w.line("")
     w.line("/** An empty stream, used when a request that declares a streamed input")
@@ -1933,7 +1943,7 @@ object TsCodegenPlugin {
           .terminator
           .foreach(t => w.line(s"responseStreamTerminator: ${jsString(t)},"))
         w.line(
-          s"encodeStream: (output) => ${streamEncodeExpr(out, s"(output as Record<string, unknown>)[${jsString(out.memberName)}] as AsyncIterable<unknown>")},"
+          s"encodeStream: (output) => ${streamEncodeExpr(out, s"(output as Record<string, unknown>)[${jsString(out.memberName)}] as ${out.streamType}")},"
         )
       }
     }

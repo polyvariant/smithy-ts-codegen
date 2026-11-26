@@ -228,7 +228,12 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(out.contains("responseStreamEncoding: 'ndjson',"))
     assert(out.contains("const res = await this.streamTransport.requestStream({"))
     // each element is validated against the union schema as it is pulled
-    assert(out.contains("decodeStream(res.stream, WatchEventSchema,"))
+    // Each element is decoded from its wire form before the union schema checks it.
+    assert(
+      out.contains(
+        "decodeStream(res.stream, { parse: (value: unknown) => WatchEventSchema.parse(decodeWatchEvent(value)) },"
+      )
+    )
     // every operation here streams, so the unary half would never be called —
     // the client takes the streaming half alone
     assert(out.contains("constructor(streamTransport: StreamTransport) {"))
@@ -425,7 +430,11 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(out.contains("responseStreamEncoding: 'sse',"))
     assert(out.contains("responseStreamTerminator: '[DONE]',"))
     // elements are validated against the union schema, exactly as for ndjson
-    assert(out.contains("decodeStream(res.stream, ChunkSchema,"))
+    assert(
+      out.contains(
+        "decodeStream(res.stream, { parse: (value: unknown) => ChunkSchema.parse(decodeChunk(value)) },"
+      )
+    )
     assert(out.contains("export type StreamEncoding = 'ndjson' | 'sse' | 'binary'"))
   }
 
