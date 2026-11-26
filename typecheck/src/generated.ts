@@ -120,6 +120,11 @@ export const GetPersonInputSchema = z.object({
 })
 export type GetPersonInput = z.infer<typeof GetPersonInputSchema>
 
+export const LineSchema = z.object({
+  text: z.string(),
+})
+export type Line = z.infer<typeof LineSchema>
+
 export const MeasureInputSchema = z.object({
   seed: z.union([z.number(), z.string()]),
   offset: z.union([z.number(), z.string()]).optional(),
@@ -143,6 +148,11 @@ export const NotFoundSchema = z.object({
 })
 export type NotFound = z.infer<typeof NotFoundSchema>
 
+export const NotifyInputSchema = z.object({
+  topic: z.string(),
+})
+export type NotifyInput = z.infer<typeof NotifyInputSchema>
+
 /**
  * A branded alias.
  */
@@ -159,6 +169,11 @@ export const PlainOutputSchema = z.object({
   message: z.string(),
 })
 export type PlainOutput = z.infer<typeof PlainOutputSchema>
+
+export const ReportOutputSchema = z.object({
+  received: z.number().int(),
+})
+export type ReportOutput = z.infer<typeof ReportOutputSchema>
 
 export const SearchInputSchema = z.object({
   q: z.string().optional(),
@@ -246,6 +261,11 @@ export const ZoneSchema = z.union([
 ])
 export type Zone = z.infer<typeof ZoneSchema>
 
+export const ReportEntrySchema = z.union([
+  z.object({ line: LineSchema }),
+])
+export type ReportEntry = z.infer<typeof ReportEntrySchema>
+
 export const MeasureOutputSchema = z.object({
   measurement: MeasurementSchema,
   total: z.union([z.number(), z.string()]).optional(),
@@ -278,6 +298,10 @@ export const GoogleRpcStatusSchema = z.object({
 })
 export type GoogleRpcStatus = z.infer<typeof GoogleRpcStatusSchema>
 
+export const ReportInputSchema = z.object({
+})
+export type ReportInput = { entries: AsyncIterable<ReportEntry> }
+
 export const FeedEventSchema = z.union([
   z.object({ item: PersonSchema }),
   z.object({ completed: DoneSchema }),
@@ -291,6 +315,12 @@ export const GetPersonOutputSchema = z.object({
   code: z.number().int().optional(),
 })
 export type GetPersonOutput = z.infer<typeof GetPersonOutputSchema>
+
+export const NotificationSchema = z.union([
+  z.object({ item: PersonSchema }),
+  z.object({ completed: DoneSchema }),
+])
+export type Notification = z.infer<typeof NotificationSchema>
 
 export const PeopleSchema = z.array(PersonSchema)
 export type People = z.infer<typeof PeopleSchema>
@@ -320,6 +350,10 @@ export const WatchOutputSchema = z.object({
   session: z.string().optional(),
 })
 export type WatchOutput = z.infer<typeof WatchOutputSchema> & { events: AsyncIterable<FeedEvent> }
+
+export const NotifyOutputSchema = z.object({
+})
+export type NotifyOutput = { notifications: AsyncIterable<Notification> }
 
 export const SearchOutputSchema = z.object({
   results: PeopleSchema,
@@ -455,11 +489,17 @@ export class UnauthenticatedError extends Error {
  *     newline. Incoming: split on newlines, skip blank lines, and
  *     `JSON.parse` each one. The generated client applies the element
  *     schema on top of whatever is yielded here.
+ *   - `'sse'` — one server-sent event per JSON value
+ *     (`text/event-stream`), for a union marked `@serverSentEvents`.
+ *     Outgoing: each element's JSON as an event's `data`, then the
+ *     terminator event if `requestStreamTerminator` is set. Incoming:
+ *     `JSON.parse` each event's `data`, skipping comments, other fields,
+ *     keep-alives and the `responseStreamTerminator` event.
  *   - `'binary'` — the body verbatim
  *     (`application/octet-stream`), as `Uint8Array` chunks. Chunk
  *     boundaries carry no meaning in either direction.
  */
-export type StreamEncoding = 'ndjson' | 'binary'
+export type StreamEncoding = 'ndjson' | 'sse' | 'binary'
 
 export interface StreamTransportRequest extends TransportRequest {
   /** Framing for the request body, when it streams. `undefined` means the
@@ -470,8 +510,16 @@ export interface StreamTransportRequest extends TransportRequest {
    * `undefined` means an ordinary JSON response body.
    */
   responseStreamEncoding?: StreamEncoding
+  /** For an `'sse'` request: the data of one more event to send after
+   * the last value (the union's `@serverSentEvents(terminator:)`).
+   */
+  requestStreamTerminator?: string
+  /** For an `'sse'` response: the data of the event the server sends
+   * after the last value, which is not itself a value and is skipped.
+   */
+  responseStreamTerminator?: string
   /** The outgoing stream, present exactly when `requestStreamEncoding` is.
-   * For `'ndjson'` these are the values to serialise, one per line; for
+   * For `'ndjson'` and `'sse'` these are the values to serialise; for
    * `'binary'`, `Uint8Array` chunks. Overrides `body`.
    */
   stream?: AsyncIterable<unknown>
@@ -484,8 +532,9 @@ export interface StreamTransportResponse {
   /** The deframed response body, present exactly when the operation
    * streams its output and the status was 2xx. Elements are the values
    * `responseStreamEncoding` describes — already `JSON.parse`d for
-   * `'ndjson'`, raw `Uint8Array` chunks for `'binary'`. The generated
-   * client validates ndjson elements against the operation's schema.
+   * `'ndjson'` and `'sse'`, raw `Uint8Array` chunks for `'binary'`. The
+   * generated client validates those elements against the operation's
+   * schema.
    */
   stream?: AsyncIterable<unknown>
   /** The fully-read body, for a non-2xx response (so declared errors can
@@ -747,6 +796,35 @@ export class FeedClient {
     throw new UnexpectedResponseError('FeedClient.echo', res.status, res.body, res.headers)
   }
 
+  /**
+   * Streams server-sent events out, closed by a terminator event.
+   * Resolves once the response status is known; `notifications` then yields `Notification` values as server-sent events lazily, so iterate it to consume the response.
+   */
+  async notify(input: NotifyInput, opts?: TransportOptions): Promise<NotifyOutput> {
+    const url = `/notify`
+    const res = await this.streamTransport.requestStream({
+      operation: 'FeedClient.notify',
+      method: 'POST',
+      url,
+      body: { topic: input.topic },
+      responseStreamEncoding: 'sse',
+      responseStreamTerminator: '[DONE]',
+      options: opts,
+    })
+    if (res.status >= 200 && res.status < 300) {
+      if (res.stream === undefined) {
+        throw new MissingStreamError('FeedClient.notify')
+      }
+      const raw: Record<string, unknown> = {}
+      raw['notifications'] = decodeStream(res.stream, NotificationSchema, 'FeedClient.notify')
+      return raw as NotifyOutput
+    }
+    if (res.status === 404) {
+      throw new NotFoundError(NotFoundSchema.parse(res.body))
+    }
+    throw new UnexpectedResponseError('FeedClient.notify', res.status, res.body, res.headers)
+  }
+
   /** A unary operation on a streaming service. */
   async plain(opts?: TransportOptions): Promise<PlainOutput> {
     const url = `/plain`
@@ -764,6 +842,30 @@ export class FeedClient {
       throw new NotFoundError(NotFoundSchema.parse(res.body))
     }
     throw new UnexpectedResponseError('FeedClient.plain', res.status, res.body, res.headers)
+  }
+
+  /**
+   * Streams server-sent events in, with no terminator.
+   * Streams `entries` to the server as `ReportEntry` values as server-sent events.
+   */
+  async report(input: ReportInput, opts?: TransportOptions): Promise<ReportOutput> {
+    const url = `/report`
+    const res = await this.streamTransport.requestStream({
+      operation: 'FeedClient.report',
+      method: 'POST',
+      url,
+      body: undefined,
+      requestStreamEncoding: 'sse',
+      stream: input.entries,
+      options: opts,
+    })
+    if (res.status >= 200 && res.status < 300) {
+      return ReportOutputSchema.parse(res.body)
+    }
+    if (res.status === 404) {
+      throw new NotFoundError(NotFoundSchema.parse(res.body))
+    }
+    throw new UnexpectedResponseError('FeedClient.report', res.status, res.body, res.headers)
   }
 
   /**
@@ -838,7 +940,7 @@ export interface MockRequest {
   query: Record<string, string | undefined>
   body: unknown
   /** The deframed request body, for an operation that streams its input.
-   * Elements are `JSON.parse`d values for an ndjson stream and
+   * Elements are `JSON.parse`d values for an ndjson or sse stream and
    * `Uint8Array` chunks for a binary one — the same shape the streaming
    * transport yields, so a mock and a real server see the same thing. */
   stream?: AsyncIterable<unknown>
@@ -852,7 +954,10 @@ export interface MockResponse {
    * adapter frames these elements per `streamEncoding`. */
   stream?: AsyncIterable<unknown>
   /** Framing for `stream`, mirroring `StreamEncoding` on the transport. */
-  streamEncoding?: 'ndjson' | 'binary'
+  streamEncoding?: 'ndjson' | 'sse' | 'binary'
+  /** For an `'sse'` stream: the data of the event to send after the last
+   * element, if the union declares one. */
+  streamTerminator?: string
 }
 
 /** One URI path segment of an operation's route: a literal or a
@@ -870,7 +975,9 @@ export interface MockOperation<Handlers> {
   readonly encodeBody: (output: unknown) => unknown
   /** Framing of this operation's streamed output, when it streams one.
    * `undefined` for an ordinary unary operation. */
-  readonly responseStreamEncoding?: 'ndjson' | 'binary'
+  readonly responseStreamEncoding?: 'ndjson' | 'sse' | 'binary'
+  /** The terminator event's data, for an `'sse'` output that declares one. */
+  readonly responseStreamTerminator?: string
   /** Pulls the streamed member out of a handler's returned output, for
    * an operation that streams its output. */
   readonly encodeStream?: (output: unknown) => AsyncIterable<unknown>
@@ -960,6 +1067,7 @@ export const mockService = <Handlers>(
                 headers: {},
                 stream: op.encodeStream(output),
                 streamEncoding: op.responseStreamEncoding,
+                ...(op.responseStreamTerminator !== undefined ? { streamTerminator: op.responseStreamTerminator } : {}),
               }
             }
             return { status: 200, body: op.encodeBody(output), headers: {} }
@@ -1099,8 +1207,12 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
 export interface FeedHandlers {
   /** Streams ndjson in both directions. */
   echo(input: EchoInput): EchoOutput | Promise<EchoOutput>
+  /** Streams server-sent events out, closed by a terminator event. */
+  notify(input: NotifyInput): NotifyOutput | Promise<NotifyOutput>
   /** A unary operation on a streaming service. */
   plain(): PlainOutput | Promise<PlainOutput>
+  /** Streams server-sent events in, with no terminator. */
+  report(input: ReportInput): ReportOutput | Promise<ReportOutput>
   /** Streams raw bytes in. */
   upload(input: UploadInput): UploadOutput | Promise<UploadOutput>
   /** Streams ndjson out, with a header alongside the stream. */
@@ -1127,10 +1239,39 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
       encodeStream: (output) => (output as Record<string, unknown>)['outgoing'] as AsyncIterable<unknown>,
     },
     {
+      key: 'notify',
+      method: 'POST',
+      segments: [{ literal: 'notify' }],
+      decodeInput: (req) => {
+        const raw: Record<string, unknown> = {}
+        const body = (req.body ?? {}) as Record<string, unknown>
+        raw['topic'] = body['topic']
+        return NotifyInputSchema.parse(raw) as NotifyInput
+      },
+      encodeBody: () => undefined,
+      responseStreamEncoding: 'sse',
+      responseStreamTerminator: '[DONE]',
+      encodeStream: (output) => (output as Record<string, unknown>)['notifications'] as AsyncIterable<unknown>,
+    },
+    {
       key: 'plain',
       method: 'GET',
       segments: [{ literal: 'plain' }],
       decodeInput: () => undefined,
+      encodeBody: (output) => output,
+    },
+    {
+      key: 'report',
+      method: 'POST',
+      segments: [{ literal: 'report' }],
+      decodeInput: (req) => {
+        const raw: Record<string, unknown> = {}
+        const decoded = ReportInputSchema.parse(raw)
+        return {
+          ...decoded,
+          entries: decodeStream((req.stream ?? emptyStream()), ReportEntrySchema, 'Report'),
+        }
+      },
       encodeBody: (output) => output,
     },
     {

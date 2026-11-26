@@ -8,6 +8,7 @@ import {
   encodeNdjson,
   readableToAsyncIterable,
 } from './ndjson.js'
+import { decodeSse, encodeSse } from './sse.js'
 import type {
   FullTransport,
   StreamTransportRequest,
@@ -195,18 +196,33 @@ export const fetchTransport = (options: FetchTransportOptions = {}): FullTranspo
     return {
       status: res.status,
       headers,
-      stream:
-        req.responseStreamEncoding === 'ndjson' ? decodeNdjson(bytes, req.operation) : bytes,
+      stream: decodeResponseStream(req, bytes),
     }
   }
 
   return { request, requestStream }
 }
 
+const decodeResponseStream = (
+  req: StreamTransportRequest,
+  bytes: AsyncIterable<Uint8Array>,
+): AsyncIterable<unknown> => {
+  switch (req.responseStreamEncoding) {
+    case 'ndjson':
+      return decodeNdjson(bytes, req.operation)
+    case 'sse':
+      return decodeSse(bytes, req.operation, req.responseStreamTerminator)
+    default:
+      return bytes
+  }
+}
+
 const requestContentType = (req: StreamTransportRequest): Record<string, string> => {
   switch (req.requestStreamEncoding) {
     case 'ndjson':
       return { 'content-type': 'application/x-ndjson' }
+    case 'sse':
+      return { 'content-type': 'text/event-stream' }
     case 'binary':
       return { 'content-type': 'application/octet-stream' }
     default:
@@ -218,6 +234,8 @@ const responseAccept = (req: StreamTransportRequest): Record<string, string> => 
   switch (req.responseStreamEncoding) {
     case 'ndjson':
       return { accept: 'application/x-ndjson' }
+    case 'sse':
+      return { accept: 'text/event-stream' }
     case 'binary':
       return { accept: 'application/octet-stream' }
     default:
@@ -244,7 +262,11 @@ const streamBody = async (
   }
 
   const framed =
-    req.requestStreamEncoding === 'ndjson' ? encodeNdjson(req.stream) : encodeBinary(req.stream)
+    req.requestStreamEncoding === 'ndjson'
+      ? encodeNdjson(req.stream)
+      : req.requestStreamEncoding === 'sse'
+        ? encodeSse(req.stream, req.requestStreamTerminator)
+        : encodeBinary(req.stream)
 
   if (supportsRequestStreams()) {
     return { body: asyncIterableToReadable(framed), duplex: true }

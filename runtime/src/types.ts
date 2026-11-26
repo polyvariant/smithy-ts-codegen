@@ -48,10 +48,13 @@ export interface Transport {
  * from the shape of the `@streaming` member, so a transport never guesses:
  *
  *   - `'ndjson'` — one JSON value per line (`application/x-ndjson`).
+ *   - `'sse'` — one server-sent event per JSON value (`text/event-stream`),
+ *     for a union marked `@serverSentEvents`; see `requestStreamTerminator` /
+ *     `responseStreamTerminator` for the optional closing event.
  *   - `'binary'` — the body verbatim (`application/octet-stream`), as
  *     `Uint8Array` chunks whose boundaries carry no meaning.
  */
-export type StreamEncoding = 'ndjson' | 'binary'
+export type StreamEncoding = 'ndjson' | 'sse' | 'binary'
 
 export interface StreamTransportRequest extends TransportRequest {
   /** Framing for the request body when it streams; `undefined` means an
@@ -60,6 +63,12 @@ export interface StreamTransportRequest extends TransportRequest {
   /** Framing the response body is expected in when it streams; `undefined`
    * means an ordinary JSON response body. */
   responseStreamEncoding?: StreamEncoding
+  /** For an `'sse'` request: the data of one more event to send after the
+   * last value (the union's `@serverSentEvents(terminator:)`). */
+  requestStreamTerminator?: string
+  /** For an `'sse'` response: the data of the event the server sends after the
+   * last value, which is not itself a value and is skipped. */
+  responseStreamTerminator?: string
   /** The outgoing stream, present exactly when `requestStreamEncoding` is.
    * Overrides `body`. */
   stream?: AsyncIterable<unknown>
@@ -69,9 +78,9 @@ export interface StreamTransportResponse {
   status: number
   headers: Record<string, string>
   /** The deframed response body — present exactly when the operation streams
-   * its output and the status was 2xx. Already parsed for `'ndjson'`, raw
+   * its output and the status was 2xx. Already parsed for `'ndjson'` and `'sse'`, raw
    * `Uint8Array` chunks for `'binary'`. The generated client validates ndjson
-   * elements against the operation's schema.
+   * and sse elements against the operation's schema.
    *
    * Parse ndjson lines with `parseLossless`, not `JSON.parse`: elements are
    * parsed here, before the client sees them, so a `@lossless` member would

@@ -51,3 +51,16 @@ export class NdjsonParseError extends Error {
     this.line = line
   }
 }
+
+/** Thrown while reading a server-sent-events response whose event data was not
+ * valid JSON. The server-sent-events counterpart of {@link NdjsonParseError}. */
+export class SseParseError extends Error {
+  readonly operation: string
+  readonly data: string
+  constructor(operation: string, data: string, cause: unknown) {
+    super(operation + ' -> could not parse a server-sent event', { cause })
+    this.name = 'SseParseError'
+    this.operation = operation
+    this.data = data
+  }
+}
