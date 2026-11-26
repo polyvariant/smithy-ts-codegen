@@ -11,3 +11,18 @@
 # smithy4s leaves @idempotencyToken members to the caller, so that setting one
 # is a conscious decision made outside of any retry loop.
 restJson1/request/RestJsonQueryIdempotencyTokenAutoFill
+
+# --- Not yet supported: alloy traits and constraint traits ---
+# Unlike the case above, these are gaps rather than deliberate choices:
+# smithy4s handles each of them. They fail the same way in a unary body, and
+# show up here because smithy4s-ndjson's suite is the first to exercise them.
+#
+# @untagged unions are encoded and decoded as tagged ones.
+ndjsonRestJson/events/NdjsonRestJsonRecordsUntagged
+# @jsonUnknown on a structure's map member: unknown members are dropped on
+# read and written nested under the map's name.
+ndjsonRestJson/events/NdjsonRestJsonRecordsJsonUnknownStructureMembers
+# Constraint traits (@range, @length, @pattern) and @uuidFormat aren't
+# enforced on decoded values.
+ndjsonRestJson/events/NdjsonRestJsonRecordsRejectsInvalidUuidOnClient
+ndjsonRestJson/events/NdjsonRestJsonSubscribeRejectsOutOfRange

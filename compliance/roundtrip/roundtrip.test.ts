@@ -12,6 +12,10 @@ const urlFor = (suite: string): string => {
   return url
 }
 
-await registerSuites(new URL('./known-failures.txt', import.meta.url), (gen, tc, suite) =>
-  runRoundTrip(gen, tc, urlFor(suite)),
+// ndjsonRestJson isn't served yet: that needs smithy4s-ndjson's builder on the
+// server side, and its event-stream cases a runner of their own.
+await registerSuites(
+  new URL('./known-failures.txt', import.meta.url),
+  (gen, tc, suite) => runRoundTrip(gen, tc, urlFor(suite)),
+  ['alloy', 'restJson1'],
 )

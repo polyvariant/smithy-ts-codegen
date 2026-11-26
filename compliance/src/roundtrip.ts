@@ -38,6 +38,8 @@ export const runRoundTrip = async (
   tc: ComplianceCase,
   baseUrl: string,
 ): Promise<string[]> => {
+  // Only the HTTP suites are served (see roundtrip.test.ts).
+  if (tc.kind === 'events') return ['event-stream cases are not round-tripped']
   const error = tc.error === null ? '' : `?error=${encodeURIComponent(tc.error)}`
   const armed = await fetch(
     `${baseUrl}/__roundtrip/arm/${tc.kind}/${encodeURIComponent(tc.id)}${error}`,

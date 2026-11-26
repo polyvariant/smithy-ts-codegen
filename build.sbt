@@ -70,6 +70,9 @@ val smithyVersion = "1.75.0"
 val alloyVersion = "0.3.41"
 val smithy4sVersion = "0.19.13"
 val smithy4sNdjsonVersion = "0.4.0"
+// The compliance cases only. From 0.5 smithy4s-ndjson is compiled for Java 17, and this build
+// still targets 11, so the protocol itself stays on 0.4.0: its model is the same in both.
+val smithy4sNdjsonProtocolTestsVersion = "0.5.0"
 
 val commonSettings = Seq(
   scalacOptions ++= Seq(
@@ -162,6 +165,8 @@ lazy val complianceCodegenProject = project
       "com.disneystreaming.alloy" % "alloy-protocol-tests" % alloyVersion,
       "software.amazon.smithy" % "smithy-aws-protocol-tests" % smithyVersion,
       "software.amazon.smithy" % "smithy-protocol-test-traits" % smithyVersion,
+      ("org.polyvariant" % "smithy4s-ndjson-protocol-tests" % smithy4sNdjsonProtocolTestsVersion)
+        .exclude("org.polyvariant", "smithy4s-ndjson-protocol"),
     ),
   )
 

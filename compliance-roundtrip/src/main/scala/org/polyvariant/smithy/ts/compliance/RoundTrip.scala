@@ -106,7 +106,10 @@ object RoundTrip extends IOApp {
       .discoverModels(getClass.getClassLoader)
       .assemble()
       .unwrap()
-    val servers = ComplianceCodegen.suites(model).traverse { suite =>
+    // smithy4s serves simpleRestJson only: ndjsonRestJson would need smithy4s-ndjson's builder,
+    // and its event-stream cases a runner of their own (see roundtrip.test.ts).
+    val httpSuites = ComplianceCodegen.suites(model).filterNot(_.name == "ndjsonRestJson")
+    val servers = httpSuites.traverse { suite =>
       val narrowed = ComplianceCodegen.narrow(model, suite.select(model))
       val cases = ComplianceCodegen.cases(narrowed, suite).map { c =>
         SuiteCase(
