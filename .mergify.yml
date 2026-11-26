@@ -31,6 +31,14 @@ pull_request_rules:
       add:
       - cli
       remove: []
+- name: Label compliance-codegen PRs
+  conditions:
+  - files~=^compliance-codegen/
+  actions:
+    label:
+      add:
+      - compliance-codegen
+      remove: []
 - name: Label core PRs
   conditions:
   - files~=^core/

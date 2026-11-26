@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    // Same regime as typecheck/: the generated suites are checked as strictly
+    // as the sample, and the runner itself is stripped, not compiled.
+    "strict": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "generated/**/*.ts"]
+}

@@ -10,7 +10,7 @@
 # `tsc` over the TypeScript in this repo — the only check that proves the
 # generated code, and the runtime library that serves it, are valid TypeScript.
 #
-# Two workspace packages:
+# Three workspace packages:
 #
 #   runtime/    the published transport library: built (so its .d.ts exist),
 #               typechecked, and unit-tested with node:test.
@@ -19,10 +19,11 @@
 #               structural Transport types still match the ones the codegen
 #               emits.
 #
-# Hermetic: the .ts sample is committed rather than generated here, so no JVM or
-# sbt is needed in the sandbox, and node_modules comes from a pnpm FOD.
-# Regenerate the sample with `sbt tsCodegenSample`; CI runs
-# `sbt tsCodegenSampleCheck` to fail if it drifts from the model.
+# Hermetic: the .ts sample and the compliance suites are committed rather than
+# generated here, so no JVM or sbt is needed in the sandbox, and node_modules
+# comes from a pnpm FOD.
+# Regenerate them with `sbt tsCodegenSample` / `sbt complianceCodegen`; CI runs
+# the matching `...Check` tasks to fail if either drifts from the codegen.
 
 let
   pnpm = pnpm_10;
@@ -44,6 +45,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
         "pnpm-workspace.yaml"
         "runtime"
         "typecheck"
+        "compliance"
       ];
     in
     lib.cleanSourceWith {
@@ -82,6 +84,9 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # Then the generated sample + the consumer-side usage, including the file
     # that pins the library's transport types to the generated ones.
     pnpm --filter smithy-ts-codegen-typecheck run typecheck
+
+    # The protocol compliance suites, against the same built library.
+    pnpm --filter smithy-ts-codegen-compliance run check
 
     runHook postBuild
   '';

@@ -1,0 +1,949 @@
+[
+    {
+        "id": "AddMenuItem",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "AddMenuItem",
+        "error": null,
+        "case": {
+            "id": "AddMenuItem",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "add menu item tests",
+            "body": "{\"food\":{\"pizza\":{\"name\":\"margharita\",\"base\":\"T\",\"toppings\":[\"MUSHROOM\",\"TOMATO\"]}},\"price\":9.0}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "menuItem": {
+                    "food": {
+                        "pizza": {
+                            "name": "margharita",
+                            "base": "T",
+                            "toppings": [
+                                "MUSHROOM",
+                                "TOMATO"
+                            ]
+                        }
+                    },
+                    "price": 9.0
+                },
+                "restaurant": "bobs"
+            },
+            "method": "POST",
+            "uri": "/restaurant/bobs/menu/item"
+        }
+    },
+    {
+        "id": "AddMenuItemResult",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "AddMenuItem",
+        "error": null,
+        "case": {
+            "id": "AddMenuItemResult",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "add menu item response tests",
+            "body": "\"1\"",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-ADDED-AT": "1576540098"
+            },
+            "params": {
+                "itemId": "1",
+                "added": {
+                    "$date": 1576540098
+                }
+            },
+            "code": 201
+        }
+    },
+    {
+        "id": "PriceErrorTest",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "AddMenuItem",
+        "error": "PriceError",
+        "case": {
+            "id": "PriceErrorTest",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "the payload produced on price error",
+            "body": "{\"message\":\"Price must be greater than 0\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-CODE": "400"
+            },
+            "params": {
+                "message": "Price must be greater than 0",
+                "code": 400
+            },
+            "code": 400
+        }
+    },
+    {
+        "id": "CustomCodeInput",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "CustomCode",
+        "error": null,
+        "case": {
+            "id": "CustomCodeInput",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "tests custom code as a label",
+            "body": "",
+            "params": {
+                "code": 399
+            },
+            "method": "GET",
+            "uri": "/custom-code/399"
+        }
+    },
+    {
+        "id": "CustomCodeOutput",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "CustomCode",
+        "error": null,
+        "case": {
+            "id": "CustomCodeOutput",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "respect the httpResponseCode trait",
+            "body": "{}",
+            "params": {
+                "code": 399
+            },
+            "code": 399
+        }
+    },
+    {
+        "id": "GetEnumInput",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "GetEnum",
+        "error": null,
+        "case": {
+            "id": "GetEnumInput",
+            "protocol": "alloy#simpleRestJson",
+            "params": {
+                "aa": "v1"
+            },
+            "method": "GET",
+            "uri": "/get-enum/v1"
+        }
+    },
+    {
+        "id": "GetEnumOutput",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "GetEnum",
+        "error": null,
+        "case": {
+            "id": "GetEnumOutput",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"result\":\"v1\"}",
+            "params": {
+                "result": "v1"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "GetIntEnumInput",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "GetIntEnum",
+        "error": null,
+        "case": {
+            "id": "GetIntEnumInput",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "",
+            "params": {
+                "aa": 1
+            },
+            "method": "GET",
+            "uri": "/get-int-enum/1"
+        }
+    },
+    {
+        "id": "GetIntEnumOutput",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "GetIntEnum",
+        "error": null,
+        "case": {
+            "id": "GetIntEnumOutput",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "",
+            "body": "{\"result\":1}",
+            "params": {
+                "result": 1
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "GetMenuRequest",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "GetMenu",
+        "error": null,
+        "case": {
+            "id": "GetMenuRequest",
+            "protocol": "alloy#simpleRestJson",
+            "params": {
+                "restaurant": "uncle:mikes"
+            },
+            "method": "GET",
+            "uri": "/restaurant/uncle%3Amikes/menu"
+        }
+    },
+    {
+        "id": "GetMenuResponse",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "GetMenu",
+        "error": null,
+        "case": {
+            "id": "GetMenuResponse",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"a0b0f3a9-81d3-4bf3-8897-a76423116403\" :{\"food\":{\"pizza\": {\"name\":\"margharita\",\"base\":\"T\",\"toppings\":[\"MUSHROOM\", \"TOMATO\"]}},\"price\":9.0}}\n",
+            "bodyMediaType": "application/json",
+            "params": {
+                "menu": {
+                    "a0b0f3a9-81d3-4bf3-8897-a76423116403": {
+                        "food": {
+                            "pizza": {
+                                "name": "margharita",
+                                "base": "T",
+                                "toppings": [
+                                    "MUSHROOM",
+                                    "TOMATO"
+                                ]
+                            }
+                        },
+                        "price": 9.0
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "NotFoundError",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "GetMenu",
+        "error": "NotFoundError",
+        "case": {
+            "id": "NotFoundError",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"name\":\"unknown\"}\n",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Error-Type": "NotFoundError"
+            },
+            "params": {
+                "name": "unknown"
+            },
+            "code": 404
+        }
+    },
+    {
+        "id": "HeaderEndpointInput",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "HeaderEndpoint",
+        "error": null,
+        "case": {
+            "id": "HeaderEndpointInput",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "tests variety of casing scenarios for writing http headers",
+            "body": "",
+            "headers": {
+                "X-Capitalized-Header": "Capitalized_value",
+                "X-UPPERCASE-HEADER": "UPPERCASE_VALUE",
+                "x-MiXeD-hEaDEr": "aLLMiXedUP",
+                "x-lowercase-header": "lowercase_value"
+            },
+            "params": {
+                "uppercaseHeader": "UPPERCASE_VALUE",
+                "capitalizedHeader": "Capitalized_value",
+                "lowercaseHeader": "lowercase_value",
+                "mixedHeader": "aLLMiXedUP"
+            },
+            "method": "POST",
+            "uri": "/headers"
+        }
+    },
+    {
+        "id": "headerEndpointResponse",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "HeaderEndpoint",
+        "error": null,
+        "case": {
+            "id": "headerEndpointResponse",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "tests variety of casing scenarios for reading http headers",
+            "headers": {
+                "X-Capitalized-Header": "Capitalized_value",
+                "X-UPPERCASE-HEADER": "UPPERCASE_VALUE",
+                "x-MiXeD-hEaDEr": "aLLMiXedUP",
+                "x-lowercase-header": "lowercase_value"
+            },
+            "params": {
+                "uppercaseHeader": "UPPERCASE_VALUE",
+                "capitalizedHeader": "Capitalized_value",
+                "lowercaseHeader": "lowercase_value",
+                "mixedHeader": "aLLMiXedUP"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "HealthGet",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "Health",
+        "error": null,
+        "case": {
+            "id": "HealthGet",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Checks that the /health endpoint returns a 200 response",
+            "body": "",
+            "params": {
+                "query": "hello"
+            },
+            "method": "GET",
+            "uri": "/health",
+            "queryParams": [
+                "query=hello"
+            ]
+        }
+    },
+    {
+        "id": "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadRequiredWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass JSON string value as is if payload provided",
+            "body": "\"custom value\"",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "body": "custom value"
+            },
+            "method": "PUT",
+            "uri": "/httpPayloadRequiredWithDefault"
+        }
+    },
+    {
+        "id": "SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadRequiredWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Use default value when there is no payload",
+            "params": {
+                "body": "default value"
+            },
+            "method": "PUT",
+            "uri": "/httpPayloadRequiredWithDefault"
+        }
+    },
+    {
+        "id": "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadRequiredWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass JSON string value as is if payload provided",
+            "body": "\"custom value\"",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "body": "custom value"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadRequiredWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Use default value when there is no payload",
+            "params": {
+                "body": "default value"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "SimpleRestJsonSomeHttpPayloadWithDefault",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonSomeHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass JSON string value as is if payload provided",
+            "body": "\"custom value\"",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "body": "custom value"
+            },
+            "method": "PUT",
+            "uri": "/httpPayloadWithDefault"
+        }
+    },
+    {
+        "id": "SimpleRestJsonNoneHttpPayloadWithDefault",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonNoneHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Use default value when there is no payload",
+            "params": {
+                "body": "default value"
+            },
+            "method": "PUT",
+            "uri": "/httpPayloadWithDefault"
+        }
+    },
+    {
+        "id": "SimpleRestJsonSomeHttpPayloadWithDefault",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonSomeHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass JSON string value as is if payload provided",
+            "body": "\"custom value\"",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "body": "custom value"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "SimpleRestJsonNoneHttpPayloadWithDefault",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "HttpPayloadWithDefault",
+        "error": null,
+        "case": {
+            "id": "SimpleRestJsonNoneHttpPayloadWithDefault",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Use default value when there is no payload",
+            "params": {
+                "body": "default value"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "OpenUnionsKnownTaggedUnionCase",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsKnownTaggedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass a known tagged union value in an open union",
+            "body": "{\"tagged\": {\"str\": \"string value\"}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "data": {
+                    "tagged": {
+                        "str": "string value"
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/openUnions"
+        }
+    },
+    {
+        "id": "OpenUnionsUnknownTaggedUnionCase",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsUnknownTaggedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass an unknown tagged union value in an open union",
+            "body": "{\"tagged\": {\"whatisthis\": {\"nested\": \"something different\"}}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "data": {
+                    "tagged": {
+                        "whatisthis": {
+                            "nested": "something different"
+                        }
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/openUnions"
+        }
+    },
+    {
+        "id": "OpenUnionsKnownDiscriminatedUnionCase",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsKnownDiscriminatedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass a known discriminated union value in an open union",
+            "body": "{\"discriminated\": {\"key\": \"smol\", \"content\": \"some string\"}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "data": {
+                    "discriminated": {
+                        "content": "some string",
+                        "key": "smol"
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/openUnions"
+        }
+    },
+    {
+        "id": "OpenUnionsUnknownDiscriminatedUnionCase",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsUnknownDiscriminatedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Pass an unknown discriminated union value in an open union",
+            "body": "{\"discriminated\": {\"key\": \"mysterious_and_important\", \"extras\": 42}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "data": {
+                    "discriminated": {
+                        "key": "mysterious_and_important",
+                        "extras": 42
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/openUnions"
+        }
+    },
+    {
+        "id": "OpenUnionsKnownTaggedUnionCase",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsKnownTaggedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Return a known tagged union value in an open union",
+            "body": "{\"tagged\": {\"str\": \"string value\"}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "data": {
+                    "tagged": {
+                        "str": "string value"
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "OpenUnionsUnknownTaggedUnionCase",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsUnknownTaggedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Return an unknown tagged union value in an open union",
+            "body": "{\"tagged\": {\"whatisthis\": {\"nested\": \"something different\"}}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "data": {
+                    "tagged": {
+                        "whatisthis": {
+                            "nested": "something different"
+                        }
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "OpenUnionsKnownDiscriminatedUnionCase",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsKnownDiscriminatedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Return a known discriminated union value in an open union",
+            "body": "{\"discriminated\": {\"key\": \"smol\", \"content\": \"some string\"}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "data": {
+                    "discriminated": {
+                        "content": "some string",
+                        "key": "smol"
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "OpenUnionsUnknownDiscriminatedUnionCase",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "OpenUnions",
+        "error": null,
+        "case": {
+            "id": "OpenUnionsUnknownDiscriminatedUnionCase",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Return an unknown discriminated union value in an open union",
+            "body": "{\"discriminated\": {\"key\": \"mysterious_and_important\", \"extras\": 42}}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "data": {
+                    "discriminated": {
+                        "key": "mysterious_and_important",
+                        "extras": 42
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "PreserveKeyOrderRequest",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "PreserveOrder",
+        "error": null,
+        "case": {
+            "id": "PreserveKeyOrderRequest",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"map\":{\"a\":1,\"d\":2,\"e\":3,\"b\":4},\"document\":{\"foo\":1,\"a\":\"b\",\"c\":[],\"bar\":null}}",
+            "params": {
+                "map": {
+                    "a": 1,
+                    "d": 2,
+                    "e": 3,
+                    "b": 4
+                },
+                "document": {
+                    "foo": 1,
+                    "a": "b",
+                    "c": [],
+                    "bar": null
+                }
+            },
+            "method": "POST",
+            "uri": "/preserveKeyOrder"
+        }
+    },
+    {
+        "id": "PreserveKeyOrderResponse",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "PreserveOrder",
+        "error": null,
+        "case": {
+            "id": "PreserveKeyOrderResponse",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"map\":{\"a\":1,\"d\":2,\"e\":3,\"b\":4},\"document\":{\"foo\":1,\"a\":\"b\",\"c\":[],\"bar\":null}}",
+            "params": {
+                "map": {
+                    "a": 1,
+                    "d": 2,
+                    "e": 3,
+                    "b": 4
+                },
+                "document": {
+                    "foo": 1,
+                    "a": "b",
+                    "c": [],
+                    "bar": null
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "PrimitivesEncodingRequest",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "Primitives",
+        "error": null,
+        "case": {
+            "id": "PrimitivesEncodingRequest",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"localTime\":\"13:26:51.123456789\",\"duration\":86400.000000001,\"uuid\":\"51216269-c0c8-454a-871e-329513e54e23\",\"offsetDateTime\":\"2025-08-15T20:26:51Z\",\"localDate\":\"2025-08-15\"}",
+            "params": {
+                "uuid": "51216269-c0c8-454a-871e-329513e54e23",
+                "localDate": "2025-08-15",
+                "localTime": "13:26:51.123456789",
+                "duration": 86400.000000001,
+                "offsetDateTime": {
+                    "$date": 1755289611
+                }
+            },
+            "method": "POST",
+            "uri": "/primitive/encoding"
+        }
+    },
+    {
+        "id": "PrimitivesEncodingResponse",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "Primitives",
+        "error": null,
+        "case": {
+            "id": "PrimitivesEncodingResponse",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"localTime\":\"13:26:51.123456789\",\"duration\":86400.000000001,\"uuid\":\"51216269-c0c8-454a-871e-329513e54e23\",\"offsetDateTime\":\"2025-08-15T20:26:51Z\",\"localDate\":\"2025-08-15\"}",
+            "params": {
+                "uuid": "51216269-c0c8-454a-871e-329513e54e23",
+                "localDate": "2025-08-15",
+                "localTime": "13:26:51.123456789",
+                "duration": 86400.000000001,
+                "offsetDateTime": {
+                    "$date": 1755289611
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RoundTripRequest",
+        "kind": "request",
+        "service": "PizzaAdminService",
+        "operation": "RoundTrip",
+        "error": null,
+        "case": {
+            "id": "RoundTripRequest",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"body\":\"the body\"}",
+            "headers": {
+                "HEADER": "the header"
+            },
+            "params": {
+                "label": "thelabel",
+                "header": "the header",
+                "query": "the query",
+                "body": "the body"
+            },
+            "method": "POST",
+            "uri": "/roundTrip/thelabel",
+            "queryParams": [
+                "query=the query"
+            ]
+        }
+    },
+    {
+        "id": "RoundTripDataResponse",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "RoundTrip",
+        "error": null,
+        "case": {
+            "id": "RoundTripDataResponse",
+            "protocol": "alloy#simpleRestJson",
+            "body": "{\"label\":\"thelabel\",\"query\":\"the query\",\"body\":\"the body\"}",
+            "headers": {
+                "HEADER": "the header"
+            },
+            "params": {
+                "label": "thelabel",
+                "header": "the header",
+                "query": "the query",
+                "body": "the body"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "VersionOutput",
+        "kind": "response",
+        "service": "PizzaAdminService",
+        "operation": "Version",
+        "error": null,
+        "case": {
+            "id": "VersionOutput",
+            "protocol": "alloy#simpleRestJson",
+            "body": "\"1.0\"",
+            "params": {
+                "version": "1.0"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RoutingAbc",
+        "kind": "request",
+        "service": "RoutingService",
+        "operation": "Abc",
+        "error": null,
+        "case": {
+            "id": "RoutingAbc",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Test the Abc operation",
+            "method": "GET",
+            "uri": "/abc"
+        }
+    },
+    {
+        "id": "RoutingAbcDef",
+        "kind": "request",
+        "service": "RoutingService",
+        "operation": "AbcDef",
+        "error": null,
+        "case": {
+            "id": "RoutingAbcDef",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Test the AbcDef operation",
+            "method": "GET",
+            "uri": "/abc/def"
+        }
+    },
+    {
+        "id": "RoutingAbcDefGreedy",
+        "kind": "request",
+        "service": "RoutingService",
+        "operation": "AbcDefGreedy",
+        "error": null,
+        "case": {
+            "id": "RoutingAbcDefGreedy",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Test the AbcDefGreedy operation with a greedy label",
+            "params": {
+                "def": "def/def"
+            },
+            "method": "GET",
+            "uri": "/abc/def/def"
+        }
+    },
+    {
+        "id": "RoutingAbcLabel",
+        "kind": "request",
+        "service": "RoutingService",
+        "operation": "AbcLabel",
+        "error": null,
+        "case": {
+            "id": "RoutingAbcLabel",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Test the AbcLabel operation with a label",
+            "params": {
+                "def": "notDef"
+            },
+            "method": "GET",
+            "uri": "/abc/notDef"
+        }
+    },
+    {
+        "id": "RoutingAbcXyz",
+        "kind": "request",
+        "service": "RoutingService",
+        "operation": "AbcXyz",
+        "error": null,
+        "case": {
+            "id": "RoutingAbcXyz",
+            "protocol": "alloy#simpleRestJson",
+            "documentation": "Test the AbcXyz operation",
+            "method": "GET",
+            "uri": "/abc/xyz"
+        }
+    }
+]

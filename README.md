@@ -472,11 +472,12 @@ literal.
 sbt test                  # unit tests
 sbt sbtPlugin/scripted    # the sbt plugin, end to end
 sbt tsCodegenSample       # regenerate typecheck/src/generated.ts
+sbt complianceCodegen     # regenerate compliance/generated
 nix flake check           # type-check + test the TypeScript side
 pnpm check                # the same, without nix (needs `pnpm install` first)
 ```
 
-The TypeScript lives in a pnpm workspace of two packages:
+The TypeScript lives in a pnpm workspace of three packages:
 
 - `runtime/` — the published transport library. `pnpm --filter @polyvariant/smithy-ts-runtime
   run check` builds it, type-checks it and runs its `node:test` suite (framing round-trips,
@@ -487,15 +488,24 @@ The TypeScript lives in a pnpm workspace of two packages:
   clients with the *library's* transport. That last file is what pins the library's structural
   transport types to the ones the codegen emits — change one without the other and it stops
   compiling.
+- `compliance/` — smithy's HTTP protocol compliance tests, run against the generated clients
+  over the runtime's `fetchTransport` (client side only: request serialization and response
+  decoding). Two suites: alloy's own `simpleRestJson` tests, and the smithy `restJson1` tests
+  alloy lists as applying to `simpleRestJson` — the set smithy4s runs. `generated/` holds the
+  TypeScript for each suite's services and its cases, written by `sbt complianceCodegen` (from
+  `compliance-codegen/`). Cases the codegen doesn't handle yet are listed, by cause, in
+  `known-failures.txt`; a listed case that starts passing fails the run, so remove it in the
+  same change that fixes it.
 
 `nix flake check` runs both under `strict` + `erasableSyntaxOnly`.
 
 This matters because the Scala tests assert on substrings of the emitted file, which cannot
 catch a type error — a generator declared as `AsyncIterable`, an intersection with an empty
 `z.object`, a `Date` cast to a query value. After changing the generator, run
-`sbt tsCodegenSample` and commit the result; CI fails if it drifts.
+`sbt tsCodegenSample` and `sbt complianceCodegen` and commit the result; CI fails if either
+drifts.
 
-Changing anything under `runtime/` or `typecheck/` that moves the lockfile means updating
+Changing anything under `runtime/`, `typecheck/` or `compliance/` that moves the lockfile means updating
 `pnpmDeps.hash` in `nix/typecheck.nix` — build once, and nix prints the hash it wanted.
 Note that `nix build` only sees git-tracked files, so `git add` new files before running it.
 
