@@ -80,6 +80,26 @@ const describe = (e: unknown): string =>
 
 const nullBodyStatus = (status: number): boolean => [204, 205, 304].includes(status)
 
+const parseJson = (text: string): { ok: true; value: unknown } | { ok: false } => {
+  try {
+    return { ok: true, value: JSON.parse(text) }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/** Whether `part` is already percent-encoded. Some cases (alloy's) spell an expected
+ * query parameter decoded — `query=the query` — which smithy4s compares decoded. */
+const isEncoded = (part: string): boolean => /^[A-Za-z0-9\-._~%=!$&'()*+,;:@/?]*$/.test(part)
+
+const decodeQueryPart = (part: string): string => {
+  try {
+    return decodeURIComponent(part)
+  } catch {
+    return part
+  }
+}
+
 /** Runs `tc` against the generated module; returns what didn't match (empty means it passed). */
 export const runCase = async (gen: GeneratedModule, tc: ComplianceCase): Promise<string[]> => {
   const c = tc.case
@@ -135,7 +155,10 @@ const checkRequest = (c: HttpTestCase, sent: { url: string; init: RequestInit })
   const method = sent.init.method ?? 'GET'
   if (c.method !== undefined && method !== c.method) problems.push(`method ${method}, expected ${c.method}`)
   if (c.uri !== undefined && rawPath !== c.uri) problems.push(`path ${rawPath}, expected ${c.uri}`)
-  const missing = (c.queryParams ?? []).filter((q) => !queryParts.includes(q))
+  const decodedParts = queryParts.map(decodeQueryPart)
+  const missing = (c.queryParams ?? []).filter((q) =>
+    isEncoded(q) ? !queryParts.includes(q) : !decodedParts.includes(q),
+  )
   if (missing.length > 0) problems.push(`query lacks ${missing.join(' & ')} (sent ${rawQuery ?? 'none'})`)
   for (const k of c.forbidQueryParams ?? []) if (queryKeys.has(k)) problems.push(`forbidden query param ${k}`)
   for (const k of c.requireQueryParams ?? []) if (!queryKeys.has(k)) problems.push(`missing query param ${k}`)
@@ -151,15 +174,12 @@ const checkRequest = (c: HttpTestCase, sent: { url: string; init: RequestInit })
     const actual = sent.init.body == null ? '' : String(sent.init.body)
     if (c.body.trim() === '') {
       if (actual !== '') problems.push(`body ${actual}, expected none`)
-    } else if (isJsonCase(c)) {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(actual)
-      } catch {
-        parsed = undefined
-      }
+    } else if (isJsonCase(c) || (parseJson(c.body).ok && parseJson(actual).ok)) {
+      // As JSON whenever it is JSON, even when the case doesn't say so: key order and
+      // whitespace are not part of the encoding.
+      const parsed = parseJson(actual)
       const expected: unknown = JSON.parse(c.body)
-      if (!isDeepStrictEqual(parsed, expected)) {
+      if (!parsed.ok || !isDeepStrictEqual(parsed.value, expected)) {
         problems.push(`body ${actual || '(none)'}, expected ${JSON.stringify(expected)}`)
       }
     } else if (actual !== c.body) {

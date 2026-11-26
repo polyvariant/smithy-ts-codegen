@@ -39,7 +39,7 @@ lazy val app = project
       // The extension ran in the forked JVM: the prefix it derived from the
       // service's `version` is in the client URL...
       require(
-        "const url = `/internal/v1/greet/${encodeURIComponent(String(input.name))}`"
+        "const url = `/internal/v1/greet/${wireEncodeLabel(String(input.name))}`"
       )
       // ...and in the mock router, as separate literal segments, so a mocked
       // route still matches the client that calls it.

@@ -369,6 +369,543 @@ export class NotFoundError extends Error {
 }
 
 
+// --- Wire codecs ---
+
+const wireIsRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const wireEpochSeconds = (date: Date): number => date.getTime() / 1000
+
+/** RFC 3339, with the fraction only when there is one (`2014-04-29T18:30:38Z`). */
+const wireDateTime = (date: Date): string => date.toISOString().replace('.000Z', 'Z')
+
+/** IMF-fixdate (`Tue, 29 Apr 2014 18:30:38 GMT`). */
+const wireHttpDate = (date: Date): string => date.toUTCString()
+
+/** Any of the three formats: epoch seconds as a number or a numeric string
+ * (as a header carries it), otherwise a date-time or an HTTP date. A value
+ * that is neither is passed on for the schema to reject. */
+const wireTimestamp = (value: unknown): unknown => {
+  if (typeof value === 'number') return new Date(value * 1000)
+  if (typeof value !== 'string') return value
+  return /^-?\d+(\.\d+)?$/.test(value) ? new Date(Number(value) * 1000) : new Date(value)
+}
+
+/** Percent-encodes everything outside RFC 3986's unreserved set —
+ * `encodeURIComponent` leaves `!'()*` alone. */
+const wireEncodeLabel = (value: string): string =>
+  encodeURIComponent(value).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+
+/** A greedy label (`{key+}`) spans segments: its slashes stay slashes. */
+const wireEncodeGreedyLabel = (value: string): string =>
+  value.split('/').map(wireEncodeLabel).join('/')
+
+/** A string list item in a header, quoted when it holds a comma or a quote. */
+const wireQuoteHeaderItem = (value: string): string =>
+  /[,"]/.test(value) ? '"' + value.replace(/["\\]/g, (c) => '\\' + c) + '"' : value
+
+/** Splits a comma-separated header list, honouring quoted items. An HTTP
+ * date contains a comma itself, so a list of them splits after each `GMT`. */
+const wireSplitHeader = (value: string, httpDates: boolean): string[] => {
+  if (httpDates) return value.split(/(?<=GMT)\s*,\s*/)
+  const items: string[] = []
+  const pattern = /\s*(?:"((?:[^"\\]|\\.)*)"|([^,]*?))\s*(?:,|$)/gy
+  let match: RegExpExecArray | null
+  while (pattern.lastIndex < value.length && (match = pattern.exec(value)) !== null) {
+    items.push(match[1] !== undefined ? match[1].replace(/\\(.)/g, '$1') : (match[2] ?? ''))
+  }
+  return items
+}
+
+/** The headers starting with `prefix`, keyed by the rest of the name, or
+ * `undefined` when there are none. */
+const wirePrefixHeaders = (
+  headers: Record<string, string>,
+  prefix: string,
+): Record<string, string> | undefined => {
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.startsWith(prefix)) out[name.slice(prefix.length)] = value
+  }
+  return Object.keys(out).length === 0 ? undefined : out
+}
+
+/** `DataExample` as it is written in a JSON body. */
+export function encodeDataExample(value: DataExample): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['smithy'] !== undefined) return { 'smithy': fields['smithy'] }
+  if (fields['json'] !== undefined) return { 'json': fields['json'] }
+  if (fields['string'] !== undefined) return { 'string': fields['string'] }
+  return value
+}
+
+/** `DataExample` read from a JSON body; validate the result with `DataExampleSchema`. */
+export function decodeDataExample(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['smithy'] !== undefined && value['smithy'] !== null) return { 'smithy': value['smithy'] }
+  if (value['json'] !== undefined && value['json'] !== null) return { 'json': value['json'] }
+  if (value['string'] !== undefined && value['string'] !== null) return { 'string': value['string'] }
+  return value
+}
+
+/** `Unit` as it is written in a JSON body. */
+export function encodeUnit(_value: Unit): Record<string, unknown> {
+  return {}
+}
+
+/** `Unit` read from a JSON body; validate the result with `UnitSchema`. */
+export function decodeUnit(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `UncheckedExample` as it is written in a JSON body. */
+export function encodeUncheckedExample(value: UncheckedExample): Record<string, unknown> {
+  return { 'title': value.title ?? undefined, 'documentation': value.documentation ?? undefined, 'input': value.input ?? undefined, 'output': value.output ?? undefined }
+}
+
+/** `UncheckedExample` read from a JSON body; validate the result with `UncheckedExampleSchema`. */
+export function decodeUncheckedExample(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'title': value['title'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'input': value['input'] ?? undefined, 'output': value['output'] ?? undefined }
+}
+
+/** `ProtobufAny` as it is written in a JSON body. */
+export function encodeProtobufAny(value: ProtobufAny): Record<string, unknown> {
+  return { 'typeUrl': value.typeUrl ?? undefined, 'value': value.value ?? undefined }
+}
+
+/** `ProtobufAny` read from a JSON body; validate the result with `ProtobufAnySchema`. */
+export function decodeProtobufAny(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'typeUrl': value['typeUrl'] ?? undefined, 'value': value['value'] ?? undefined }
+}
+
+/** `Range` as it is written in a JSON body. */
+export function encodeRange(value: Range): Record<string, unknown> {
+  return { 'start': value.start ?? undefined, 'end': value.end ?? undefined }
+}
+
+/** `Range` read from a JSON body; validate the result with `RangeSchema`. */
+export function decodeRange(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'start': value['start'] ?? undefined, 'end': value['end'] ?? undefined }
+}
+
+/** `AlreadyExists` as it is written in a JSON body. */
+export function encodeAlreadyExists(value: AlreadyExists): Record<string, unknown> {
+  return { 'message': value.message ?? undefined }
+}
+
+/** `AlreadyExists` read from a JSON body; validate the result with `AlreadyExistsSchema`. */
+export function decodeAlreadyExists(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined }
+}
+
+/** `Circle` as it is written in a JSON body. */
+export function encodeCircle(value: Circle): Record<string, unknown> {
+  return { 'radius': value.radius ?? undefined }
+}
+
+/** `Circle` read from a JSON body; validate the result with `CircleSchema`. */
+export function decodeCircle(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'radius': value['radius'] ?? undefined }
+}
+
+/** `Conflict` as it is written in a JSON body. */
+export function encodeConflict(value: Conflict): Record<string, unknown> {
+  return { 'message': value.message ?? undefined }
+}
+
+/** `Conflict` read from a JSON body; validate the result with `ConflictSchema`. */
+export function decodeConflict(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined }
+}
+
+/** `Counter` as it is written in a JSON body. */
+export function encodeCounter(value: Counter): Record<string, unknown> {
+  return { 'total': value.total ?? undefined }
+}
+
+/** `Counter` read from a JSON body; validate the result with `CounterSchema`. */
+export function decodeCounter(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'total': value['total'] ?? undefined }
+}
+
+/** `Done` as it is written in a JSON body. */
+export function encodeDone(_value: Done): Record<string, unknown> {
+  return {}
+}
+
+/** `Done` read from a JSON body; validate the result with `DoneSchema`. */
+export function decodeDone(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `Failure` as it is written in a JSON body. */
+export function encodeFailure(value: Failure): Record<string, unknown> {
+  return { 'reason': value.reason ?? undefined }
+}
+
+/** `Failure` read from a JSON body; validate the result with `FailureSchema`. */
+export function decodeFailure(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'reason': value['reason'] ?? undefined }
+}
+
+/** `Square` as it is written in a JSON body. */
+export function encodeSquare(value: Square): Record<string, unknown> {
+  return { 'side': value.side ?? undefined }
+}
+
+/** `Square` read from a JSON body; validate the result with `SquareSchema`. */
+export function decodeSquare(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'side': value['side'] ?? undefined }
+}
+
+/** `GetPersonInput` as it is written in a JSON body. */
+export function encodeGetPersonInput(value: GetPersonInput): Record<string, unknown> {
+  return { 'id': value.id ?? undefined, 'verbose': value.verbose ?? undefined }
+}
+
+/** `GetPersonInput` read from a JSON body; validate the result with `GetPersonInputSchema`. */
+export function decodeGetPersonInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined, 'verbose': value['verbose'] ?? undefined }
+}
+
+/** `MeasureInput` as it is written in a JSON body. */
+export function encodeMeasureInput(value: MeasureInput): Record<string, unknown> {
+  return { 'seed': value.seed == null ? undefined : BigInt(value.seed), 'offset': value.offset == null ? undefined : BigInt(value.offset), 'revision': value.revision == null ? undefined : BigInt(value.revision) }
+}
+
+/** `MeasureInput` read from a JSON body; validate the result with `MeasureInputSchema`. */
+export function decodeMeasureInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'seed': value['seed'] ?? undefined, 'offset': value['offset'] ?? undefined, 'revision': value['revision'] ?? undefined }
+}
+
+/** `Measurement` as it is written in a JSON body. */
+export function encodeMeasurement(value: Measurement): Record<string, unknown> {
+  return { 'sequence': value.sequence ?? undefined, 'seed': value.seed == null ? undefined : BigInt(value.seed), 'precise': value.precise == null ? undefined : BigInt(value.precise), 'label': value.label ?? undefined }
+}
+
+/** `Measurement` read from a JSON body; validate the result with `MeasurementSchema`. */
+export function decodeMeasurement(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'sequence': value['sequence'] ?? undefined, 'seed': value['seed'] ?? undefined, 'precise': value['precise'] ?? undefined, 'label': value['label'] ?? undefined }
+}
+
+/** `NotFound` as it is written in a JSON body. */
+export function encodeNotFound(value: NotFound): Record<string, unknown> {
+  return { 'message': value.message ?? undefined }
+}
+
+/** `NotFound` read from a JSON body; validate the result with `NotFoundSchema`. */
+export function decodeNotFound(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined }
+}
+
+/** `PlainOutput` as it is written in a JSON body. */
+export function encodePlainOutput(value: PlainOutput): Record<string, unknown> {
+  return { 'message': value.message ?? undefined }
+}
+
+/** `PlainOutput` read from a JSON body; validate the result with `PlainOutputSchema`. */
+export function decodePlainOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined }
+}
+
+/** `SearchInput` as it is written in a JSON body. */
+export function encodeSearchInput(value: SearchInput): Record<string, unknown> {
+  return { 'q': value.q ?? undefined }
+}
+
+/** `SearchInput` read from a JSON body; validate the result with `SearchInputSchema`. */
+export function decodeSearchInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'q': value['q'] ?? undefined }
+}
+
+/** `SequenceInput` as it is written in a JSON body. */
+export function encodeSequenceInput(value: SequenceInput): Record<string, unknown> {
+  return { 'seed': value.seed == null ? undefined : BigInt(value.seed), 'cursor': value.cursor == null ? undefined : BigInt(value.cursor), 'count': value.count ?? undefined }
+}
+
+/** `SequenceInput` read from a JSON body; validate the result with `SequenceInputSchema`. */
+export function decodeSequenceInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'seed': value['seed'] ?? undefined, 'cursor': value['cursor'] ?? undefined, 'count': value['count'] ?? undefined }
+}
+
+/** `UploadOutput` as it is written in a JSON body. */
+export function encodeUploadOutput(value: UploadOutput): Record<string, unknown> {
+  return { 'stored': value.stored ?? undefined }
+}
+
+/** `UploadOutput` read from a JSON body; validate the result with `UploadOutputSchema`. */
+export function decodeUploadOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'stored': value['stored'] ?? undefined }
+}
+
+/** `WatchInput` as it is written in a JSON body. */
+export function encodeWatchInput(value: WatchInput): Record<string, unknown> {
+  return { 'id': value.id ?? undefined, 'since': value.since == null ? undefined : wireEpochSeconds(value.since) }
+}
+
+/** `WatchInput` read from a JSON body; validate the result with `WatchInputSchema`. */
+export function decodeWatchInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined, 'since': value['since'] == null ? undefined : wireTimestamp(value['since']) }
+}
+
+export function encodeProtobufAnyList(value: ProtobufAnyList): unknown[] {
+  return value.map((e) => encodeProtobufAny(e))
+}
+
+export function decodeProtobufAnyList(value: unknown): unknown {
+  return Array.isArray(value) ? value.map((e: unknown) => (e === null ? null : decodeProtobufAny(e))) : value
+}
+
+/** `ReservedFieldsDefinition` as it is written in a JSON body. */
+export function encodeReservedFieldsDefinition(value: ReservedFieldsDefinition): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['name'] !== undefined) return { 'name': fields['name'] }
+  if (fields['number'] !== undefined) return { 'number': fields['number'] }
+  if (fields['range'] !== undefined) return { 'range': encodeRange((fields['range'] as Range)) }
+  return value
+}
+
+/** `ReservedFieldsDefinition` read from a JSON body; validate the result with `ReservedFieldsDefinitionSchema`. */
+export function decodeReservedFieldsDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['name'] !== undefined && value['name'] !== null) return { 'name': value['name'] }
+  if (value['number'] !== undefined && value['number'] !== null) return { 'number': value['number'] }
+  if (value['range'] !== undefined && value['range'] !== null) return { 'range': decodeRange(value['range']) }
+  return value
+}
+
+/** `UploadInput` as it is written in a JSON body. */
+export function encodeUploadInput(value: UploadInput): Record<string, unknown> {
+  return { 'id': value.id ?? undefined }
+}
+
+/** `UploadInput` read from a JSON body; validate the result with `UploadInputSchema`. */
+export function decodeUploadInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined }
+}
+
+/** `Figure` as it is written in a JSON body. */
+export function encodeFigure(value: Figure): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['circle'] !== undefined) return { 'circle': encodeCircle((fields['circle'] as Circle)) }
+  if (fields['square'] !== undefined) return { 'square': encodeSquare((fields['square'] as Square)) }
+  return value
+}
+
+/** `Figure` read from a JSON body; validate the result with `FigureSchema`. */
+export function decodeFigure(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['circle'] !== undefined && value['circle'] !== null) return { 'circle': decodeCircle(value['circle']) }
+  if (value['square'] !== undefined && value['square'] !== null) return { 'square': decodeSquare(value['square']) }
+  return value
+}
+
+/** `Region` as it is written in a JSON body. */
+export function encodeRegion(value: Region): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['kind'] === 'circle') return { ...encodeCircle(value as unknown as Circle), 'kind': 'circle' }
+  if (fields['kind'] === 'square') return { ...encodeSquare(value as unknown as Square), 'kind': 'square' }
+  return value
+}
+
+/** `Region` read from a JSON body; validate the result with `RegionSchema`. */
+export function decodeRegion(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['kind'] === 'circle') return { ...(decodeCircle(value) as Record<string, unknown>), 'kind': 'circle' }
+  if (value['kind'] === 'square') return { ...(decodeSquare(value) as Record<string, unknown>), 'kind': 'square' }
+  return value
+}
+
+/** `Zone` as it is written in a JSON body. */
+export function encodeZone(value: Zone): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['kind'] === 'circle') return { ...encodeCircle(value as unknown as Circle), 'kind': 'circle' }
+  if (fields['kind'] === 'square') return { ...encodeSquare(value as unknown as Square), 'kind': 'square' }
+  return value
+}
+
+/** `Zone` read from a JSON body; validate the result with `ZoneSchema`. */
+export function decodeZone(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['kind'] === 'circle') return { ...(decodeCircle(value) as Record<string, unknown>), 'kind': 'circle' }
+  if (value['kind'] === 'square') return { ...(decodeSquare(value) as Record<string, unknown>), 'kind': 'square' }
+  return value
+}
+
+/** `MeasureOutput` as it is written in a JSON body. */
+export function encodeMeasureOutput(value: MeasureOutput): Record<string, unknown> {
+  return { 'measurement': value.measurement == null ? undefined : encodeMeasurement(value.measurement), 'total': value.total == null ? undefined : BigInt(value.total) }
+}
+
+/** `MeasureOutput` read from a JSON body; validate the result with `MeasureOutputSchema`. */
+export function decodeMeasureOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'measurement': value['measurement'] == null ? undefined : decodeMeasurement(value['measurement']), 'total': value['total'] ?? undefined }
+}
+
+/** `SequenceOutput` as it is written in a JSON body. */
+export function encodeSequenceOutput(value: SequenceOutput): Record<string, unknown> {
+  return { 'measurement': value.measurement == null ? undefined : encodeMeasurement(value.measurement) }
+}
+
+/** `SequenceOutput` read from a JSON body; validate the result with `SequenceOutputSchema`. */
+export function decodeSequenceOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'measurement': value['measurement'] == null ? undefined : decodeMeasurement(value['measurement']) }
+}
+
+/** `Person` as it is written in a JSON body. */
+export function encodePerson(value: Person): Record<string, unknown> {
+  return { 'name': value.name ?? undefined, 'age': value.age ?? undefined, 'kind': value.kind ?? undefined, 'tags': value.tags ?? undefined, 'scores': value.scores ?? undefined, 'id': value.id ?? undefined, 'registered': value.registered == null ? undefined : wireEpochSeconds(value.registered), 'active': value.active ?? undefined, 'payload': value.payload ?? undefined }
+}
+
+/** `Person` read from a JSON body; validate the result with `PersonSchema`. */
+export function decodePerson(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'name': value['name'] ?? undefined, 'age': value['age'] ?? undefined, 'kind': value['kind'] ?? undefined, 'tags': value['tags'] ?? undefined, 'scores': value['scores'] ?? undefined, 'id': value['id'] ?? undefined, 'registered': value['registered'] == null ? undefined : wireTimestamp(value['registered']), 'active': value['active'] ?? undefined, 'payload': value['payload'] ?? undefined }
+}
+
+/** `GoogleRpcStatus` as it is written in a JSON body. */
+export function encodeGoogleRpcStatus(value: GoogleRpcStatus): Record<string, unknown> {
+  return { 'code': value.code ?? undefined, 'message': value.message ?? undefined, 'details': value.details == null ? undefined : encodeProtobufAnyList(value.details) }
+}
+
+/** `GoogleRpcStatus` read from a JSON body; validate the result with `GoogleRpcStatusSchema`. */
+export function decodeGoogleRpcStatus(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'code': value['code'] ?? undefined, 'message': value['message'] ?? undefined, 'details': value['details'] == null ? undefined : decodeProtobufAnyList(value['details']) }
+}
+
+/** `FeedEvent` as it is written in a JSON body. */
+export function encodeFeedEvent(value: FeedEvent): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['item'] !== undefined) return { 'item': encodePerson((fields['item'] as Person)) }
+  if (fields['completed'] !== undefined) return { 'completed': encodeDone((fields['completed'] as Done)) }
+  if (fields['failed'] !== undefined) return { 'failed': encodeFailure((fields['failed'] as Failure)) }
+  return value
+}
+
+/** `FeedEvent` read from a JSON body; validate the result with `FeedEventSchema`. */
+export function decodeFeedEvent(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['item'] !== undefined && value['item'] !== null) return { 'item': decodePerson(value['item']) }
+  if (value['completed'] !== undefined && value['completed'] !== null) return { 'completed': decodeDone(value['completed']) }
+  if (value['failed'] !== undefined && value['failed'] !== null) return { 'failed': decodeFailure(value['failed']) }
+  return value
+}
+
+/** `GetPersonOutput` as it is written in a JSON body. */
+export function encodeGetPersonOutput(value: GetPersonOutput): Record<string, unknown> {
+  return { 'person': value.person == null ? undefined : encodePerson(value.person), 'trace': value.trace ?? undefined, 'code': value.code ?? undefined }
+}
+
+/** `GetPersonOutput` read from a JSON body; validate the result with `GetPersonOutputSchema`. */
+export function decodeGetPersonOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'person': value['person'] == null ? undefined : decodePerson(value['person']), 'trace': value['trace'] ?? undefined, 'code': value['code'] ?? undefined }
+}
+
+export function encodePeople(value: People): unknown[] {
+  return value.map((e) => encodePerson(e))
+}
+
+export function decodePeople(value: unknown): unknown {
+  return Array.isArray(value) ? value.map((e: unknown) => (e === null ? null : decodePerson(e))) : value
+}
+
+/** `PutPersonInput` as it is written in a JSON body. */
+export function encodePutPersonInput(value: PutPersonInput): Record<string, unknown> {
+  return { 'id': value.id ?? undefined, 'person': value.person == null ? undefined : encodePerson(value.person), 'ifMatch': value.ifMatch ?? undefined }
+}
+
+/** `PutPersonInput` read from a JSON body; validate the result with `PutPersonInputSchema`. */
+export function decodePutPersonInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined, 'person': value['person'] == null ? undefined : decodePerson(value['person']), 'ifMatch': value['ifMatch'] ?? undefined }
+}
+
+/** `Shape` as it is written in a JSON body. */
+export function encodeShape(value: Shape): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['person'] !== undefined) return { 'person': encodePerson((fields['person'] as Person)) }
+  if (fields['label'] !== undefined) return { 'label': fields['label'] }
+  return value
+}
+
+/** `Shape` read from a JSON body; validate the result with `ShapeSchema`. */
+export function decodeShape(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['person'] !== undefined && value['person'] !== null) return { 'person': decodePerson(value['person']) }
+  if (value['label'] !== undefined && value['label'] !== null) return { 'label': value['label'] }
+  return value
+}
+
+/** `EchoInput` as it is written in a JSON body. */
+export function encodeEchoInput(_value: EchoInput): Record<string, unknown> {
+  return {}
+}
+
+/** `EchoInput` read from a JSON body; validate the result with `EchoInputSchema`. */
+export function decodeEchoInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `EchoOutput` as it is written in a JSON body. */
+export function encodeEchoOutput(_value: EchoOutput): Record<string, unknown> {
+  return {}
+}
+
+/** `EchoOutput` read from a JSON body; validate the result with `EchoOutputSchema`. */
+export function decodeEchoOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `WatchOutput` as it is written in a JSON body. */
+export function encodeWatchOutput(value: WatchOutput): Record<string, unknown> {
+  return { 'session': value.session ?? undefined }
+}
+
+/** `WatchOutput` read from a JSON body; validate the result with `WatchOutputSchema`. */
+export function decodeWatchOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'session': value['session'] ?? undefined }
+}
+
+/** `SearchOutput` as it is written in a JSON body. */
+export function encodeSearchOutput(value: SearchOutput): Record<string, unknown> {
+  return { 'results': value.results == null ? undefined : encodePeople(value.results) }
+}
+
+/** `SearchOutput` read from a JSON body; validate the result with `SearchOutputSchema`. */
+export function decodeSearchOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'results': value['results'] == null ? undefined : decodePeople(value['results']) }
+}
+
+
 // --- Transport ---
 
 /** Per-operation transport options. The generator threads these straight
@@ -389,7 +926,8 @@ export interface TransportRequest {
   operation: string
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   url: string
-  query?: Record<string, string | number | boolean | undefined>
+  /** A list value is sent as the parameter repeated, once per element. */
+  query?: Record<string, string | number | boolean | readonly string[] | undefined>
   headers?: Record<string, string>
   body?: unknown
   options?: TransportOptions
@@ -559,6 +1097,63 @@ export class StreamDecodeError extends Error {
 }
 
 
+// --- Response decoding ---
+
+/** `AlreadyExists` read from a response: its body, headers and status. */
+export function decodeAlreadyExistsResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): AlreadyExists {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return AlreadyExistsSchema.parse({ 'message': body['message'] ?? undefined }) as AlreadyExists
+}
+
+/** `Conflict` read from a response: its body, headers and status. */
+export function decodeConflictResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): Conflict {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return ConflictSchema.parse({ 'message': body['message'] ?? undefined }) as Conflict
+}
+
+/** `GetPersonOutput` read from a response: its body, headers and status. */
+export function decodeGetPersonOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): GetPersonOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return GetPersonOutputSchema.parse({ 'person': body['person'] == null ? undefined : decodePerson(body['person']), 'trace': res.headers['x-trace'] === undefined ? undefined : res.headers['x-trace'], 'code': res.status }) as GetPersonOutput
+}
+
+/** `MeasureOutput` read from a response: its body, headers and status. */
+export function decodeMeasureOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): MeasureOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return MeasureOutputSchema.parse({ 'measurement': body['measurement'] == null ? undefined : decodeMeasurement(body['measurement']), 'total': res.headers['x-total'] === undefined ? undefined : res.headers['x-total'] }) as MeasureOutput
+}
+
+/** `NotFound` read from a response: its body, headers and status. */
+export function decodeNotFoundResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): NotFound {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return NotFoundSchema.parse({ 'message': body['message'] ?? undefined }) as NotFound
+}
+
+/** `PlainOutput` read from a response: its body, headers and status. */
+export function decodePlainOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): PlainOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return PlainOutputSchema.parse({ 'message': body['message'] ?? undefined }) as PlainOutput
+}
+
+/** `SearchOutput` read from a response: its body, headers and status. */
+export function decodeSearchOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): SearchOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return SearchOutputSchema.parse({ 'results': body['results'] == null ? undefined : decodePeople(body['results']) }) as SearchOutput
+}
+
+/** `SequenceOutput` read from a response: its body, headers and status. */
+export function decodeSequenceOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): SequenceOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return SequenceOutputSchema.parse({ 'measurement': body['measurement'] == null ? undefined : decodeMeasurement(body['measurement']) }) as SequenceOutput
+}
+
+/** `UploadOutput` read from a response: its body, headers and status. */
+export function decodeUploadOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): UploadOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return UploadOutputSchema.parse({ 'stored': body['stored'] ?? undefined }) as UploadOutput
+}
+
+
 // --- Service clients ---
 
 export class DirectoryClient {
@@ -568,9 +1163,9 @@ export class DirectoryClient {
   }
 
   async getPerson(input: GetPersonInput, opts?: TransportOptions): Promise<GetPersonOutput> {
-    const url = `/people/${encodeURIComponent(String(input.id))}`
-    const query: Record<string, string | number | boolean | undefined> = {}
-    if (input.verbose !== undefined) query['verbose'] = input.verbose
+    const url = `/people/${wireEncodeLabel(String(input.id))}`
+    const query: Record<string, string | readonly string[] | undefined> = {}
+    if (input.verbose !== undefined) query['verbose'] = String(input.verbose)
     const res = await this.transport.request({
       operation: 'DirectoryClient.getPerson',
       method: 'GET',
@@ -579,30 +1174,25 @@ export class DirectoryClient {
       body: undefined,
       options: opts,
     })
-    if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(GetPersonOutputSchema.omit({ 'code': true, 'trace': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-trace'] !== undefined) {
-        raw['trace'] = res.headers['x-trace']
-      }
-      raw['code'] = res.status
-      return GetPersonOutputSchema.parse(raw) as GetPersonOutput
+    if (res.status >= 200 && res.status < 400) {
+      return decodeGetPersonOutputResponse(res)
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     if (res.status === 409) {
       const errorType = res.headers['x-error-type']
-      if (errorType === 'Conflict') throw new ConflictError(ConflictSchema.parse(res.body))
-      if (errorType === 'AlreadyExists') throw new AlreadyExistsError(AlreadyExistsSchema.parse(res.body))
+      if (errorType === 'Conflict') throw new ConflictError(decodeConflictResponse(res))
+      if (errorType === 'AlreadyExists') throw new AlreadyExistsError(decodeAlreadyExistsResponse(res))
     }
     throw new UnexpectedResponseError('DirectoryClient.getPerson', res.status, res.body, res.headers)
   }
 
   /** Exercises `@lossless` outside a JSON body: as a `@httpLabel`, a `@httpQuery` and a `@httpHeader`, none of which may be coerced with `Number(...)` once the member admits a string. */
   async measure(input: MeasureInput, opts?: TransportOptions): Promise<MeasureOutput> {
-    const url = `/measurements/${encodeURIComponent(String(input.seed))}`
-    const query: Record<string, string | number | boolean | undefined> = {}
-    if (input.offset !== undefined) query['offset'] = input.offset
+    const url = `/measurements/${wireEncodeLabel(String(input.seed))}`
+    const query: Record<string, string | readonly string[] | undefined> = {}
+    if (input.offset !== undefined) query['offset'] = String(input.offset)
     const headers: Record<string, string> = {}
     if (input.revision !== undefined) headers['x-revision'] = String(input.revision)
     const res = await this.transport.request({
@@ -615,14 +1205,10 @@ export class DirectoryClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(MeasureOutputSchema.omit({ 'total': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-total'] !== undefined) {
-        raw['total'] = res.headers['x-total']
-      }
-      return MeasureOutputSchema.parse(raw) as MeasureOutput
+      return decodeMeasureOutputResponse(res)
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('DirectoryClient.measure', res.status, res.body, res.headers)
   }
@@ -641,13 +1227,13 @@ export class DirectoryClient {
       return undefined
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('DirectoryClient.ping', res.status, res.body, res.headers)
   }
 
   async putPerson(input: PutPersonInput, opts?: TransportOptions): Promise<void> {
-    const url = `/people/${encodeURIComponent(String(input.id))}`
+    const url = `/people/${wireEncodeLabel(String(input.id))}`
     const headers: Record<string, string> = {}
     if (input.ifMatch !== undefined) headers['if-match'] = String(input.ifMatch)
     const res = await this.transport.request({
@@ -655,21 +1241,21 @@ export class DirectoryClient {
       method: 'PUT',
       url,
       headers,
-      body: input.person,
+      body: input.person === undefined ? undefined : encodePerson(input.person),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
       return undefined
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('DirectoryClient.putPerson', res.status, res.body, res.headers)
   }
 
   async search(input: SearchInput, opts?: TransportOptions): Promise<SearchOutput> {
     const url = `/search`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const query: Record<string, string | readonly string[] | undefined> = {}
     if (input.q !== undefined) query['q'] = String(input.q)
     const res = await this.transport.request({
       operation: 'DirectoryClient.search',
@@ -680,10 +1266,10 @@ export class DirectoryClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return SearchOutputSchema.parse(res.body)
+      return decodeSearchOutputResponse(res)
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('DirectoryClient.search', res.status, res.body, res.headers)
   }
@@ -695,14 +1281,14 @@ export class DirectoryClient {
       operation: 'DirectoryClient.sequence',
       method: 'POST',
       url,
-      body: { seed: BigInt(input.seed), cursor: (input.cursor === undefined ? undefined : BigInt(input.cursor)), count: input.count },
+      body: { 'seed': input.seed == null ? undefined : BigInt(input.seed), 'cursor': input.cursor == null ? undefined : BigInt(input.cursor), 'count': input.count ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return SequenceOutputSchema.parse(res.body)
+      return decodeSequenceOutputResponse(res)
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('DirectoryClient.sequence', res.status, res.body, res.headers)
   }
@@ -742,7 +1328,7 @@ export class FeedClient {
       return raw as EchoOutput
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('FeedClient.echo', res.status, res.body, res.headers)
   }
@@ -758,10 +1344,10 @@ export class FeedClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return PlainOutputSchema.parse(res.body)
+      return decodePlainOutputResponse(res)
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('FeedClient.plain', res.status, res.body, res.headers)
   }
@@ -771,7 +1357,7 @@ export class FeedClient {
    * Streams `body` to the server as raw bytes.
    */
   async upload(input: UploadInput, opts?: TransportOptions): Promise<UploadOutput> {
-    const url = `/upload/${encodeURIComponent(String(input.id))}`
+    const url = `/upload/${wireEncodeLabel(String(input.id))}`
     const res = await this.streamTransport.requestStream({
       operation: 'FeedClient.upload',
       method: 'POST',
@@ -782,10 +1368,10 @@ export class FeedClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return UploadOutputSchema.parse(res.body)
+      return decodeUploadOutputResponse(res)
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('FeedClient.upload', res.status, res.body, res.headers)
   }
@@ -795,9 +1381,9 @@ export class FeedClient {
    * Resolves once the response status is known; `events` then yields newline-delimited `FeedEvent` values lazily, so iterate it to consume the response.
    */
   async watch(input: WatchInput, opts?: TransportOptions): Promise<WatchOutput> {
-    const url = `/watch/${encodeURIComponent(String(input.id))}`
-    const query: Record<string, string | number | boolean | undefined> = {}
-    if (input.since !== undefined) query['since'] = input.since.toISOString()
+    const url = `/watch/${wireEncodeLabel(String(input.id))}`
+    const query: Record<string, string | readonly string[] | undefined> = {}
+    if (input.since !== undefined) query['since'] = wireDateTime(input.since)
     const res = await this.streamTransport.requestStream({
       operation: 'FeedClient.watch',
       method: 'GET',
@@ -819,7 +1405,7 @@ export class FeedClient {
       return raw as WatchOutput
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('FeedClient.watch', res.status, res.body, res.headers)
   }
@@ -1027,11 +1613,11 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
         const raw: Record<string, unknown> = {}
         raw['id'] = req.pathParams['id']
         if (req.query['verbose'] !== undefined) {
-          raw['verbose'] = (req.query['verbose'] as string === 'true')
+          raw['verbose'] = ((req.query['verbose'] as string) === 'true')
         }
         return GetPersonInputSchema.parse(raw) as GetPersonInput
       },
-      encodeBody: (output) => { const { code: _code, trace: _trace, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: (output) => { const o = output as GetPersonOutput; return { 'person': o.person == null ? undefined : encodePerson(o.person) } },
     },
     {
       key: 'measure',
@@ -1041,11 +1627,11 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
         const raw: Record<string, unknown> = {}
         raw['seed'] = req.pathParams['seed']
         if (req.query['offset'] !== undefined) {
-          raw['offset'] = req.query['offset'] as string
+          raw['offset'] = (req.query['offset'] as string)
         }
         return MeasureInputSchema.parse(raw) as MeasureInput
       },
-      encodeBody: (output) => { const { total: _total, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: (output) => { const o = output as MeasureOutput; return { 'measurement': o.measurement == null ? undefined : encodeMeasurement(o.measurement) } },
     },
     {
       key: 'ping',
@@ -1061,7 +1647,7 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         raw['id'] = req.pathParams['id']
-        raw['person'] = req.body
+        raw['person'] = req.body == null ? undefined : decodePerson(req.body)
         return PutPersonInputSchema.parse(raw) as PutPersonInput
       },
       encodeBody: () => ({}),
@@ -1073,11 +1659,11 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['q'] !== undefined) {
-          raw['q'] = req.query['q'] as string
+          raw['q'] = (req.query['q'] as string)
         }
         return SearchInputSchema.parse(raw) as SearchInput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as SearchOutput; return { 'results': o.results == null ? undefined : encodePeople(o.results) } },
     },
     {
       key: 'sequence',
@@ -1085,13 +1671,13 @@ export const DirectoryMock: MockServiceDescriptor<DirectoryHandlers> = {
       segments: [{ literal: 'sequences' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['seed'] = body['seed']
-        raw['cursor'] = body['cursor']
-        raw['count'] = body['count']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['seed'] = body['seed'] ?? undefined
+        raw['cursor'] = body['cursor'] ?? undefined
+        raw['count'] = body['count'] ?? undefined
         return SequenceInputSchema.parse(raw) as SequenceInput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as SequenceOutput; return { 'measurement': o.measurement == null ? undefined : encodeMeasurement(o.measurement) } },
     },
   ],
 }
@@ -1131,7 +1717,7 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
       method: 'GET',
       segments: [{ literal: 'plain' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as PlainOutput; return { 'message': o.message ?? undefined } },
     },
     {
       key: 'upload',
@@ -1146,7 +1732,7 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
           body: (req.stream ?? emptyStream()) as AsyncIterable<Uint8Array>,
         }
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as UploadOutput; return { 'stored': o.stored ?? undefined } },
     },
     {
       key: 'watch',
@@ -1156,7 +1742,7 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
         const raw: Record<string, unknown> = {}
         raw['id'] = req.pathParams['id']
         if (req.query['since'] !== undefined) {
-          raw['since'] = req.query['since'] as string
+          raw['since'] = wireTimestamp((req.query['since'] as string))
         }
         return WatchInputSchema.parse(raw) as WatchInput
       },

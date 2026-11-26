@@ -202,9 +202,9 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(clue(out).contains("export class GreeterClient {"))
     assert(out.contains("async greet(input: GreetInput"))
     assert(out.contains("method: 'POST',"))
-    assert(out.contains("`/greet/${encodeURIComponent(String(input.name))}`"))
+    assert(out.contains("`/greet/${wireEncodeLabel(String(input.name))}`"))
     // http-bound label member is omitted from the JSON body
-    assert(out.contains("body: { greeting: input.greeting },"))
+    assert(out.contains("body: { 'greeting': input.greeting ?? undefined },"))
     // mock stubs
     assert(out.contains("export interface GreeterHandlers {"))
     assert(out.contains("export const GreeterMock: MockServiceDescriptor<GreeterHandlers> = {"))
@@ -344,8 +344,9 @@ class TsCodegenPluginTest extends munit.FunSuite {
          |""".stripMargin
     )
 
-    assert(clue(out).contains("query['since'] = input.since.toISOString()"))
-    assert(out.contains("query['limit'] = input.limit"))
+    // RFC 3339, the protocol's default for a timestamp in a query string.
+    assert(clue(out).contains("query['since'] = wireDateTime(input.since)"))
+    assert(out.contains("query['limit'] = String(input.limit)"))
     assert(!out.contains("as string | number | boolean"))
   }
 
@@ -509,23 +510,33 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(out.contains("export const GreetOutputSchema = z.object({"))
   }
 
-  test("fails on recursive shapes") {
-    val ex = intercept[RuntimeException] {
-      generate(
-        """|$version: "2"
-           |namespace test
-           |
-           |structure A {
-           |  b: B
-           |}
-           |
-           |structure B {
-           |  a: A
-           |}
-           |""".stripMargin
-      )
-    }
-    assert(clue(ex.getMessage).contains("does not support recursive shapes"))
+  test("a reference that closes a cycle is a getter, so recursive shapes can be declared") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |structure A {
+         |  b: B
+         |}
+         |
+         |structure B {
+         |  a: A
+         |  self: B
+         |  names: Names
+         |}
+         |
+         |list Names {
+         |  member: String
+         |}
+         |""".stripMargin
+    )
+    assert(clue(out).contains("get b() { return BSchema.optional() },"))
+    assert(out.contains("get a() { return ASchema.optional() },"))
+    assert(out.contains("get self() { return BSchema.optional() },"))
+    // Not part of a cycle, so an ordinary (eager) member.
+    assert(out.contains("names: NamesSchema.optional(),"))
+    // The codecs are hoisted functions, so they recurse without help.
+    assert(out.contains("'b': value.b == null ? undefined : encodeB(value.b)"))
   }
 
   // The model stores shapes in a hash map keyed by ShapeId, so iteration order
@@ -773,7 +784,10 @@ class TsCodegenPluginTest extends munit.FunSuite {
 
     // `Number(...)` is the rounding the trait exists to avoid, and the schema
     // accepts the raw string anyway.
-    assert(out.contains("raw['total'] = res.headers['x-total']"), out)
+    assert(
+      out.contains("res.headers['x-total'] === undefined ? undefined : res.headers['x-total']"),
+      out,
+    )
     assert(!out.contains("Number(res.headers['x-total'])"), out)
   }
 
@@ -808,9 +822,9 @@ class TsCodegenPluginTest extends munit.FunSuite {
     // A numeric string would be written back as a *quoted* string, changing the
     // type the server sees; a bigint serialises as a bare literal at full range.
     // The member is required, so it needs no undefined guard.
-    assert(out.contains("seed: BigInt(input.seed)"), out)
+    assert(out.contains("\'seed\': input.seed == null ? undefined : BigInt(input.seed)"), out)
     // The untagged member is untouched.
-    assert(out.contains("count: input.count"), out)
+    assert(out.contains("\'count\': input.count ?? undefined"), out)
   }
 
   test("an optional @lossless body member stays absent rather than becoming BigInt(undefined)") {
@@ -839,7 +853,7 @@ class TsCodegenPluginTest extends munit.FunSuite {
 
     // `BigInt(undefined)` throws, so the guard is what keeps an absent optional
     // member absent instead of failing the request.
-    assert(out.contains("input.seed === undefined ? undefined : BigInt(input.seed)"), out)
+    assert(out.contains("input.seed == null ? undefined : BigInt(input.seed)"), out)
   }
 
   test("a @discriminated union dispatches on its discriminator property") {
@@ -1185,14 +1199,14 @@ class TsCodegenPluginTest extends munit.FunSuite {
 
   test("no extensions leave the @http uri untouched") {
     val out = generate(prefixModel)
-    assert(clue(out).contains("const url = `/things/${encodeURIComponent(String(input.id))}`"))
+    assert(clue(out).contains("const url = `/things/${wireEncodeLabel(String(input.id))}`"))
   }
 
   test("an extension can prepend literal segments to the uri") {
     val out = generate(prefixModel, extensions = prefixExt("internal", "v1"))
     assert(
       clue(out).contains(
-        "const url = `/internal/v1/things/${encodeURIComponent(String(input.id))}`"
+        "const url = `/internal/v1/things/${wireEncodeLabel(String(input.id))}`"
       )
     )
   }
@@ -1218,7 +1232,7 @@ class TsCodegenPluginTest extends munit.FunSuite {
           path
       ),
     )
-    assert(clue(out).contains("const url = `/things/${encodeURIComponent(String(input.id))}`"))
+    assert(clue(out).contains("const url = `/things/${wireEncodeLabel(String(input.id))}`"))
     assert(clue(out).contains("const url = `/internal/v2/others`"))
   }
 
@@ -1282,7 +1296,7 @@ class TsCodegenPluginTest extends munit.FunSuite {
       prefixModel,
       extensions = pathExt((_, _, path) => path.reverse),
     )
-    assert(clue(out).contains("const url = `/${encodeURIComponent(String(input.id))}/things`"))
+    assert(clue(out).contains("const url = `/${wireEncodeLabel(String(input.id))}/things`"))
     assert(clue(out).contains("segments: [{ label: 'id' }, { literal: 'things' }],"))
   }
 

@@ -256,37 +256,6 @@
         }
     },
     {
-        "id": "RestJsonSupportsNegativeInfinityFloatQueryValues",
-        "kind": "request",
-        "service": "RestJson",
-        "operation": "AllQueryStringTypes",
-        "error": null,
-        "case": {
-            "id": "RestJsonSupportsNegativeInfinityFloatQueryValues",
-            "protocol": "aws.protocols#restJson1",
-            "documentation": "Supports handling -Infinity float query values.",
-            "body": "",
-            "params": {
-                "queryFloat": "-Infinity",
-                "queryDouble": "-Infinity",
-                "queryParamsMapOfStringList": {
-                    "Float": [
-                        "-Infinity"
-                    ],
-                    "Double": [
-                        "-Infinity"
-                    ]
-                }
-            },
-            "method": "GET",
-            "uri": "/AllQueryStringTypesInput",
-            "queryParams": [
-                "Float=-Infinity",
-                "Double=-Infinity"
-            ]
-        }
-    },
-    {
         "id": "RestJsonConstantAndVariableQueryStringMissingOneValue",
         "kind": "request",
         "service": "RestJson",
@@ -1120,25 +1089,6 @@
         }
     },
     {
-        "id": "RestJsonSupportsNegativeInfinityFloatLabels",
-        "kind": "request",
-        "service": "RestJson",
-        "operation": "HttpRequestWithFloatLabels",
-        "error": null,
-        "case": {
-            "id": "RestJsonSupportsNegativeInfinityFloatLabels",
-            "protocol": "aws.protocols#restJson1",
-            "documentation": "Supports handling -Infinity float label values.",
-            "body": "",
-            "params": {
-                "float": "-Infinity",
-                "double": "-Infinity"
-            },
-            "method": "GET",
-            "uri": "/FloatHttpLabels/-Infinity/-Infinity"
-        }
-    },
-    {
         "id": "RestJsonHttpRequestWithGreedyLabelInPath",
         "kind": "request",
         "service": "RestJson",
@@ -1323,50 +1273,6 @@
             },
             "params": {
                 "baz": "bam"
-            },
-            "code": 200
-        }
-    },
-    {
-        "id": "RestJsonSupportsNegativeInfinityFloatHeaderInputs",
-        "kind": "request",
-        "service": "RestJson",
-        "operation": "InputAndOutputWithHeaders",
-        "error": null,
-        "case": {
-            "id": "RestJsonSupportsNegativeInfinityFloatHeaderInputs",
-            "protocol": "aws.protocols#restJson1",
-            "documentation": "Supports handling -Infinity float header values.",
-            "body": "",
-            "headers": {
-                "X-Double": "-Infinity",
-                "X-Float": "-Infinity"
-            },
-            "params": {
-                "headerFloat": "-Infinity",
-                "headerDouble": "-Infinity"
-            },
-            "method": "POST",
-            "uri": "/InputAndOutputWithHeaders"
-        }
-    },
-    {
-        "id": "RestJsonSupportsNegativeInfinityFloatHeaderOutputs",
-        "kind": "response",
-        "service": "RestJson",
-        "operation": "InputAndOutputWithHeaders",
-        "error": null,
-        "case": {
-            "id": "RestJsonSupportsNegativeInfinityFloatHeaderOutputs",
-            "protocol": "aws.protocols#restJson1",
-            "documentation": "Supports handling -Infinity float header values.",
-            "headers": {
-                "X-Double": "-Infinity",
-                "X-Float": "-Infinity"
-            },
-            "params": {
-                "headerFloat": "-Infinity",
-                "headerDouble": "-Infinity"
             },
             "code": 200
         }
@@ -3137,6 +3043,71 @@
         }
     },
     {
+        "id": "RestJsonRecursiveShapes",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "RecursiveShapes",
+        "error": null,
+        "case": {
+            "id": "RestJsonRecursiveShapes",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes recursive structures",
+            "body": "{\n    \"nested\": {\n        \"foo\": \"Foo1\",\n        \"nested\": {\n            \"bar\": \"Bar1\",\n            \"recursiveMember\": {\n                \"foo\": \"Foo2\",\n                \"nested\": {\n                    \"bar\": \"Bar2\"\n                }\n            }\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "nested": {
+                    "foo": "Foo1",
+                    "nested": {
+                        "bar": "Bar1",
+                        "recursiveMember": {
+                            "foo": "Foo2",
+                            "nested": {
+                                "bar": "Bar2"
+                            }
+                        }
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/RecursiveShapes"
+        }
+    },
+    {
+        "id": "RestJsonRecursiveShapes",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "RecursiveShapes",
+        "error": null,
+        "case": {
+            "id": "RestJsonRecursiveShapes",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes recursive structures",
+            "body": "{\n    \"nested\": {\n        \"foo\": \"Foo1\",\n        \"nested\": {\n            \"bar\": \"Bar1\",\n            \"recursiveMember\": {\n                \"foo\": \"Foo2\",\n                \"nested\": {\n                    \"bar\": \"Bar2\"\n                }\n            }\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "nested": {
+                    "foo": "Foo1",
+                    "nested": {
+                        "bar": "Bar1",
+                        "recursiveMember": {
+                            "foo": "Foo2",
+                            "nested": {
+                                "bar": "Bar2"
+                            }
+                        }
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
         "id": "RestJsonSimpleScalarProperties",
         "kind": "request",
         "service": "RestJson",
@@ -3474,51 +3445,6 @@
             },
             "method": "POST",
             "uri": "/TimestampFormatHeaders"
-        }
-    },
-    {
-        "id": "RestJsonTimestampFormatHeaders",
-        "kind": "response",
-        "service": "RestJson",
-        "operation": "TimestampFormatHeaders",
-        "error": null,
-        "case": {
-            "id": "RestJsonTimestampFormatHeaders",
-            "protocol": "aws.protocols#restJson1",
-            "documentation": "Tests how timestamp response headers are serialized",
-            "headers": {
-                "X-defaultFormat": "Mon, 16 Dec 2019 23:48:18 GMT",
-                "X-memberDateTime": "2019-12-16T23:48:18Z",
-                "X-memberEpochSeconds": "1576540098",
-                "X-memberHttpDate": "Mon, 16 Dec 2019 23:48:18 GMT",
-                "X-targetDateTime": "2019-12-16T23:48:18Z",
-                "X-targetEpochSeconds": "1576540098",
-                "X-targetHttpDate": "Mon, 16 Dec 2019 23:48:18 GMT"
-            },
-            "params": {
-                "memberEpochSeconds": {
-                    "$date": 1576540098
-                },
-                "memberHttpDate": {
-                    "$date": 1576540098
-                },
-                "memberDateTime": {
-                    "$date": 1576540098
-                },
-                "defaultFormat": {
-                    "$date": 1576540098
-                },
-                "targetEpochSeconds": {
-                    "$date": 1576540098
-                },
-                "targetHttpDate": {
-                    "$date": 1576540098
-                },
-                "targetDateTime": {
-                    "$date": 1576540098
-                }
-            },
-            "code": 200
         }
     },
     {

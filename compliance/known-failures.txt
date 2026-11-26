@@ -1,103 +1,13 @@
 # Compliance cases the generated client is known to fail, as <suite>/<kind>/<id>.
 #
-# Grouped by root cause. Fixing one should flip a whole group: the test run
-# fails on any listed case that passes, so delete its lines in the same change.
-# `pnpm --filter smithy-ts-codegen-compliance run test` prints what each listed
-# case currently gets wrong.
+# The suites are the cases smithy4s runs, and smithy4s is the reference for
+# how simpleRestJson behaves: a case belongs here only when we deliberately
+# match smithy4s rather than the test. Anything else failing is a bug to fix,
+# not to list. The test run fails on any listed case that passes, so delete
+# its line in the same change. `pnpm --filter smithy-ts-codegen-compliance run
+# test` prints what each listed case currently gets wrong.
 
-# --- Timestamps: @timestampFormat is ignored everywhere ---
-# Bodies are written as ISO strings, though the protocol default is
-# epoch-seconds; epoch-seconds are read through z.coerce.date(), which takes
-# them as milliseconds (a 2014 date decodes as 1970); headers, labels and query
-# values use Date.prototype.toString(), which depends on the local timezone.
-alloy/request/PrimitivesEncodingRequest
-alloy/response/AddMenuItemResult
-restJson1/request/RestJsonHttpRequestWithLabelsAndTimestampFormat
-restJson1/request/RestJsonInputWithHeadersAndAllParams
-restJson1/request/RestJsonJsonTimestamps
-restJson1/request/RestJsonJsonTimestampsWithDateTimeFormat
-restJson1/request/RestJsonJsonTimestampsWithDateTimeOnTargetFormat
-restJson1/request/RestJsonJsonTimestampsWithEpochSecondsFormat
-restJson1/request/RestJsonJsonTimestampsWithEpochSecondsOnTargetFormat
-restJson1/request/RestJsonJsonTimestampsWithHttpDateFormat
-restJson1/request/RestJsonJsonTimestampsWithHttpDateOnTargetFormat
-restJson1/request/RestJsonLists
-restJson1/request/RestJsonSerializeTimestampUnionValue
-restJson1/request/RestJsonTimestampFormatHeaders
-restJson1/response/RestJsonDeserializeTimestampUnionValue
-restJson1/response/RestJsonJsonTimestamps
-restJson1/response/RestJsonJsonTimestampsWithEpochSecondsFormat
-restJson1/response/RestJsonJsonTimestampsWithEpochSecondsOnTargetFormat
-restJson1/response/RestJsonLists
-restJson1/response/RestJsonTimestampFormatHeaders
-
-# --- @jsonName is ignored (structures and unions) ---
-# On the way in, zod drops the renamed field without an error.
-restJson1/request/PostUnionWithJsonNameRequest1
-restJson1/request/PostUnionWithJsonNameRequest2
-restJson1/request/RestJsonSimpleScalarProperties
-restJson1/response/PostUnionWithJsonNameResponse1
-restJson1/response/PostUnionWithJsonNameResponse2
-restJson1/response/RestJsonSimpleScalarProperties
-
-# --- An empty response body fails to parse ---
-# Outputs (and errors) with no body members are still parsed as an object, so
-# a response without a body throws "expected object, received undefined".
-alloy/response/headerEndpointResponse
-restJson1/response/RestJsonEmptyInputAndEmptyOutputJsonObjectOutput
-restJson1/response/RestJsonGreetingWithErrorsNoPayload
-restJson1/response/RestJsonHttpResponseCodeWithNoPayload
-restJson1/response/RestJsonNoInputAndOutputNoPayload
-restJson1/response/RestJsonSupportsNegativeInfinityFloatHeaderOutputs
-
-# --- Query strings ---
-# The runtime encodes with URLSearchParams (space as `+`, `*` left bare); lists
-# are comma-joined instead of repeating the key; @httpQueryParams maps are sent
-# in the body; constant query strings in @http(uri) are dropped; idempotency
-# tokens are not filled in.
-alloy/request/RoundTripRequest
-restJson1/request/RestJsonAllQueryStringTypes
-restJson1/request/RestJsonConstantAndVariableQueryStringAllValues
-restJson1/request/RestJsonConstantAndVariableQueryStringMissingOneValue
-restJson1/request/RestJsonConstantQueryString
+# --- Intentional: idempotency tokens are not filled in ---
+# smithy4s leaves @idempotencyToken members to the caller, so that setting one
+# is a conscious decision made outside of any retry loop.
 restJson1/request/RestJsonQueryIdempotencyTokenAutoFill
-restJson1/request/RestJsonQueryParamsStringListMap
-restJson1/request/RestJsonQueryPrecedence
-restJson1/request/RestJsonQueryStringEscaping
-restJson1/request/RestJsonQueryStringMap
-restJson1/request/RestJsonSupportsNegativeInfinityFloatQueryValues
-
-# --- Path labels ---
-# Greedy labels ({x+}) escape `/`; encodeURIComponent leaves !'()* unescaped.
-alloy/request/RoutingAbcDefGreedy
-restJson1/request/RestJsonHttpRequestLabelEscaping
-restJson1/request/RestJsonHttpRequestWithGreedyLabelInPath
-
-# --- Unsupported HTTP bindings ---
-# @httpPrefixHeaders members go in the body; an error's @httpHeader members
-# are never read; output members bound with @httpLabel/@httpQuery (which only
-# apply to input) are left out of the body instead of read from it.
-alloy/response/PriceErrorTest
-alloy/response/RoundTripDataResponse
-restJson1/request/RestJsonHttpPrefixHeadersAreNotPresent
-restJson1/request/RestJsonHttpPrefixHeadersArePresent
-restJson1/response/HttpPrefixHeadersResponse
-restJson1/response/RestJsonComplexErrorWithNoMessage
-restJson1/response/RestJsonHttpPrefixHeadersArePresent
-restJson1/response/RestJsonIgnoreQueryParamsInResponse
-
-# --- @httpPayload default ---
-# A missing payload doesn't fall back to the member's default.
-alloy/response/SimpleRestJsonNoneHttpPayloadWithDefault
-alloy/response/SimpleRestJsonNoneRequiredHttpPayloadWithDefault
-
-# --- @httpResponseCode ---
-# A non-2xx success code (399) is treated as an unexpected response.
-alloy/response/CustomCodeOutput
-
-# --- null handling ---
-# A null structure member is sent rather than omitted, and rejected rather than
-# treated as absent on the way in; @sparse collections reject null elements.
-restJson1/request/RestJsonDoesntSerializeNullStructureValues
-restJson1/response/RestJsonDeserializesSparseSetMapAndRetainsNull
-restJson1/response/RestJsonDoesntDeserializeNullStructureValues

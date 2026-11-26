@@ -739,6 +739,778 @@ export class UnknownServerErrorError extends Error {
 }
 
 
+// --- Wire codecs ---
+
+const wireIsRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const wireEpochSeconds = (date: Date): number => date.getTime() / 1000
+
+/** RFC 3339, with the fraction only when there is one (`2014-04-29T18:30:38Z`). */
+const wireDateTime = (date: Date): string => date.toISOString().replace('.000Z', 'Z')
+
+/** IMF-fixdate (`Tue, 29 Apr 2014 18:30:38 GMT`). */
+const wireHttpDate = (date: Date): string => date.toUTCString()
+
+/** Any of the three formats: epoch seconds as a number or a numeric string
+ * (as a header carries it), otherwise a date-time or an HTTP date. A value
+ * that is neither is passed on for the schema to reject. */
+const wireTimestamp = (value: unknown): unknown => {
+  if (typeof value === 'number') return new Date(value * 1000)
+  if (typeof value !== 'string') return value
+  return /^-?\d+(\.\d+)?$/.test(value) ? new Date(Number(value) * 1000) : new Date(value)
+}
+
+/** Percent-encodes everything outside RFC 3986's unreserved set —
+ * `encodeURIComponent` leaves `!'()*` alone. */
+const wireEncodeLabel = (value: string): string =>
+  encodeURIComponent(value).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+
+/** A greedy label (`{key+}`) spans segments: its slashes stay slashes. */
+const wireEncodeGreedyLabel = (value: string): string =>
+  value.split('/').map(wireEncodeLabel).join('/')
+
+/** A string list item in a header, quoted when it holds a comma or a quote. */
+const wireQuoteHeaderItem = (value: string): string =>
+  /[,"]/.test(value) ? '"' + value.replace(/["\\]/g, (c) => '\\' + c) + '"' : value
+
+/** Splits a comma-separated header list, honouring quoted items. An HTTP
+ * date contains a comma itself, so a list of them splits after each `GMT`. */
+const wireSplitHeader = (value: string, httpDates: boolean): string[] => {
+  if (httpDates) return value.split(/(?<=GMT)\s*,\s*/)
+  const items: string[] = []
+  const pattern = /\s*(?:"((?:[^"\\]|\\.)*)"|([^,]*?))\s*(?:,|$)/gy
+  let match: RegExpExecArray | null
+  while (pattern.lastIndex < value.length && (match = pattern.exec(value)) !== null) {
+    items.push(match[1] !== undefined ? match[1].replace(/\\(.)/g, '$1') : (match[2] ?? ''))
+  }
+  return items
+}
+
+/** The headers starting with `prefix`, keyed by the rest of the name, or
+ * `undefined` when there are none. */
+const wirePrefixHeaders = (
+  headers: Record<string, string>,
+  prefix: string,
+): Record<string, string> | undefined => {
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.startsWith(prefix)) out[name.slice(prefix.length)] = value
+  }
+  return Object.keys(out).length === 0 ? undefined : out
+}
+
+/** `DataExample` as it is written in a JSON body. */
+export function encodeDataExample(value: DataExample): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['smithy'] !== undefined) return { 'smithy': fields['smithy'] }
+  if (fields['json'] !== undefined) return { 'json': fields['json'] }
+  if (fields['string'] !== undefined) return { 'string': fields['string'] }
+  return value
+}
+
+/** `DataExample` read from a JSON body; validate the result with `DataExampleSchema`. */
+export function decodeDataExample(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['smithy'] !== undefined && value['smithy'] !== null) return { 'smithy': value['smithy'] }
+  if (value['json'] !== undefined && value['json'] !== null) return { 'json': value['json'] }
+  if (value['string'] !== undefined && value['string'] !== null) return { 'string': value['string'] }
+  return value
+}
+
+/** `UncheckedExample` as it is written in a JSON body. */
+export function encodeUncheckedExample(value: UncheckedExample): Record<string, unknown> {
+  return { 'title': value.title ?? undefined, 'documentation': value.documentation ?? undefined, 'input': value.input ?? undefined, 'output': value.output ?? undefined }
+}
+
+/** `UncheckedExample` read from a JSON body; validate the result with `UncheckedExampleSchema`. */
+export function decodeUncheckedExample(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'title': value['title'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'input': value['input'] ?? undefined, 'output': value['output'] ?? undefined }
+}
+
+/** `Range` as it is written in a JSON body. */
+export function encodeRange(value: Range): Record<string, unknown> {
+  return { 'start': value.start ?? undefined, 'end': value.end ?? undefined }
+}
+
+/** `Range` read from a JSON body; validate the result with `RangeSchema`. */
+export function decodeRange(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'start': value['start'] ?? undefined, 'end': value['end'] ?? undefined }
+}
+
+/** `AddMenuItemResult` as it is written in a JSON body. */
+export function encodeAddMenuItemResult(value: AddMenuItemResult): Record<string, unknown> {
+  return { 'itemId': value.itemId ?? undefined, 'added': value.added == null ? undefined : wireEpochSeconds(value.added) }
+}
+
+/** `AddMenuItemResult` read from a JSON body; validate the result with `AddMenuItemResultSchema`. */
+export function decodeAddMenuItemResult(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'itemId': value['itemId'] ?? undefined, 'added': value['added'] == null ? undefined : wireTimestamp(value['added']) }
+}
+
+/** `CustomCodeInput` as it is written in a JSON body. */
+export function encodeCustomCodeInput(value: CustomCodeInput): Record<string, unknown> {
+  return { 'code': value.code ?? undefined }
+}
+
+/** `CustomCodeInput` read from a JSON body; validate the result with `CustomCodeInputSchema`. */
+export function decodeCustomCodeInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'code': value['code'] ?? undefined }
+}
+
+/** `CustomCodeOutput` as it is written in a JSON body. */
+export function encodeCustomCodeOutput(value: CustomCodeOutput): Record<string, unknown> {
+  return { 'code': value.code ?? undefined }
+}
+
+/** `CustomCodeOutput` read from a JSON body; validate the result with `CustomCodeOutputSchema`. */
+export function decodeCustomCodeOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'code': value['code'] ?? undefined }
+}
+
+/** `Unit` as it is written in a JSON body. */
+export function encodeUnit(_value: Unit): Record<string, unknown> {
+  return {}
+}
+
+/** `Unit` read from a JSON body; validate the result with `UnitSchema`. */
+export function decodeUnit(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `FallbackError` as it is written in a JSON body. */
+export function encodeFallbackError(value: FallbackError): Record<string, unknown> {
+  return { 'error': value.error ?? undefined }
+}
+
+/** `FallbackError` read from a JSON body; validate the result with `FallbackErrorSchema`. */
+export function decodeFallbackError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'error': value['error'] ?? undefined }
+}
+
+/** `GenericClientError` as it is written in a JSON body. */
+export function encodeGenericClientError(value: GenericClientError): Record<string, unknown> {
+  return { 'message': value.message ?? undefined }
+}
+
+/** `GenericClientError` read from a JSON body; validate the result with `GenericClientErrorSchema`. */
+export function decodeGenericClientError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined }
+}
+
+/** `GenericServerError` as it is written in a JSON body. */
+export function encodeGenericServerError(value: GenericServerError): Record<string, unknown> {
+  return { 'message': value.message ?? undefined }
+}
+
+/** `GenericServerError` read from a JSON body; validate the result with `GenericServerErrorSchema`. */
+export function decodeGenericServerError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined }
+}
+
+/** `GetEnumOutput` as it is written in a JSON body. */
+export function encodeGetEnumOutput(value: GetEnumOutput): Record<string, unknown> {
+  return { 'result': value.result ?? undefined }
+}
+
+/** `GetEnumOutput` read from a JSON body; validate the result with `GetEnumOutputSchema`. */
+export function decodeGetEnumOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'result': value['result'] ?? undefined }
+}
+
+/** `GetMenuRequest` as it is written in a JSON body. */
+export function encodeGetMenuRequest(value: GetMenuRequest): Record<string, unknown> {
+  return { 'restaurant': value.restaurant ?? undefined }
+}
+
+/** `GetMenuRequest` read from a JSON body; validate the result with `GetMenuRequestSchema`. */
+export function decodeGetMenuRequest(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'restaurant': value['restaurant'] ?? undefined }
+}
+
+/** `HeaderEndpointData` as it is written in a JSON body. */
+export function encodeHeaderEndpointData(value: HeaderEndpointData): Record<string, unknown> {
+  return { 'uppercaseHeader': value.uppercaseHeader ?? undefined, 'capitalizedHeader': value.capitalizedHeader ?? undefined, 'lowercaseHeader': value.lowercaseHeader ?? undefined, 'mixedHeader': value.mixedHeader ?? undefined }
+}
+
+/** `HeaderEndpointData` read from a JSON body; validate the result with `HeaderEndpointDataSchema`. */
+export function decodeHeaderEndpointData(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'uppercaseHeader': value['uppercaseHeader'] ?? undefined, 'capitalizedHeader': value['capitalizedHeader'] ?? undefined, 'lowercaseHeader': value['lowercaseHeader'] ?? undefined, 'mixedHeader': value['mixedHeader'] ?? undefined }
+}
+
+/** `HealthRequest` as it is written in a JSON body. */
+export function encodeHealthRequest(value: HealthRequest): Record<string, unknown> {
+  return { 'query': value.query ?? undefined }
+}
+
+/** `HealthRequest` read from a JSON body; validate the result with `HealthRequestSchema`. */
+export function decodeHealthRequest(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'query': value['query'] ?? undefined }
+}
+
+/** `HealthResponse` as it is written in a JSON body. */
+export function encodeHealthResponse(value: HealthResponse): Record<string, unknown> {
+  return { 'status': value.status ?? undefined }
+}
+
+/** `HealthResponse` read from a JSON body; validate the result with `HealthResponseSchema`. */
+export function decodeHealthResponse(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'status': value['status'] ?? undefined }
+}
+
+/** `HttpPayloadRequiredWithDefaultInputOutput` as it is written in a JSON body. */
+export function encodeHttpPayloadRequiredWithDefaultInputOutput(value: HttpPayloadRequiredWithDefaultInputOutput): Record<string, unknown> {
+  return { 'body': value.body ?? undefined }
+}
+
+/** `HttpPayloadRequiredWithDefaultInputOutput` read from a JSON body; validate the result with `HttpPayloadRequiredWithDefaultInputOutputSchema`. */
+export function decodeHttpPayloadRequiredWithDefaultInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'body': value['body'] == null ? "default value" : value['body'] }
+}
+
+/** `HttpPayloadWithDefaultInputOutput` as it is written in a JSON body. */
+export function encodeHttpPayloadWithDefaultInputOutput(value: HttpPayloadWithDefaultInputOutput): Record<string, unknown> {
+  return { 'body': value.body ?? undefined }
+}
+
+/** `HttpPayloadWithDefaultInputOutput` read from a JSON body; validate the result with `HttpPayloadWithDefaultInputOutputSchema`. */
+export function decodeHttpPayloadWithDefaultInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'body': value['body'] == null ? "default value" : value['body'] }
+}
+
+/** `NotFoundError` as it is written in a JSON body. */
+export function encodeNotFoundError(value: NotFoundError): Record<string, unknown> {
+  return { 'name': value.name ?? undefined }
+}
+
+/** `NotFoundError` read from a JSON body; validate the result with `NotFoundErrorSchema`. */
+export function decodeNotFoundError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'name': value['name'] ?? undefined }
+}
+
+/** `SmallStruct` as it is written in a JSON body. */
+export function encodeSmallStruct(value: SmallStruct): Record<string, unknown> {
+  return { 'content': value.content ?? undefined }
+}
+
+/** `SmallStruct` read from a JSON body; validate the result with `SmallStructSchema`. */
+export function decodeSmallStruct(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'content': value['content'] ?? undefined }
+}
+
+/** `OpenTaggedUnion` as it is written in a JSON body. */
+export function encodeOpenTaggedUnion(value: OpenTaggedUnion): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['str'] !== undefined) return { 'str': fields['str'] }
+  return value
+}
+
+/** `OpenTaggedUnion` read from a JSON body; validate the result with `OpenTaggedUnionSchema`. */
+export function decodeOpenTaggedUnion(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['str'] !== undefined && value['str'] !== null) return { 'str': value['str'] }
+  return value
+}
+
+/** `PriceError` as it is written in a JSON body. */
+export function encodePriceError(value: PriceError): Record<string, unknown> {
+  return { 'message': value.message ?? undefined, 'code': value.code ?? undefined }
+}
+
+/** `PriceError` read from a JSON body; validate the result with `PriceErrorSchema`. */
+export function decodePriceError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined, 'code': value['code'] ?? undefined }
+}
+
+/** `RoundTripData` as it is written in a JSON body. */
+export function encodeRoundTripData(value: RoundTripData): Record<string, unknown> {
+  return { 'label': value.label ?? undefined, 'header': value.header ?? undefined, 'query': value.query ?? undefined, 'body': value.body ?? undefined }
+}
+
+/** `RoundTripData` read from a JSON body; validate the result with `RoundTripDataSchema`. */
+export function decodeRoundTripData(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'label': value['label'] ?? undefined, 'header': value['header'] ?? undefined, 'query': value['query'] ?? undefined, 'body': value['body'] ?? undefined }
+}
+
+/** `VersionOutput` as it is written in a JSON body. */
+export function encodeVersionOutput(value: VersionOutput): Record<string, unknown> {
+  return { 'version': value.version ?? undefined }
+}
+
+/** `VersionOutput` read from a JSON body; validate the result with `VersionOutputSchema`. */
+export function decodeVersionOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'version': value['version'] ?? undefined }
+}
+
+/** `AbcDefGreedyInput` as it is written in a JSON body. */
+export function encodeAbcDefGreedyInput(value: AbcDefGreedyInput): Record<string, unknown> {
+  return { 'def': value.def ?? undefined }
+}
+
+/** `AbcDefGreedyInput` read from a JSON body; validate the result with `AbcDefGreedyInputSchema`. */
+export function decodeAbcDefGreedyInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'def': value['def'] ?? undefined }
+}
+
+/** `AbcLabelInput` as it is written in a JSON body. */
+export function encodeAbcLabelInput(value: AbcLabelInput): Record<string, unknown> {
+  return { 'def': value.def ?? undefined }
+}
+
+/** `AbcLabelInput` read from a JSON body; validate the result with `AbcLabelInputSchema`. */
+export function decodeAbcLabelInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'def': value['def'] ?? undefined }
+}
+
+/** `MessageOutput` as it is written in a JSON body. */
+export function encodeMessageOutput(value: MessageOutput): Record<string, unknown> {
+  return { 'message': value.message ?? undefined }
+}
+
+/** `MessageOutput` read from a JSON body; validate the result with `MessageOutputSchema`. */
+export function decodeMessageOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'message': value['message'] ?? undefined }
+}
+
+/** `EventHeaderValue` as it is written in a JSON body. */
+export function encodeEventHeaderValue(value: EventHeaderValue): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['boolean'] !== undefined) return { 'boolean': fields['boolean'] }
+  if (fields['byte'] !== undefined) return { 'byte': fields['byte'] }
+  if (fields['short'] !== undefined) return { 'short': fields['short'] }
+  if (fields['integer'] !== undefined) return { 'integer': fields['integer'] }
+  if (fields['long'] !== undefined) return { 'long': fields['long'] }
+  if (fields['blob'] !== undefined) return { 'blob': fields['blob'] }
+  if (fields['string'] !== undefined) return { 'string': fields['string'] }
+  if (fields['timestamp'] !== undefined) return { 'timestamp': wireEpochSeconds((fields['timestamp'] as Date)) }
+  return value
+}
+
+/** `EventHeaderValue` read from a JSON body; validate the result with `EventHeaderValueSchema`. */
+export function decodeEventHeaderValue(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['boolean'] !== undefined && value['boolean'] !== null) return { 'boolean': value['boolean'] }
+  if (value['byte'] !== undefined && value['byte'] !== null) return { 'byte': value['byte'] }
+  if (value['short'] !== undefined && value['short'] !== null) return { 'short': value['short'] }
+  if (value['integer'] !== undefined && value['integer'] !== null) return { 'integer': value['integer'] }
+  if (value['long'] !== undefined && value['long'] !== null) return { 'long': value['long'] }
+  if (value['blob'] !== undefined && value['blob'] !== null) return { 'blob': value['blob'] }
+  if (value['string'] !== undefined && value['string'] !== null) return { 'string': value['string'] }
+  if (value['timestamp'] !== undefined && value['timestamp'] !== null) return { 'timestamp': wireTimestamp(value['timestamp']) }
+  return value
+}
+
+/** `HttpMalformedResponseBodyAssertion` as it is written in a JSON body. */
+export function encodeHttpMalformedResponseBodyAssertion(value: HttpMalformedResponseBodyAssertion): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['contents'] !== undefined) return { 'contents': fields['contents'] }
+  if (fields['messageRegex'] !== undefined) return { 'messageRegex': fields['messageRegex'] }
+  return value
+}
+
+/** `HttpMalformedResponseBodyAssertion` read from a JSON body; validate the result with `HttpMalformedResponseBodyAssertionSchema`. */
+export function decodeHttpMalformedResponseBodyAssertion(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['contents'] !== undefined && value['contents'] !== null) return { 'contents': value['contents'] }
+  if (value['messageRegex'] !== undefined && value['messageRegex'] !== null) return { 'messageRegex': value['messageRegex'] }
+  return value
+}
+
+/** `TestFailureExpectation` as it is written in a JSON body. */
+export function encodeTestFailureExpectation(value: TestFailureExpectation): Record<string, unknown> {
+  return { 'errorId': value.errorId ?? undefined }
+}
+
+/** `TestFailureExpectation` read from a JSON body; validate the result with `TestFailureExpectationSchema`. */
+export function decodeTestFailureExpectation(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'errorId': value['errorId'] ?? undefined }
+}
+
+/** `PrimitiveEncodings` as it is written in a JSON body. */
+export function encodePrimitiveEncodings(value: PrimitiveEncodings): Record<string, unknown> {
+  return { 'uuid': value.uuid ?? undefined, 'localDate': value.localDate ?? undefined, 'localTime': value.localTime ?? undefined, 'duration': value.duration ?? undefined, 'offsetDateTime': value.offsetDateTime == null ? undefined : wireDateTime(value.offsetDateTime) }
+}
+
+/** `PrimitiveEncodings` read from a JSON body; validate the result with `PrimitiveEncodingsSchema`. */
+export function decodePrimitiveEncodings(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'uuid': value['uuid'] ?? undefined, 'localDate': value['localDate'] ?? undefined, 'localTime': value['localTime'] ?? undefined, 'duration': value['duration'] ?? undefined, 'offsetDateTime': value['offsetDateTime'] == null ? undefined : wireTimestamp(value['offsetDateTime']) }
+}
+
+/** `ReservedFieldsDefinition` as it is written in a JSON body. */
+export function encodeReservedFieldsDefinition(value: ReservedFieldsDefinition): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['name'] !== undefined) return { 'name': fields['name'] }
+  if (fields['number'] !== undefined) return { 'number': fields['number'] }
+  if (fields['range'] !== undefined) return { 'range': encodeRange((fields['range'] as Range)) }
+  return value
+}
+
+/** `ReservedFieldsDefinition` read from a JSON body; validate the result with `ReservedFieldsDefinitionSchema`. */
+export function decodeReservedFieldsDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['name'] !== undefined && value['name'] !== null) return { 'name': value['name'] }
+  if (value['number'] !== undefined && value['number'] !== null) return { 'number': value['number'] }
+  if (value['range'] !== undefined && value['range'] !== null) return { 'range': decodeRange(value['range']) }
+  return value
+}
+
+/** `PreserveOrderStruct` as it is written in a JSON body. */
+export function encodePreserveOrderStruct(value: PreserveOrderStruct): Record<string, unknown> {
+  return { 'map': value.map ?? undefined, 'document': value.document ?? undefined }
+}
+
+/** `PreserveOrderStruct` read from a JSON body; validate the result with `PreserveOrderStructSchema`. */
+export function decodePreserveOrderStruct(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'map': value['map'] ?? undefined, 'document': value['document'] ?? undefined }
+}
+
+/** `OpenDiscriminatedUnion` as it is written in a JSON body. */
+export function encodeOpenDiscriminatedUnion(value: OpenDiscriminatedUnion): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['key'] === 'smol') return { ...encodeSmallStruct(value as unknown as SmallStruct), 'key': 'smol' }
+  return value
+}
+
+/** `OpenDiscriminatedUnion` read from a JSON body; validate the result with `OpenDiscriminatedUnionSchema`. */
+export function decodeOpenDiscriminatedUnion(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['key'] === 'smol') return { ...(decodeSmallStruct(value) as Record<string, unknown>), 'key': 'smol' }
+  return value
+}
+
+/** `TaggableServiceApiConfig` as it is written in a JSON body. */
+export function encodeTaggableServiceApiConfig(value: TaggableServiceApiConfig): Record<string, unknown> {
+  return { 'tagApi': value.tagApi ?? undefined, 'untagApi': value.untagApi ?? undefined, 'listTagsApi': value.listTagsApi ?? undefined }
+}
+
+/** `TaggableServiceApiConfig` read from a JSON body; validate the result with `TaggableServiceApiConfigSchema`. */
+export function decodeTaggableServiceApiConfig(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'tagApi': value['tagApi'] ?? undefined, 'untagApi': value['untagApi'] ?? undefined, 'listTagsApi': value['listTagsApi'] ?? undefined }
+}
+
+/** `TaggableApiConfig` as it is written in a JSON body. */
+export function encodeTaggableApiConfig(value: TaggableApiConfig): Record<string, unknown> {
+  return { 'tagApi': value.tagApi ?? undefined, 'untagApi': value.untagApi ?? undefined, 'listTagsApi': value.listTagsApi ?? undefined }
+}
+
+/** `TaggableApiConfig` read from a JSON body; validate the result with `TaggableApiConfigSchema`. */
+export function decodeTaggableApiConfig(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'tagApi': value['tagApi'] ?? undefined, 'untagApi': value['untagApi'] ?? undefined, 'listTagsApi': value['listTagsApi'] ?? undefined }
+}
+
+export function encodeEventHeaders(value: EventHeaders): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, encodeEventHeaderValue(e)]))
+}
+
+export function decodeEventHeaders(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, e === null ? null : decodeEventHeaderValue(e)]))
+}
+
+/** `HttpMalformedRequestDefinition` as it is written in a JSON body. */
+export function encodeHttpMalformedRequestDefinition(value: HttpMalformedRequestDefinition): Record<string, unknown> {
+  return { 'method': value.method ?? undefined, 'uri': value.uri ?? undefined, 'host': value.host ?? undefined, 'queryParams': value.queryParams ?? undefined, 'headers': value.headers ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined }
+}
+
+/** `HttpMalformedRequestDefinition` read from a JSON body; validate the result with `HttpMalformedRequestDefinitionSchema`. */
+export function decodeHttpMalformedRequestDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'method': value['method'] ?? undefined, 'uri': value['uri'] ?? undefined, 'host': value['host'] ?? undefined, 'queryParams': value['queryParams'] ?? undefined, 'headers': value['headers'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined }
+}
+
+/** `HttpMalformedResponseBodyDefinition` as it is written in a JSON body. */
+export function encodeHttpMalformedResponseBodyDefinition(value: HttpMalformedResponseBodyDefinition): Record<string, unknown> {
+  return { 'assertion': value.assertion == null ? undefined : encodeHttpMalformedResponseBodyAssertion(value.assertion), 'mediaType': value.mediaType ?? undefined }
+}
+
+/** `HttpMalformedResponseBodyDefinition` read from a JSON body; validate the result with `HttpMalformedResponseBodyDefinitionSchema`. */
+export function decodeHttpMalformedResponseBodyDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'assertion': value['assertion'] == null ? undefined : decodeHttpMalformedResponseBodyAssertion(value['assertion']), 'mediaType': value['mediaType'] ?? undefined }
+}
+
+/** `TestExpectation` as it is written in a JSON body. */
+export function encodeTestExpectation(value: TestExpectation): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['success'] !== undefined) return { 'success': encodeUnit((fields['success'] as Unit)) }
+  if (fields['failure'] !== undefined) return { 'failure': encodeTestFailureExpectation((fields['failure'] as TestFailureExpectation)) }
+  return value
+}
+
+/** `TestExpectation` read from a JSON body; validate the result with `TestExpectationSchema`. */
+export function decodeTestExpectation(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['success'] !== undefined && value['success'] !== null) return { 'success': decodeUnit(value['success']) }
+  if (value['failure'] !== undefined && value['failure'] !== null) return { 'failure': decodeTestFailureExpectation(value['failure']) }
+  return value
+}
+
+/** `GetIntEnumInput` as it is written in a JSON body. */
+export function encodeGetIntEnumInput(value: GetIntEnumInput): Record<string, unknown> {
+  return { 'aa': value.aa ?? undefined }
+}
+
+/** `GetIntEnumInput` read from a JSON body; validate the result with `GetIntEnumInputSchema`. */
+export function decodeGetIntEnumInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'aa': value['aa'] ?? undefined }
+}
+
+/** `GetIntEnumOutput` as it is written in a JSON body. */
+export function encodeGetIntEnumOutput(value: GetIntEnumOutput): Record<string, unknown> {
+  return { 'result': value.result ?? undefined }
+}
+
+/** `GetIntEnumOutput` read from a JSON body; validate the result with `GetIntEnumOutputSchema`. */
+export function decodeGetIntEnumOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'result': value['result'] ?? undefined }
+}
+
+/** `GetEnumInput` as it is written in a JSON body. */
+export function encodeGetEnumInput(value: GetEnumInput): Record<string, unknown> {
+  return { 'aa': value.aa ?? undefined }
+}
+
+/** `GetEnumInput` read from a JSON body; validate the result with `GetEnumInputSchema`. */
+export function decodeGetEnumInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'aa': value['aa'] ?? undefined }
+}
+
+/** `UnknownServerError` as it is written in a JSON body. */
+export function encodeUnknownServerError(value: UnknownServerError): Record<string, unknown> {
+  return { 'errorCode': value.errorCode ?? undefined, 'description': value.description ?? undefined, 'stateHash': value.stateHash ?? undefined }
+}
+
+/** `UnknownServerError` read from a JSON body; validate the result with `UnknownServerErrorSchema`. */
+export function decodeUnknownServerError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'errorCode': value['errorCode'] ?? undefined, 'description': value['description'] ?? undefined, 'stateHash': value['stateHash'] ?? undefined }
+}
+
+/** `OpenUnionsPayload` as it is written in a JSON body. */
+export function encodeOpenUnionsPayload(value: OpenUnionsPayload): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['tagged'] !== undefined) return { 'tagged': encodeOpenTaggedUnion((fields['tagged'] as OpenTaggedUnion)) }
+  if (fields['discriminated'] !== undefined) return { 'discriminated': encodeOpenDiscriminatedUnion((fields['discriminated'] as OpenDiscriminatedUnion)) }
+  return value
+}
+
+/** `OpenUnionsPayload` read from a JSON body; validate the result with `OpenUnionsPayloadSchema`. */
+export function decodeOpenUnionsPayload(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['tagged'] !== undefined && value['tagged'] !== null) return { 'tagged': decodeOpenTaggedUnion(value['tagged']) }
+  if (value['discriminated'] !== undefined && value['discriminated'] !== null) return { 'discriminated': decodeOpenDiscriminatedUnion(value['discriminated']) }
+  return value
+}
+
+/** `Event` as it is written in a JSON body. */
+export function encodeEvent(value: Event): Record<string, unknown> {
+  return { 'type': value.type ?? undefined, 'params': value.params ?? undefined, 'headers': value.headers == null ? undefined : encodeEventHeaders(value.headers), 'forbidHeaders': value.forbidHeaders ?? undefined, 'requireHeaders': value.requireHeaders ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined, 'bytes': value.bytes ?? undefined, 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined }
+}
+
+/** `Event` read from a JSON body; validate the result with `EventSchema`. */
+export function decodeEvent(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'type': value['type'] ?? undefined, 'params': value['params'] ?? undefined, 'headers': value['headers'] == null ? undefined : decodeEventHeaders(value['headers']), 'forbidHeaders': value['forbidHeaders'] ?? undefined, 'requireHeaders': value['requireHeaders'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined, 'bytes': value['bytes'] ?? undefined, 'vendorParams': value['vendorParams'] == null ? {} : value['vendorParams'], 'vendorParamsShape': value['vendorParamsShape'] ?? undefined }
+}
+
+/** `HttpMalformedResponseDefinition` as it is written in a JSON body. */
+export function encodeHttpMalformedResponseDefinition(value: HttpMalformedResponseDefinition): Record<string, unknown> {
+  return { 'headers': value.headers ?? undefined, 'code': value.code ?? undefined, 'body': value.body == null ? undefined : encodeHttpMalformedResponseBodyDefinition(value.body) }
+}
+
+/** `HttpMalformedResponseDefinition` read from a JSON body; validate the result with `HttpMalformedResponseDefinitionSchema`. */
+export function decodeHttpMalformedResponseDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'headers': value['headers'] ?? undefined, 'code': value['code'] ?? undefined, 'body': value['body'] == null ? undefined : decodeHttpMalformedResponseBodyDefinition(value['body']) }
+}
+
+/** `HttpRequestTestCase` as it is written in a JSON body. */
+export function encodeHttpRequestTestCase(value: HttpRequestTestCase): Record<string, unknown> {
+  return { 'headers': value.headers ?? undefined, 'forbidHeaders': value.forbidHeaders ?? undefined, 'requireHeaders': value.requireHeaders ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined, 'method': value.method ?? undefined, 'uri': value.uri ?? undefined, 'host': value.host ?? undefined, 'resolvedHost': value.resolvedHost ?? undefined, 'queryParams': value.queryParams ?? undefined, 'forbidQueryParams': value.forbidQueryParams ?? undefined, 'requireQueryParams': value.requireQueryParams ?? undefined, 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'authScheme': value.authScheme ?? undefined, 'params': value.params ?? undefined, 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined, 'documentation': value.documentation ?? undefined, 'tags': value.tags ?? undefined, 'appliesTo': value.appliesTo ?? undefined }
+}
+
+/** `HttpRequestTestCase` read from a JSON body; validate the result with `HttpRequestTestCaseSchema`. */
+export function decodeHttpRequestTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'headers': value['headers'] ?? undefined, 'forbidHeaders': value['forbidHeaders'] ?? undefined, 'requireHeaders': value['requireHeaders'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined, 'method': value['method'] ?? undefined, 'uri': value['uri'] ?? undefined, 'host': value['host'] ?? undefined, 'resolvedHost': value['resolvedHost'] ?? undefined, 'queryParams': value['queryParams'] ?? undefined, 'forbidQueryParams': value['forbidQueryParams'] ?? undefined, 'requireQueryParams': value['requireQueryParams'] ?? undefined, 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'authScheme': value['authScheme'] ?? undefined, 'params': value['params'] ?? undefined, 'vendorParams': value['vendorParams'] ?? undefined, 'vendorParamsShape': value['vendorParamsShape'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'tags': value['tags'] ?? undefined, 'appliesTo': value['appliesTo'] ?? undefined }
+}
+
+/** `HttpResponseTestCase` as it is written in a JSON body. */
+export function encodeHttpResponseTestCase(value: HttpResponseTestCase): Record<string, unknown> {
+  return { 'headers': value.headers ?? undefined, 'forbidHeaders': value.forbidHeaders ?? undefined, 'requireHeaders': value.requireHeaders ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined, 'code': value.code ?? undefined, 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'authScheme': value.authScheme ?? undefined, 'params': value.params ?? undefined, 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined, 'documentation': value.documentation ?? undefined, 'tags': value.tags ?? undefined, 'appliesTo': value.appliesTo ?? undefined }
+}
+
+/** `HttpResponseTestCase` read from a JSON body; validate the result with `HttpResponseTestCaseSchema`. */
+export function decodeHttpResponseTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'headers': value['headers'] ?? undefined, 'forbidHeaders': value['forbidHeaders'] ?? undefined, 'requireHeaders': value['requireHeaders'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined, 'code': value['code'] ?? undefined, 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'authScheme': value['authScheme'] ?? undefined, 'params': value['params'] ?? undefined, 'vendorParams': value['vendorParams'] ?? undefined, 'vendorParamsShape': value['vendorParamsShape'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'tags': value['tags'] ?? undefined, 'appliesTo': value['appliesTo'] ?? undefined }
+}
+
+/** `Pizza` as it is written in a JSON body. */
+export function encodePizza(value: Pizza): Record<string, unknown> {
+  return { 'name': value.name ?? undefined, 'base': value.base ?? undefined, 'toppings': value.toppings ?? undefined }
+}
+
+/** `Pizza` read from a JSON body; validate the result with `PizzaSchema`. */
+export function decodePizza(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'name': value['name'] ?? undefined, 'base': value['base'] ?? undefined, 'toppings': value['toppings'] ?? undefined }
+}
+
+/** `Salad` as it is written in a JSON body. */
+export function encodeSalad(value: Salad): Record<string, unknown> {
+  return { 'name': value.name ?? undefined, 'ingredients': value.ingredients ?? undefined }
+}
+
+/** `Salad` read from a JSON body; validate the result with `SaladSchema`. */
+export function decodeSalad(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'name': value['name'] ?? undefined, 'ingredients': value['ingredients'] ?? undefined }
+}
+
+/** `OpenUnionsInput` as it is written in a JSON body. */
+export function encodeOpenUnionsInput(value: OpenUnionsInput): Record<string, unknown> {
+  return { 'data': value.data == null ? undefined : encodeOpenUnionsPayload(value.data) }
+}
+
+/** `OpenUnionsInput` read from a JSON body; validate the result with `OpenUnionsInputSchema`. */
+export function decodeOpenUnionsInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'data': value['data'] == null ? undefined : decodeOpenUnionsPayload(value['data']) }
+}
+
+/** `OpenUnionsOutput` as it is written in a JSON body. */
+export function encodeOpenUnionsOutput(value: OpenUnionsOutput): Record<string, unknown> {
+  return { 'data': value.data == null ? undefined : encodeOpenUnionsPayload(value.data) }
+}
+
+/** `OpenUnionsOutput` read from a JSON body; validate the result with `OpenUnionsOutputSchema`. */
+export function decodeOpenUnionsOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'data': value['data'] == null ? undefined : decodeOpenUnionsPayload(value['data']) }
+}
+
+export function encodeEvents(value: Events): unknown[] {
+  return value.map((e) => encodeEvent(e))
+}
+
+export function decodeEvents(value: unknown): unknown {
+  return Array.isArray(value) ? value.map((e: unknown) => (e === null ? null : decodeEvent(e))) : value
+}
+
+/** `HttpMalformedRequestTestCase` as it is written in a JSON body. */
+export function encodeHttpMalformedRequestTestCase(value: HttpMalformedRequestTestCase): Record<string, unknown> {
+  return { 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'request': value.request == null ? undefined : encodeHttpMalformedRequestDefinition(value.request), 'response': value.response == null ? undefined : encodeHttpMalformedResponseDefinition(value.response), 'documentation': value.documentation ?? undefined, 'tags': value.tags ?? undefined, 'testParameters': value.testParameters ?? undefined }
+}
+
+/** `HttpMalformedRequestTestCase` read from a JSON body; validate the result with `HttpMalformedRequestTestCaseSchema`. */
+export function decodeHttpMalformedRequestTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'request': value['request'] == null ? undefined : decodeHttpMalformedRequestDefinition(value['request']), 'response': value['response'] == null ? undefined : decodeHttpMalformedResponseDefinition(value['response']), 'documentation': value['documentation'] ?? undefined, 'tags': value['tags'] ?? undefined, 'testParameters': value['testParameters'] ?? undefined }
+}
+
+/** `Food` as it is written in a JSON body. */
+export function encodeFood(value: Food): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['pizza'] !== undefined) return { 'pizza': encodePizza((fields['pizza'] as Pizza)) }
+  if (fields['salad'] !== undefined) return { 'salad': encodeSalad((fields['salad'] as Salad)) }
+  return value
+}
+
+/** `Food` read from a JSON body; validate the result with `FoodSchema`. */
+export function decodeFood(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['pizza'] !== undefined && value['pizza'] !== null) return { 'pizza': decodePizza(value['pizza']) }
+  if (value['salad'] !== undefined && value['salad'] !== null) return { 'salad': decodeSalad(value['salad']) }
+  return value
+}
+
+/** `EventStreamTestCase` as it is written in a JSON body. */
+export function encodeEventStreamTestCase(value: EventStreamTestCase): Record<string, unknown> {
+  return { 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'initialRequestParams': value.initialRequestParams ?? undefined, 'initialRequest': value.initialRequest ?? undefined, 'initialRequestShape': value.initialRequestShape ?? undefined, 'initialResponseParams': value.initialResponseParams ?? undefined, 'initialResponse': value.initialResponse ?? undefined, 'initialResponseShape': value.initialResponseShape ?? undefined, 'events': value.events == null ? undefined : encodeEvents(value.events), 'expectation': value.expectation == null ? undefined : encodeTestExpectation(value.expectation), 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined, 'documentation': value.documentation ?? undefined, 'appliesTo': value.appliesTo ?? undefined, 'tags': value.tags ?? undefined }
+}
+
+/** `EventStreamTestCase` read from a JSON body; validate the result with `EventStreamTestCaseSchema`. */
+export function decodeEventStreamTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'initialRequestParams': value['initialRequestParams'] ?? undefined, 'initialRequest': value['initialRequest'] ?? undefined, 'initialRequestShape': value['initialRequestShape'] ?? undefined, 'initialResponseParams': value['initialResponseParams'] ?? undefined, 'initialResponse': value['initialResponse'] ?? undefined, 'initialResponseShape': value['initialResponseShape'] ?? undefined, 'events': value['events'] == null ? undefined : decodeEvents(value['events']), 'expectation': value['expectation'] == null ? undefined : decodeTestExpectation(value['expectation']), 'vendorParams': value['vendorParams'] ?? undefined, 'vendorParamsShape': value['vendorParamsShape'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'appliesTo': value['appliesTo'] ?? undefined, 'tags': value['tags'] ?? undefined }
+}
+
+/** `MenuItem` as it is written in a JSON body. */
+export function encodeMenuItem(value: MenuItem): Record<string, unknown> {
+  return { 'food': value.food == null ? undefined : encodeFood(value.food), 'price': value.price ?? undefined }
+}
+
+/** `MenuItem` read from a JSON body; validate the result with `MenuItemSchema`. */
+export function decodeMenuItem(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'food': value['food'] == null ? undefined : decodeFood(value['food']), 'price': value['price'] ?? undefined }
+}
+
+/** `AddMenuItemRequest` as it is written in a JSON body. */
+export function encodeAddMenuItemRequest(value: AddMenuItemRequest): Record<string, unknown> {
+  return { 'restaurant': value.restaurant ?? undefined, 'menuItem': value.menuItem == null ? undefined : encodeMenuItem(value.menuItem) }
+}
+
+/** `AddMenuItemRequest` read from a JSON body; validate the result with `AddMenuItemRequestSchema`. */
+export function decodeAddMenuItemRequest(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'restaurant': value['restaurant'] ?? undefined, 'menuItem': value['menuItem'] == null ? undefined : decodeMenuItem(value['menuItem']) }
+}
+
+export function encodeMenu(value: Menu): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, encodeMenuItem(e)]))
+}
+
+export function decodeMenu(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, e === null ? null : decodeMenuItem(e)]))
+}
+
+/** `GetMenuResult` as it is written in a JSON body. */
+export function encodeGetMenuResult(value: GetMenuResult): Record<string, unknown> {
+  return { 'menu': value.menu == null ? undefined : encodeMenu(value.menu) }
+}
+
+/** `GetMenuResult` read from a JSON body; validate the result with `GetMenuResultSchema`. */
+export function decodeGetMenuResult(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'menu': value['menu'] == null ? undefined : decodeMenu(value['menu']) }
+}
+
+
 // --- Transport ---
 
 /** Per-operation transport options. The generator threads these straight
@@ -759,7 +1531,8 @@ export interface TransportRequest {
   operation: string
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   url: string
-  query?: Record<string, string | number | boolean | undefined>
+  /** A list value is sent as the parameter repeated, once per element. */
+  query?: Record<string, string | number | boolean | readonly string[] | undefined>
   headers?: Record<string, string>
   body?: unknown
   options?: TransportOptions
@@ -813,6 +1586,126 @@ export class UnauthenticatedError extends Error {
 }
 
 
+// --- Response decoding ---
+
+/** `AddMenuItemResult` read from a response: its body, headers and status. */
+export function decodeAddMenuItemResultResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): AddMenuItemResult {
+  return AddMenuItemResultSchema.parse({ 'itemId': res.body == null ? undefined : res.body, 'added': res.headers['x-added-at'] === undefined ? undefined : wireTimestamp(res.headers['x-added-at']) }) as AddMenuItemResult
+}
+
+/** `CustomCodeOutput` read from a response: its body, headers and status. */
+export function decodeCustomCodeOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): CustomCodeOutput {
+  return CustomCodeOutputSchema.parse({ 'code': res.status }) as CustomCodeOutput
+}
+
+/** `FallbackError` read from a response: its body, headers and status. */
+export function decodeFallbackErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): FallbackError {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return FallbackErrorSchema.parse({ 'error': body['error'] ?? undefined }) as FallbackError
+}
+
+/** `GenericClientError` read from a response: its body, headers and status. */
+export function decodeGenericClientErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): GenericClientError {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return GenericClientErrorSchema.parse({ 'message': body['message'] ?? undefined }) as GenericClientError
+}
+
+/** `GenericServerError` read from a response: its body, headers and status. */
+export function decodeGenericServerErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): GenericServerError {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return GenericServerErrorSchema.parse({ 'message': body['message'] ?? undefined }) as GenericServerError
+}
+
+/** `GetEnumOutput` read from a response: its body, headers and status. */
+export function decodeGetEnumOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): GetEnumOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return GetEnumOutputSchema.parse({ 'result': body['result'] ?? undefined }) as GetEnumOutput
+}
+
+/** `GetIntEnumOutput` read from a response: its body, headers and status. */
+export function decodeGetIntEnumOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): GetIntEnumOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return GetIntEnumOutputSchema.parse({ 'result': body['result'] ?? undefined }) as GetIntEnumOutput
+}
+
+/** `GetMenuResult` read from a response: its body, headers and status. */
+export function decodeGetMenuResultResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): GetMenuResult {
+  return GetMenuResultSchema.parse({ 'menu': res.body == null ? undefined : decodeMenu(res.body) }) as GetMenuResult
+}
+
+/** `HeaderEndpointData` read from a response: its body, headers and status. */
+export function decodeHeaderEndpointDataResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HeaderEndpointData {
+  return HeaderEndpointDataSchema.parse({ 'uppercaseHeader': res.headers['x-uppercase-header'] === undefined ? undefined : res.headers['x-uppercase-header'], 'capitalizedHeader': res.headers['x-capitalized-header'] === undefined ? undefined : res.headers['x-capitalized-header'], 'lowercaseHeader': res.headers['x-lowercase-header'] === undefined ? undefined : res.headers['x-lowercase-header'], 'mixedHeader': res.headers['x-mixed-header'] === undefined ? undefined : res.headers['x-mixed-header'] }) as HeaderEndpointData
+}
+
+/** `HealthResponse` read from a response: its body, headers and status. */
+export function decodeHealthResponseResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HealthResponse {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return HealthResponseSchema.parse({ 'status': body['status'] ?? undefined }) as HealthResponse
+}
+
+/** `HttpPayloadRequiredWithDefaultInputOutput` read from a response: its body, headers and status. */
+export function decodeHttpPayloadRequiredWithDefaultInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HttpPayloadRequiredWithDefaultInputOutput {
+  return HttpPayloadRequiredWithDefaultInputOutputSchema.parse({ 'body': res.body == null ? "default value" : res.body }) as HttpPayloadRequiredWithDefaultInputOutput
+}
+
+/** `HttpPayloadWithDefaultInputOutput` read from a response: its body, headers and status. */
+export function decodeHttpPayloadWithDefaultInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HttpPayloadWithDefaultInputOutput {
+  return HttpPayloadWithDefaultInputOutputSchema.parse({ 'body': res.body == null ? "default value" : res.body }) as HttpPayloadWithDefaultInputOutput
+}
+
+/** `NotFoundError` read from a response: its body, headers and status. */
+export function decodeNotFoundErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): NotFoundError {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return NotFoundErrorSchema.parse({ 'name': body['name'] ?? undefined }) as NotFoundError
+}
+
+/** `OpenUnionsOutput` read from a response: its body, headers and status. */
+export function decodeOpenUnionsOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): OpenUnionsOutput {
+  return OpenUnionsOutputSchema.parse({ 'data': res.body == null ? undefined : decodeOpenUnionsPayload(res.body) }) as OpenUnionsOutput
+}
+
+/** `PreserveOrderStruct` read from a response: its body, headers and status. */
+export function decodePreserveOrderStructResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): PreserveOrderStruct {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return PreserveOrderStructSchema.parse({ 'map': body['map'] ?? undefined, 'document': body['document'] ?? undefined }) as PreserveOrderStruct
+}
+
+/** `PriceError` read from a response: its body, headers and status. */
+export function decodePriceErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): PriceError {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return PriceErrorSchema.parse({ 'message': body['message'] ?? undefined, 'code': res.headers['x-code'] === undefined ? undefined : Number(res.headers['x-code']) }) as PriceError
+}
+
+/** `PrimitiveEncodings` read from a response: its body, headers and status. */
+export function decodePrimitiveEncodingsResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): PrimitiveEncodings {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return PrimitiveEncodingsSchema.parse({ 'uuid': body['uuid'] ?? undefined, 'localDate': body['localDate'] ?? undefined, 'localTime': body['localTime'] ?? undefined, 'duration': body['duration'] ?? undefined, 'offsetDateTime': body['offsetDateTime'] == null ? undefined : wireTimestamp(body['offsetDateTime']) }) as PrimitiveEncodings
+}
+
+/** `RoundTripData` read from a response: its body, headers and status. */
+export function decodeRoundTripDataResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): RoundTripData {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return RoundTripDataSchema.parse({ 'label': body['label'] ?? undefined, 'header': res.headers['header'] === undefined ? undefined : res.headers['header'], 'query': body['query'] ?? undefined, 'body': body['body'] ?? undefined }) as RoundTripData
+}
+
+/** `UnknownServerError` read from a response: its body, headers and status. */
+export function decodeUnknownServerErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): UnknownServerError {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return UnknownServerErrorSchema.parse({ 'errorCode': body['errorCode'] ?? undefined, 'description': body['description'] ?? undefined, 'stateHash': body['stateHash'] ?? undefined }) as UnknownServerError
+}
+
+/** `VersionOutput` read from a response: its body, headers and status. */
+export function decodeVersionOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): VersionOutput {
+  return VersionOutputSchema.parse({ 'version': res.body == null ? undefined : res.body }) as VersionOutput
+}
+
+/** `MessageOutput` read from a response: its body, headers and status. */
+export function decodeMessageOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): MessageOutput {
+  return MessageOutputSchema.parse({ 'message': res.body == null ? undefined : res.body }) as MessageOutput
+}
+
+
 // --- Service clients ---
 
 export class PizzaAdminServiceClient {
@@ -822,35 +1715,31 @@ export class PizzaAdminServiceClient {
   }
 
   async addMenuItem(input: AddMenuItemRequest, opts?: TransportOptions): Promise<AddMenuItemResult> {
-    const url = `/restaurant/${encodeURIComponent(String(input.restaurant))}/menu/item`
+    const url = `/restaurant/${wireEncodeLabel(String(input.restaurant))}/menu/item`
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.addMenuItem',
       method: 'POST',
       url,
-      body: input.menuItem,
+      body: input.menuItem === undefined ? undefined : encodeMenuItem(input.menuItem),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...({ itemId: z.string().parse(res.body) } as Record<string, unknown>) }
-      if (res.headers['x-added-at'] !== undefined) {
-        raw['added'] = res.headers['x-added-at']
-      }
-      return AddMenuItemResultSchema.parse(raw) as AddMenuItemResult
+      return decodeAddMenuItemResultResponse(res)
     }
     if (res.status === 400) {
-      throw new PriceErrorError(PriceErrorSchema.parse(res.body))
+      throw new PriceErrorError(decodePriceErrorResponse(res))
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.addMenuItem', res.status, res.body, res.headers)
   }
 
   async customCode(input: CustomCodeInput, opts?: TransportOptions): Promise<CustomCodeOutput> {
-    const url = `/custom-code/${encodeURIComponent(String(input.code))}`
+    const url = `/custom-code/${wireEncodeLabel(String(input.code))}`
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.customCode',
       method: 'GET',
@@ -858,25 +1747,23 @@ export class PizzaAdminServiceClient {
       body: undefined,
       options: opts,
     })
-    if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(CustomCodeOutputSchema.omit({ 'code': true }).parse(res.body) as Record<string, unknown>) }
-      raw['code'] = res.status
-      return CustomCodeOutputSchema.parse(raw) as CustomCodeOutput
+    if (res.status >= 200 && res.status < 400) {
+      return decodeCustomCodeOutputResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 500) {
-      throw new UnknownServerErrorError(UnknownServerErrorSchema.parse(res.body))
+      throw new UnknownServerErrorError(decodeUnknownServerErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.customCode', res.status, res.body, res.headers)
   }
 
   async getEnum(input: GetEnumInput, opts?: TransportOptions): Promise<GetEnumOutput> {
-    const url = `/get-enum/${encodeURIComponent(String(input.aa))}`
+    const url = `/get-enum/${wireEncodeLabel(String(input.aa))}`
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.getEnum',
       method: 'GET',
@@ -885,22 +1772,22 @@ export class PizzaAdminServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return GetEnumOutputSchema.parse(res.body)
+      return decodeGetEnumOutputResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 500) {
-      throw new UnknownServerErrorError(UnknownServerErrorSchema.parse(res.body))
+      throw new UnknownServerErrorError(decodeUnknownServerErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.getEnum', res.status, res.body, res.headers)
   }
 
   async getIntEnum(input: GetIntEnumInput, opts?: TransportOptions): Promise<GetIntEnumOutput> {
-    const url = `/get-int-enum/${encodeURIComponent(String(input.aa))}`
+    const url = `/get-int-enum/${wireEncodeLabel(String(input.aa))}`
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.getIntEnum',
       method: 'GET',
@@ -909,22 +1796,22 @@ export class PizzaAdminServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return GetIntEnumOutputSchema.parse(res.body)
+      return decodeGetIntEnumOutputResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 500) {
-      throw new UnknownServerErrorError(UnknownServerErrorSchema.parse(res.body))
+      throw new UnknownServerErrorError(decodeUnknownServerErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.getIntEnum', res.status, res.body, res.headers)
   }
 
   async getMenu(input: GetMenuRequest, opts?: TransportOptions): Promise<GetMenuResult> {
-    const url = `/restaurant/${encodeURIComponent(String(input.restaurant))}/menu`
+    const url = `/restaurant/${wireEncodeLabel(String(input.restaurant))}/menu`
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.getMenu',
       method: 'GET',
@@ -933,19 +1820,19 @@ export class PizzaAdminServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { menu: MenuSchema.parse(res.body) }
+      return decodeGetMenuResultResponse(res)
     }
     if (res.status === 400) {
-      throw new FallbackErrorError(FallbackErrorSchema.parse(res.body))
+      throw new FallbackErrorError(decodeFallbackErrorResponse(res))
     }
     if (res.status === 404) {
-      throw new NotFoundErrorError(NotFoundErrorSchema.parse(res.body))
+      throw new NotFoundErrorError(decodeNotFoundErrorResponse(res))
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.getMenu', res.status, res.body, res.headers)
   }
@@ -966,33 +1853,20 @@ export class PizzaAdminServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(HeaderEndpointDataSchema.omit({ 'capitalizedHeader': true, 'lowercaseHeader': true, 'mixedHeader': true, 'uppercaseHeader': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-uppercase-header'] !== undefined) {
-        raw['uppercaseHeader'] = res.headers['x-uppercase-header']
-      }
-      if (res.headers['x-capitalized-header'] !== undefined) {
-        raw['capitalizedHeader'] = res.headers['x-capitalized-header']
-      }
-      if (res.headers['x-lowercase-header'] !== undefined) {
-        raw['lowercaseHeader'] = res.headers['x-lowercase-header']
-      }
-      if (res.headers['x-mixed-header'] !== undefined) {
-        raw['mixedHeader'] = res.headers['x-mixed-header']
-      }
-      return HeaderEndpointDataSchema.parse(raw) as HeaderEndpointData
+      return decodeHeaderEndpointDataResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.headerEndpoint', res.status, res.body, res.headers)
   }
 
   async health(input: HealthRequest, opts?: TransportOptions): Promise<HealthResponse> {
     const url = `/health`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const query: Record<string, string | readonly string[] | undefined> = {}
     if (input.query !== undefined) query['query'] = String(input.query)
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.health',
@@ -1003,16 +1877,16 @@ export class PizzaAdminServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return HealthResponseSchema.parse(res.body)
+      return decodeHealthResponseResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 500) {
-      throw new UnknownServerErrorError(UnknownServerErrorSchema.parse(res.body))
+      throw new UnknownServerErrorError(decodeUnknownServerErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.health', res.status, res.body, res.headers)
   }
@@ -1023,17 +1897,17 @@ export class PizzaAdminServiceClient {
       operation: 'PizzaAdminServiceClient.httpPayloadRequiredWithDefault',
       method: 'PUT',
       url,
-      body: input.body,
+      body: input.body === undefined ? undefined : input.body,
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { body: z.string().parse(res.body) }
+      return decodeHttpPayloadRequiredWithDefaultInputOutputResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.httpPayloadRequiredWithDefault', res.status, res.body, res.headers)
   }
@@ -1044,17 +1918,17 @@ export class PizzaAdminServiceClient {
       operation: 'PizzaAdminServiceClient.httpPayloadWithDefault',
       method: 'PUT',
       url,
-      body: input.body,
+      body: input.body === undefined ? undefined : input.body,
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { body: z.string().parse(res.body) }
+      return decodeHttpPayloadWithDefaultInputOutputResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.httpPayloadWithDefault', res.status, res.body, res.headers)
   }
@@ -1065,17 +1939,17 @@ export class PizzaAdminServiceClient {
       operation: 'PizzaAdminServiceClient.openUnions',
       method: 'PUT',
       url,
-      body: input.data,
+      body: input.data === undefined ? undefined : encodeOpenUnionsPayload(input.data),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { data: OpenUnionsPayloadSchema.parse(res.body) }
+      return decodeOpenUnionsOutputResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.openUnions', res.status, res.body, res.headers)
   }
@@ -1086,17 +1960,17 @@ export class PizzaAdminServiceClient {
       operation: 'PizzaAdminServiceClient.preserveOrder',
       method: 'POST',
       url,
-      body: { map: input.map, document: input.document },
+      body: { 'map': input.map ?? undefined, 'document': input.document ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return PreserveOrderStructSchema.parse(res.body)
+      return decodePreserveOrderStructResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.preserveOrder', res.status, res.body, res.headers)
   }
@@ -1107,24 +1981,24 @@ export class PizzaAdminServiceClient {
       operation: 'PizzaAdminServiceClient.primitives',
       method: 'POST',
       url,
-      body: { uuid: input.uuid, localDate: input.localDate, localTime: input.localTime, duration: input.duration, offsetDateTime: input.offsetDateTime },
+      body: { 'uuid': input.uuid ?? undefined, 'localDate': input.localDate ?? undefined, 'localTime': input.localTime ?? undefined, 'duration': input.duration ?? undefined, 'offsetDateTime': input.offsetDateTime == null ? undefined : wireDateTime(input.offsetDateTime) },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return PrimitiveEncodingsSchema.parse(res.body)
+      return decodePrimitiveEncodingsResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.primitives', res.status, res.body, res.headers)
   }
 
   async roundTrip(input: RoundTripData, opts?: TransportOptions): Promise<RoundTripData> {
-    const url = `/roundTrip/${encodeURIComponent(String(input.label))}`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const url = `/roundTrip/${wireEncodeLabel(String(input.label))}`
+    const query: Record<string, string | readonly string[] | undefined> = {}
     if (input.query !== undefined) query['query'] = String(input.query)
     const headers: Record<string, string> = {}
     if (input.header !== undefined) headers['HEADER'] = String(input.header)
@@ -1134,21 +2008,17 @@ export class PizzaAdminServiceClient {
       url,
       query,
       headers,
-      body: { body: input.body },
+      body: { 'body': input.body ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(RoundTripDataSchema.omit({ 'header': true, 'label': true, 'query': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['header'] !== undefined) {
-        raw['header'] = res.headers['header']
-      }
-      return RoundTripDataSchema.parse(raw) as RoundTripData
+      return decodeRoundTripDataResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.roundTrip', res.status, res.body, res.headers)
   }
@@ -1163,13 +2033,13 @@ export class PizzaAdminServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { version: z.string().parse(res.body) }
+      return decodeVersionOutputResponse(res)
     }
     if (res.status === 418) {
-      throw new GenericClientErrorError(GenericClientErrorSchema.parse(res.body))
+      throw new GenericClientErrorError(decodeGenericClientErrorResponse(res))
     }
     if (res.status === 502) {
-      throw new GenericServerErrorError(GenericServerErrorSchema.parse(res.body))
+      throw new GenericServerErrorError(decodeGenericServerErrorResponse(res))
     }
     throw new UnexpectedResponseError('PizzaAdminServiceClient.version', res.status, res.body, res.headers)
   }
@@ -1191,7 +2061,7 @@ export class RoutingServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { message: z.string().parse(res.body) }
+      return decodeMessageOutputResponse(res)
     }
     throw new UnexpectedResponseError('RoutingServiceClient.abc', res.status, res.body, res.headers)
   }
@@ -1206,13 +2076,13 @@ export class RoutingServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { message: z.string().parse(res.body) }
+      return decodeMessageOutputResponse(res)
     }
     throw new UnexpectedResponseError('RoutingServiceClient.abcDef', res.status, res.body, res.headers)
   }
 
   async abcDefGreedy(input: AbcDefGreedyInput, opts?: TransportOptions): Promise<MessageOutput> {
-    const url = `/abc/${encodeURIComponent(String(input.def))}`
+    const url = `/abc/${wireEncodeGreedyLabel(String(input.def))}`
     const res = await this.transport.request({
       operation: 'RoutingServiceClient.abcDefGreedy',
       method: 'GET',
@@ -1221,13 +2091,13 @@ export class RoutingServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { message: z.string().parse(res.body) }
+      return decodeMessageOutputResponse(res)
     }
     throw new UnexpectedResponseError('RoutingServiceClient.abcDefGreedy', res.status, res.body, res.headers)
   }
 
   async abcLabel(input: AbcLabelInput, opts?: TransportOptions): Promise<MessageOutput> {
-    const url = `/abc/${encodeURIComponent(String(input.def))}`
+    const url = `/abc/${wireEncodeLabel(String(input.def))}`
     const res = await this.transport.request({
       operation: 'RoutingServiceClient.abcLabel',
       method: 'GET',
@@ -1236,7 +2106,7 @@ export class RoutingServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { message: z.string().parse(res.body) }
+      return decodeMessageOutputResponse(res)
     }
     throw new UnexpectedResponseError('RoutingServiceClient.abcLabel', res.status, res.body, res.headers)
   }
@@ -1251,7 +2121,7 @@ export class RoutingServiceClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { message: z.string().parse(res.body) }
+      return decodeMessageOutputResponse(res)
     }
     throw new UnexpectedResponseError('RoutingServiceClient.abcXyz', res.status, res.body, res.headers)
   }
@@ -1438,10 +2308,10 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         raw['restaurant'] = req.pathParams['restaurant']
-        raw['menuItem'] = req.body
+        raw['menuItem'] = req.body == null ? undefined : decodeMenuItem(req.body)
         return AddMenuItemRequestSchema.parse(raw) as AddMenuItemRequest
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['itemId'],
+      encodeBody: (output) => { const o = output as AddMenuItemResult; return o.itemId === undefined ? undefined : o.itemId },
     },
     {
       key: 'customCode',
@@ -1452,7 +2322,7 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
         raw['code'] = Number(req.pathParams['code'])
         return CustomCodeInputSchema.parse(raw) as CustomCodeInput
       },
-      encodeBody: (output) => { const { code: _code, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: () => undefined,
     },
     {
       key: 'getEnum',
@@ -1463,7 +2333,7 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
         raw['aa'] = req.pathParams['aa']
         return GetEnumInputSchema.parse(raw) as GetEnumInput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as GetEnumOutput; return { 'result': o.result ?? undefined } },
     },
     {
       key: 'getIntEnum',
@@ -1474,7 +2344,7 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
         raw['aa'] = Number(req.pathParams['aa'])
         return GetIntEnumInputSchema.parse(raw) as GetIntEnumInput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as GetIntEnumOutput; return { 'result': o.result ?? undefined } },
     },
     {
       key: 'getMenu',
@@ -1485,7 +2355,7 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
         raw['restaurant'] = req.pathParams['restaurant']
         return GetMenuRequestSchema.parse(raw) as GetMenuRequest
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['menu'],
+      encodeBody: (output) => { const o = output as GetMenuResult; return o.menu === undefined ? undefined : encodeMenu(o.menu) },
     },
     {
       key: 'headerEndpoint',
@@ -1495,7 +2365,7 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
         const raw: Record<string, unknown> = {}
         return HeaderEndpointDataSchema.parse(raw) as HeaderEndpointData
       },
-      encodeBody: (output) => { const { capitalizedHeader: _capitalizedHeader, lowercaseHeader: _lowercaseHeader, mixedHeader: _mixedHeader, uppercaseHeader: _uppercaseHeader, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: () => undefined,
     },
     {
       key: 'health',
@@ -1504,11 +2374,11 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['query'] !== undefined) {
-          raw['query'] = req.query['query'] as string
+          raw['query'] = (req.query['query'] as string)
         }
         return HealthRequestSchema.parse(raw) as HealthRequest
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as HealthResponse; return { 'status': o.status ?? undefined } },
     },
     {
       key: 'httpPayloadRequiredWithDefault',
@@ -1516,10 +2386,10 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
       segments: [{ literal: 'httpPayloadRequiredWithDefault' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        raw['body'] = req.body
+        raw['body'] = req.body == null ? undefined : req.body
         return HttpPayloadRequiredWithDefaultInputOutputSchema.parse(raw) as HttpPayloadRequiredWithDefaultInputOutput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['body'],
+      encodeBody: (output) => { const o = output as HttpPayloadRequiredWithDefaultInputOutput; return o.body === undefined ? undefined : o.body },
     },
     {
       key: 'httpPayloadWithDefault',
@@ -1527,10 +2397,10 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
       segments: [{ literal: 'httpPayloadWithDefault' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        raw['body'] = req.body
+        raw['body'] = req.body == null ? undefined : req.body
         return HttpPayloadWithDefaultInputOutputSchema.parse(raw) as HttpPayloadWithDefaultInputOutput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['body'],
+      encodeBody: (output) => { const o = output as HttpPayloadWithDefaultInputOutput; return o.body === undefined ? undefined : o.body },
     },
     {
       key: 'openUnions',
@@ -1538,10 +2408,10 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
       segments: [{ literal: 'openUnions' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        raw['data'] = req.body
+        raw['data'] = req.body == null ? undefined : decodeOpenUnionsPayload(req.body)
         return OpenUnionsInputSchema.parse(raw) as OpenUnionsInput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['data'],
+      encodeBody: (output) => { const o = output as OpenUnionsOutput; return o.data === undefined ? undefined : encodeOpenUnionsPayload(o.data) },
     },
     {
       key: 'preserveOrder',
@@ -1549,12 +2419,12 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
       segments: [{ literal: 'preserveKeyOrder' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['map'] = body['map']
-        raw['document'] = body['document']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['map'] = body['map'] ?? undefined
+        raw['document'] = body['document'] ?? undefined
         return PreserveOrderStructSchema.parse(raw) as PreserveOrderStruct
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as PreserveOrderStruct; return { 'map': o.map ?? undefined, 'document': o.document ?? undefined } },
     },
     {
       key: 'primitives',
@@ -1562,15 +2432,15 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
       segments: [{ literal: 'primitive' }, { literal: 'encoding' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['uuid'] = body['uuid']
-        raw['localDate'] = body['localDate']
-        raw['localTime'] = body['localTime']
-        raw['duration'] = body['duration']
-        raw['offsetDateTime'] = body['offsetDateTime']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['uuid'] = body['uuid'] ?? undefined
+        raw['localDate'] = body['localDate'] ?? undefined
+        raw['localTime'] = body['localTime'] ?? undefined
+        raw['duration'] = body['duration'] ?? undefined
+        raw['offsetDateTime'] = body['offsetDateTime'] == null ? undefined : wireTimestamp(body['offsetDateTime'])
         return PrimitiveEncodingsSchema.parse(raw) as PrimitiveEncodings
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as PrimitiveEncodings; return { 'uuid': o.uuid ?? undefined, 'localDate': o.localDate ?? undefined, 'localTime': o.localTime ?? undefined, 'duration': o.duration ?? undefined, 'offsetDateTime': o.offsetDateTime == null ? undefined : wireDateTime(o.offsetDateTime) } },
     },
     {
       key: 'roundTrip',
@@ -1580,20 +2450,20 @@ export const PizzaAdminServiceMock: MockServiceDescriptor<PizzaAdminServiceHandl
         const raw: Record<string, unknown> = {}
         raw['label'] = req.pathParams['label']
         if (req.query['query'] !== undefined) {
-          raw['query'] = req.query['query'] as string
+          raw['query'] = (req.query['query'] as string)
         }
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['body'] = body['body']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['body'] = body['body'] ?? undefined
         return RoundTripDataSchema.parse(raw) as RoundTripData
       },
-      encodeBody: (output) => { const { header: _header, label: _label, query: _query, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: (output) => { const o = output as RoundTripData; return { 'label': o.label ?? undefined, 'query': o.query ?? undefined, 'body': o.body ?? undefined } },
     },
     {
       key: 'version',
       method: 'GET',
       segments: [{ literal: 'version' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => (output as Record<string, unknown>)['version'],
+      encodeBody: (output) => { const o = output as VersionOutput; return o.version === undefined ? undefined : o.version },
     },
   ],
 }
@@ -1614,14 +2484,14 @@ export const RoutingServiceMock: MockServiceDescriptor<RoutingServiceHandlers> =
       method: 'GET',
       segments: [{ literal: 'abc' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => (output as Record<string, unknown>)['message'],
+      encodeBody: (output) => { const o = output as MessageOutput; return o.message === undefined ? undefined : o.message },
     },
     {
       key: 'abcDef',
       method: 'GET',
       segments: [{ literal: 'abc' }, { literal: 'def' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => (output as Record<string, unknown>)['message'],
+      encodeBody: (output) => { const o = output as MessageOutput; return o.message === undefined ? undefined : o.message },
     },
     {
       key: 'abcDefGreedy',
@@ -1632,7 +2502,7 @@ export const RoutingServiceMock: MockServiceDescriptor<RoutingServiceHandlers> =
         raw['def'] = req.pathParams['def']
         return AbcDefGreedyInputSchema.parse(raw) as AbcDefGreedyInput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['message'],
+      encodeBody: (output) => { const o = output as MessageOutput; return o.message === undefined ? undefined : o.message },
     },
     {
       key: 'abcLabel',
@@ -1643,14 +2513,14 @@ export const RoutingServiceMock: MockServiceDescriptor<RoutingServiceHandlers> =
         raw['def'] = req.pathParams['def']
         return AbcLabelInputSchema.parse(raw) as AbcLabelInput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['message'],
+      encodeBody: (output) => { const o = output as MessageOutput; return o.message === undefined ? undefined : o.message },
     },
     {
       key: 'abcXyz',
       method: 'GET',
       segments: [{ literal: 'abc' }, { literal: 'xyz' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => (output as Record<string, unknown>)['message'],
+      encodeBody: (output) => { const o = output as MessageOutput; return o.message === undefined ? undefined : o.message },
     },
   ],
 }

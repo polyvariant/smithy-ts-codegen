@@ -45,6 +45,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
 import java.util.Base64
+import java.util.regex.Pattern
 import scala.collection.immutable.ListMap
 import scala.jdk.CollectionConverters.*
 import scala.jdk.OptionConverters.*
@@ -57,8 +58,9 @@ import scala.jdk.OptionConverters.*
   *
   *   - `alloy` — `alloy-protocol-tests`, written for `alloy#simpleRestJson` itself.
   *   - `restJson1` — smithy's own `aws.protocols#restJson1` tests, restricted to the ones alloy
-  *     declares as applying to `simpleRestJson` (the `alloySimpleRestJsonBorrowedTests` allow list
-  *     shipped in `alloy-protocol-tests`). This is the same set smithy4s runs.
+  *     declares as applying to `simpleRestJson` (the `alloySimpleRestJsonBorrowedTests` rules
+  *     shipped in `alloy-protocol-tests`), interpreted exactly as smithy4s interprets them — see
+  *     [[AllowRule]]. So this is the set smithy4s runs, no more and no less.
   *
   * A case's `params` are written in Smithy's node form, which is not always how the TypeScript API
   * spells a value. They are rewritten here, with the model at hand, so the runner can stay
@@ -73,8 +75,33 @@ object ComplianceCodegen {
     protocol: ShapeId,
     // Narrows the loaded model to the services (and operations) this suite covers.
     select: Model => List[ServiceShape],
-    includeCase: String => Boolean,
+    includeCase: TestCase => Boolean,
   )
+
+  /** One entry of alloy's allow or disallow list, matched as smithy4s's `AllowRules` does: the id
+    * is a glob where `*` matches any run of characters (`**` is no different), and `appliesTo` /
+    * `testType`, when given, narrow it to client or server, request or response cases.
+    */
+  final case class AllowRule(id: String, appliesTo: Option[String], testType: Option[String]) {
+
+    private val pattern: Pattern = Pattern.compile(
+      id.split("\\*", -1)
+        .map(part =>
+          if (part.isEmpty)
+            ""
+          else
+            Pattern.quote(part)
+        )
+        .mkString(".*")
+    )
+
+    /** Only client cases are rendered here, so a rule for the server side never matches. */
+    def matches(c: TestCase): Boolean =
+      pattern.matcher(c.testCase.getId).matches &&
+        appliesTo.forall(_ == "client") &&
+        testType.forall(_ == c.kind)
+
+  }
 
   final case class TestCase(
     kind: String,
@@ -90,13 +117,6 @@ object ComplianceCodegen {
   private val Discriminated = ShapeId.from("alloy#discriminated")
   private val JsonUnknown = ShapeId.from("alloy#jsonUnknown")
 
-  /** Allow-listed operations the codegen cannot render at all — generating them fails the whole
-    * file, so they are left out of the suite rather than listed as known failures.
-    */
-  private val unrenderable: Map[ShapeId, String] = Map(
-    ShapeId.from("aws.protocoltests.restjson#RecursiveShapes") -> "recursive shapes are unsupported"
-  )
-
   def suites(model: Model): List[Suite] = {
     val borrowed = borrowedRestJson1Tests(model)
     List(
@@ -105,6 +125,7 @@ object ComplianceCodegen {
         protocol = SimpleRestJson,
         select =
           _.getServiceShapes.asScala.toList.filter(_.getId.getNamespace.startsWith("alloy.test")),
+        // smithy4s runs every alloy case.
         includeCase = _ => true,
       ),
       Suite(
@@ -118,8 +139,7 @@ object ComplianceCodegen {
               .getContainedOperations(service)
               .asScala
               .toList
-              .filter(op => !unrenderable.contains(op.getId))
-              .filter(op => operationCases(m, service, op).exists(c => borrowed(c.testCase.getId)))
+              .filter(op => operationCases(m, service, op).exists(borrowed))
             List(
               service
                 .toBuilder
@@ -133,16 +153,29 @@ object ComplianceCodegen {
     )
   }
 
-  private def borrowedRestJson1Tests(model: Model): Set[String] =
-    model
+  /** smithy4s's `AllowRules.shouldRun`: a disallow rule wins, then an allow rule admits. */
+  private def borrowedRestJson1Tests(model: Model): TestCase => Boolean = {
+    val rules = model
       .getMetadataProperty("alloySimpleRestJsonBorrowedTests")
       .toScala
       .flatMap(_.expectObjectNode.getObjectMember(RestJson1.toString).toScala)
-      .flatMap(_.getArrayMember("allowList").toScala)
-      .toList
-      .flatMap(_.getElements.asScala)
-      .map(_.expectObjectNode.expectStringMember("id").getValue)
-      .toSet
+    def list(name: String): List[AllowRule] =
+      rules
+        .flatMap(_.getArrayMember(name).toScala)
+        .toList
+        .flatMap(_.getElements.asScala)
+        .map(_.expectObjectNode)
+        .map { r =>
+          AllowRule(
+            r.expectStringMember("id").getValue,
+            r.getStringMember("appliesTo").toScala.map(_.getValue),
+            r.getStringMember("testType").toScala.map(_.getValue),
+          )
+        }
+    val allow = list("allowList")
+    val disallow = list("disallowList")
+    c => !disallow.exists(_.matches(c)) && allow.exists(_.matches(c))
+  }
 
   /** The suite's services and nothing else: every other service is dropped, and so is every shape
     * that is then unreachable — the codegen emits all shapes it is given.
@@ -206,7 +239,7 @@ object ComplianceCodegen {
       .filter { c =>
         c.testCase.getProtocol == suite.protocol &&
         !c.testCase.getAppliesTo.toScala.contains(AppliesTo.SERVER) &&
-        suite.includeCase(c.testCase.getId)
+        suite.includeCase(c)
       }
       .distinctBy(c => (c.error.map(_.getId), c.kind, c.testCase.getId))
   }

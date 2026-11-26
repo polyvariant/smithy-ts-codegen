@@ -158,12 +158,6 @@ export type HttpPrefixHeadersInResponseInput = z.infer<typeof HttpPrefixHeadersI
 export const aws_protocoltests_shared_StringMapSchema = z.record(z.string(), z.string())
 export type aws_protocoltests_shared_StringMap = z.infer<typeof aws_protocoltests_shared_StringMapSchema>
 
-export const HttpRequestWithFloatLabelsInputSchema = z.object({
-  float: z.number(),
-  double: z.number(),
-})
-export type HttpRequestWithFloatLabelsInput = z.infer<typeof HttpRequestWithFloatLabelsInputSchema>
-
 export const HttpRequestWithGreedyLabelInPathInputSchema = z.object({
   foo: z.string(),
   baz: z.string(),
@@ -258,6 +252,18 @@ export const QueryIdempotencyTokenAutoFillInputSchema = z.object({
 })
 export type QueryIdempotencyTokenAutoFillInput = z.infer<typeof QueryIdempotencyTokenAutoFillInputSchema>
 
+export const RecursiveShapesInputOutputNested1Schema = z.object({
+  foo: z.string().optional(),
+  get nested() { return RecursiveShapesInputOutputNested2Schema.optional() },
+})
+export type RecursiveShapesInputOutputNested1 = z.infer<typeof RecursiveShapesInputOutputNested1Schema>
+
+export const RecursiveShapesInputOutputNested2Schema = z.object({
+  bar: z.string().optional(),
+  get recursiveMember() { return RecursiveShapesInputOutputNested1Schema.optional() },
+})
+export type RecursiveShapesInputOutputNested2 = z.infer<typeof RecursiveShapesInputOutputNested2Schema>
+
 export const SimpleScalarPropertiesInputOutputSchema = z.object({
   foo: z.string().optional(),
   stringValue: z.string().optional(),
@@ -272,13 +278,13 @@ export const SimpleScalarPropertiesInputOutputSchema = z.object({
 })
 export type SimpleScalarPropertiesInputOutput = z.infer<typeof SimpleScalarPropertiesInputOutputSchema>
 
-export const SparseBooleanMapSchema = z.record(z.string(), z.boolean())
+export const SparseBooleanMapSchema = z.record(z.string(), z.boolean().nullable())
 export type SparseBooleanMap = z.infer<typeof SparseBooleanMapSchema>
 
-export const SparseNumberMapSchema = z.record(z.string(), z.number().int())
+export const SparseNumberMapSchema = z.record(z.string(), z.number().int().nullable())
 export type SparseNumberMap = z.infer<typeof SparseNumberMapSchema>
 
-export const SparseStringMapSchema = z.record(z.string(), z.string())
+export const SparseStringMapSchema = z.record(z.string(), z.string().nullable())
 export type SparseStringMap = z.infer<typeof SparseStringMapSchema>
 
 export const StructureListMemberSchema = z.object({
@@ -415,7 +421,7 @@ export type StringListMap = z.infer<typeof StringListMapSchema>
 export const DenseSetMapSchema = z.record(z.string(), StringSetSchema)
 export type DenseSetMap = z.infer<typeof DenseSetMapSchema>
 
-export const SparseSetMapSchema = z.record(z.string(), StringSetSchema)
+export const SparseSetMapSchema = z.record(z.string(), StringSetSchema.nullable())
 export type SparseSetMap = z.infer<typeof SparseSetMapSchema>
 
 /**
@@ -441,7 +447,7 @@ export type FractionalSecondsOutput = z.infer<typeof FractionalSecondsOutputSche
 export const DenseStructMapSchema = z.record(z.string(), aws_protocoltests_shared_GreetingStructSchema)
 export type DenseStructMap = z.infer<typeof DenseStructMapSchema>
 
-export const SparseStructMapSchema = z.record(z.string(), aws_protocoltests_shared_GreetingStructSchema)
+export const SparseStructMapSchema = z.record(z.string(), aws_protocoltests_shared_GreetingStructSchema.nullable())
 export type SparseStructMap = z.infer<typeof SparseStructMapSchema>
 
 export const DocumentTypeAsPayloadInputOutputSchema = z.object({
@@ -531,6 +537,11 @@ export const PostUnionWithJsonNameOutputSchema = z.object({
   value: UnionWithJsonNameSchema,
 })
 export type PostUnionWithJsonNameOutput = z.infer<typeof PostUnionWithJsonNameOutputSchema>
+
+export const RecursiveShapesInputOutputSchema = z.object({
+  nested: RecursiveShapesInputOutputNested1Schema.optional(),
+})
+export type RecursiveShapesInputOutput = z.infer<typeof RecursiveShapesInputOutputSchema>
 
 export const StructureListSchema = z.array(StructureListMemberSchema)
 export type StructureList = z.infer<typeof StructureListSchema>
@@ -835,28 +846,6 @@ export const AllQueryStringTypesInputSchema = z.object({
 })
 export type AllQueryStringTypesInput = z.infer<typeof AllQueryStringTypesInputSchema>
 
-export const InputAndOutputWithHeadersIOSchema = z.object({
-  headerString: z.string().optional(),
-  headerByte: z.number().int().optional(),
-  headerShort: z.number().int().optional(),
-  headerInteger: z.number().int().optional(),
-  headerLong: z.number().int().optional(),
-  headerFloat: z.number().optional(),
-  headerDouble: z.number().optional(),
-  headerTrueBool: z.boolean().optional(),
-  headerFalseBool: z.boolean().optional(),
-  headerStringList: aws_protocoltests_shared_StringListSchema.optional(),
-  headerStringSet: StringSetSchema.optional(),
-  headerIntegerList: IntegerListSchema.optional(),
-  headerBooleanList: BooleanListSchema.optional(),
-  headerTimestampList: TimestampListSchema.optional(),
-  headerEnum: FooEnumSchema.optional(),
-  headerEnumList: FooEnumListSchema.optional(),
-  headerIntegerEnum: IntegerEnumSchema.optional(),
-  headerIntegerEnumList: IntegerEnumListSchema.optional(),
-})
-export type InputAndOutputWithHeadersIO = z.infer<typeof InputAndOutputWithHeadersIOSchema>
-
 export const JsonListsInputOutputSchema = z.object({
   stringList: aws_protocoltests_shared_StringListSchema.optional(),
   stringSet: StringSetSchema.optional(),
@@ -995,6 +984,1076 @@ export class ComplexErrorError extends Error {
 }
 
 
+// --- Wire codecs ---
+
+const wireIsRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const wireEpochSeconds = (date: Date): number => date.getTime() / 1000
+
+/** RFC 3339, with the fraction only when there is one (`2014-04-29T18:30:38Z`). */
+const wireDateTime = (date: Date): string => date.toISOString().replace('.000Z', 'Z')
+
+/** IMF-fixdate (`Tue, 29 Apr 2014 18:30:38 GMT`). */
+const wireHttpDate = (date: Date): string => date.toUTCString()
+
+/** Any of the three formats: epoch seconds as a number or a numeric string
+ * (as a header carries it), otherwise a date-time or an HTTP date. A value
+ * that is neither is passed on for the schema to reject. */
+const wireTimestamp = (value: unknown): unknown => {
+  if (typeof value === 'number') return new Date(value * 1000)
+  if (typeof value !== 'string') return value
+  return /^-?\d+(\.\d+)?$/.test(value) ? new Date(Number(value) * 1000) : new Date(value)
+}
+
+/** Percent-encodes everything outside RFC 3986's unreserved set —
+ * `encodeURIComponent` leaves `!'()*` alone. */
+const wireEncodeLabel = (value: string): string =>
+  encodeURIComponent(value).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+
+/** A greedy label (`{key+}`) spans segments: its slashes stay slashes. */
+const wireEncodeGreedyLabel = (value: string): string =>
+  value.split('/').map(wireEncodeLabel).join('/')
+
+/** A string list item in a header, quoted when it holds a comma or a quote. */
+const wireQuoteHeaderItem = (value: string): string =>
+  /[,"]/.test(value) ? '"' + value.replace(/["\\]/g, (c) => '\\' + c) + '"' : value
+
+/** Splits a comma-separated header list, honouring quoted items. An HTTP
+ * date contains a comma itself, so a list of them splits after each `GMT`. */
+const wireSplitHeader = (value: string, httpDates: boolean): string[] => {
+  if (httpDates) return value.split(/(?<=GMT)\s*,\s*/)
+  const items: string[] = []
+  const pattern = /\s*(?:"((?:[^"\\]|\\.)*)"|([^,]*?))\s*(?:,|$)/gy
+  let match: RegExpExecArray | null
+  while (pattern.lastIndex < value.length && (match = pattern.exec(value)) !== null) {
+    items.push(match[1] !== undefined ? match[1].replace(/\\(.)/g, '$1') : (match[2] ?? ''))
+  }
+  return items
+}
+
+/** The headers starting with `prefix`, keyed by the rest of the name, or
+ * `undefined` when there are none. */
+const wirePrefixHeaders = (
+  headers: Record<string, string>,
+  prefix: string,
+): Record<string, string> | undefined => {
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.startsWith(prefix)) out[name.slice(prefix.length)] = value
+  }
+  return Object.keys(out).length === 0 ? undefined : out
+}
+
+/** `DataExample` as it is written in a JSON body. */
+export function encodeDataExample(value: DataExample): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['smithy'] !== undefined) return { 'smithy': fields['smithy'] }
+  if (fields['json'] !== undefined) return { 'json': fields['json'] }
+  if (fields['string'] !== undefined) return { 'string': fields['string'] }
+  return value
+}
+
+/** `DataExample` read from a JSON body; validate the result with `DataExampleSchema`. */
+export function decodeDataExample(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['smithy'] !== undefined && value['smithy'] !== null) return { 'smithy': value['smithy'] }
+  if (value['json'] !== undefined && value['json'] !== null) return { 'json': value['json'] }
+  if (value['string'] !== undefined && value['string'] !== null) return { 'string': value['string'] }
+  return value
+}
+
+/** `UncheckedExample` as it is written in a JSON body. */
+export function encodeUncheckedExample(value: UncheckedExample): Record<string, unknown> {
+  return { 'title': value.title ?? undefined, 'documentation': value.documentation ?? undefined, 'input': value.input ?? undefined, 'output': value.output ?? undefined }
+}
+
+/** `UncheckedExample` read from a JSON body; validate the result with `UncheckedExampleSchema`. */
+export function decodeUncheckedExample(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'title': value['title'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'input': value['input'] ?? undefined, 'output': value['output'] ?? undefined }
+}
+
+/** `Range` as it is written in a JSON body. */
+export function encodeRange(value: Range): Record<string, unknown> {
+  return { 'start': value.start ?? undefined, 'end': value.end ?? undefined }
+}
+
+/** `Range` read from a JSON body; validate the result with `RangeSchema`. */
+export function decodeRange(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'start': value['start'] ?? undefined, 'end': value['end'] ?? undefined }
+}
+
+/** `Unit` as it is written in a JSON body. */
+export function encodeUnit(_value: Unit): Record<string, unknown> {
+  return {}
+}
+
+/** `Unit` read from a JSON body; validate the result with `UnitSchema`. */
+export function decodeUnit(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+export function encodeTimestampList(value: TimestampList): unknown[] {
+  return value.map((e) => wireEpochSeconds(e))
+}
+
+export function decodeTimestampList(value: unknown): unknown {
+  return Array.isArray(value) ? value.map((e: unknown) => (e === null ? null : wireTimestamp(e))) : value
+}
+
+/** `ComplexNestedErrorData` as it is written in a JSON body. */
+export function encodeComplexNestedErrorData(value: ComplexNestedErrorData): Record<string, unknown> {
+  return { 'Fooooo': value.Foo ?? undefined }
+}
+
+/** `ComplexNestedErrorData` read from a JSON body; validate the result with `ComplexNestedErrorDataSchema`. */
+export function decodeComplexNestedErrorData(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'Foo': value['Fooooo'] ?? undefined }
+}
+
+/** `ConstantAndVariableQueryStringInput` as it is written in a JSON body. */
+export function encodeConstantAndVariableQueryStringInput(value: ConstantAndVariableQueryStringInput): Record<string, unknown> {
+  return { 'baz': value.baz ?? undefined, 'maybeSet': value.maybeSet ?? undefined }
+}
+
+/** `ConstantAndVariableQueryStringInput` read from a JSON body; validate the result with `ConstantAndVariableQueryStringInputSchema`. */
+export function decodeConstantAndVariableQueryStringInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'baz': value['baz'] ?? undefined, 'maybeSet': value['maybeSet'] ?? undefined }
+}
+
+/** `ConstantQueryStringInput` as it is written in a JSON body. */
+export function encodeConstantQueryStringInput(value: ConstantQueryStringInput): Record<string, unknown> {
+  return { 'hello': value.hello ?? undefined }
+}
+
+/** `ConstantQueryStringInput` read from a JSON body; validate the result with `ConstantQueryStringInputSchema`. */
+export function decodeConstantQueryStringInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'hello': value['hello'] ?? undefined }
+}
+
+/** `aws_protocoltests_shared_GreetingStruct` as it is written in a JSON body. */
+export function encodeaws_protocoltests_shared_GreetingStruct(value: aws_protocoltests_shared_GreetingStruct): Record<string, unknown> {
+  return { 'hi': value.hi ?? undefined }
+}
+
+/** `aws_protocoltests_shared_GreetingStruct` read from a JSON body; validate the result with `aws_protocoltests_shared_GreetingStructSchema`. */
+export function decodeaws_protocoltests_shared_GreetingStruct(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'hi': value['hi'] ?? undefined }
+}
+
+/** `EmptyInputAndEmptyOutputInput` as it is written in a JSON body. */
+export function encodeEmptyInputAndEmptyOutputInput(_value: EmptyInputAndEmptyOutputInput): Record<string, unknown> {
+  return {}
+}
+
+/** `EmptyInputAndEmptyOutputInput` read from a JSON body; validate the result with `EmptyInputAndEmptyOutputInputSchema`. */
+export function decodeEmptyInputAndEmptyOutputInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `EmptyInputAndEmptyOutputOutput` as it is written in a JSON body. */
+export function encodeEmptyInputAndEmptyOutputOutput(_value: EmptyInputAndEmptyOutputOutput): Record<string, unknown> {
+  return {}
+}
+
+/** `EmptyInputAndEmptyOutputOutput` read from a JSON body; validate the result with `EmptyInputAndEmptyOutputOutputSchema`. */
+export function decodeEmptyInputAndEmptyOutputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `FooError` as it is written in a JSON body. */
+export function encodeFooError(_value: FooError): Record<string, unknown> {
+  return {}
+}
+
+/** `FooError` read from a JSON body; validate the result with `FooErrorSchema`. */
+export function decodeFooError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `GreetingWithErrorsOutput` as it is written in a JSON body. */
+export function encodeGreetingWithErrorsOutput(value: GreetingWithErrorsOutput): Record<string, unknown> {
+  return { 'greeting': value.greeting ?? undefined }
+}
+
+/** `GreetingWithErrorsOutput` read from a JSON body; validate the result with `GreetingWithErrorsOutputSchema`. */
+export function decodeGreetingWithErrorsOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'greeting': value['greeting'] ?? undefined }
+}
+
+/** `HostLabelInput` as it is written in a JSON body. */
+export function encodeHostLabelInput(value: HostLabelInput): Record<string, unknown> {
+  return { 'label': value.label ?? undefined }
+}
+
+/** `HostLabelInput` read from a JSON body; validate the result with `HostLabelInputSchema`. */
+export function decodeHostLabelInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'label': value['label'] ?? undefined }
+}
+
+/** `NestedPayload` as it is written in a JSON body. */
+export function encodeNestedPayload(value: NestedPayload): Record<string, unknown> {
+  return { 'greeting': value.greeting ?? undefined, 'name': value.name ?? undefined }
+}
+
+/** `NestedPayload` read from a JSON body; validate the result with `NestedPayloadSchema`. */
+export function decodeNestedPayload(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'greeting': value['greeting'] ?? undefined, 'name': value['name'] ?? undefined }
+}
+
+/** `HttpPrefixHeadersInResponseInput` as it is written in a JSON body. */
+export function encodeHttpPrefixHeadersInResponseInput(_value: HttpPrefixHeadersInResponseInput): Record<string, unknown> {
+  return {}
+}
+
+/** `HttpPrefixHeadersInResponseInput` read from a JSON body; validate the result with `HttpPrefixHeadersInResponseInputSchema`. */
+export function decodeHttpPrefixHeadersInResponseInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `HttpRequestWithGreedyLabelInPathInput` as it is written in a JSON body. */
+export function encodeHttpRequestWithGreedyLabelInPathInput(value: HttpRequestWithGreedyLabelInPathInput): Record<string, unknown> {
+  return { 'foo': value.foo ?? undefined, 'baz': value.baz ?? undefined }
+}
+
+/** `HttpRequestWithGreedyLabelInPathInput` read from a JSON body; validate the result with `HttpRequestWithGreedyLabelInPathInputSchema`. */
+export function decodeHttpRequestWithGreedyLabelInPathInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'foo': value['foo'] ?? undefined, 'baz': value['baz'] ?? undefined }
+}
+
+/** `HttpRequestWithLabelsInput` as it is written in a JSON body. */
+export function encodeHttpRequestWithLabelsInput(value: HttpRequestWithLabelsInput): Record<string, unknown> {
+  return { 'string': value.string ?? undefined, 'short': value.short ?? undefined, 'integer': value.integer ?? undefined, 'long': value.long ?? undefined, 'float': value.float ?? undefined, 'double': value.double ?? undefined, 'boolean': value.boolean ?? undefined, 'timestamp': value.timestamp == null ? undefined : wireEpochSeconds(value.timestamp) }
+}
+
+/** `HttpRequestWithLabelsInput` read from a JSON body; validate the result with `HttpRequestWithLabelsInputSchema`. */
+export function decodeHttpRequestWithLabelsInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'string': value['string'] ?? undefined, 'short': value['short'] ?? undefined, 'integer': value['integer'] ?? undefined, 'long': value['long'] ?? undefined, 'float': value['float'] ?? undefined, 'double': value['double'] ?? undefined, 'boolean': value['boolean'] ?? undefined, 'timestamp': value['timestamp'] == null ? undefined : wireTimestamp(value['timestamp']) }
+}
+
+/** `HttpRequestWithRegexLiteralInput` as it is written in a JSON body. */
+export function encodeHttpRequestWithRegexLiteralInput(value: HttpRequestWithRegexLiteralInput): Record<string, unknown> {
+  return { 'str': value.str ?? undefined }
+}
+
+/** `HttpRequestWithRegexLiteralInput` read from a JSON body; validate the result with `HttpRequestWithRegexLiteralInputSchema`. */
+export function decodeHttpRequestWithRegexLiteralInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'str': value['str'] ?? undefined }
+}
+
+/** `HttpResponseCodeOutput` as it is written in a JSON body. */
+export function encodeHttpResponseCodeOutput(value: HttpResponseCodeOutput): Record<string, unknown> {
+  return { 'Status': value.Status ?? undefined }
+}
+
+/** `HttpResponseCodeOutput` read from a JSON body; validate the result with `HttpResponseCodeOutputSchema`. */
+export function decodeHttpResponseCodeOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'Status': value['Status'] ?? undefined }
+}
+
+/** `IgnoreQueryParamsInResponseOutput` as it is written in a JSON body. */
+export function encodeIgnoreQueryParamsInResponseOutput(value: IgnoreQueryParamsInResponseOutput): Record<string, unknown> {
+  return { 'baz': value.baz ?? undefined }
+}
+
+/** `IgnoreQueryParamsInResponseOutput` read from a JSON body; validate the result with `IgnoreQueryParamsInResponseOutputSchema`. */
+export function decodeIgnoreQueryParamsInResponseOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'baz': value['baz'] ?? undefined }
+}
+
+/** `InvalidGreeting` as it is written in a JSON body. */
+export function encodeInvalidGreeting(value: InvalidGreeting): Record<string, unknown> {
+  return { 'Message': value.Message ?? undefined }
+}
+
+/** `InvalidGreeting` read from a JSON body; validate the result with `InvalidGreetingSchema`. */
+export function decodeInvalidGreeting(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'Message': value['Message'] ?? undefined }
+}
+
+/** `JsonBlobsInputOutput` as it is written in a JSON body. */
+export function encodeJsonBlobsInputOutput(value: JsonBlobsInputOutput): Record<string, unknown> {
+  return { 'data': value.data ?? undefined }
+}
+
+/** `JsonBlobsInputOutput` read from a JSON body; validate the result with `JsonBlobsInputOutputSchema`. */
+export function decodeJsonBlobsInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'data': value['data'] ?? undefined }
+}
+
+/** `NestedUnion` as it is written in a JSON body. */
+export function encodeNestedUnion(value: NestedUnion): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['stringValue'] !== undefined) return { 'stringValue': fields['stringValue'] }
+  return value
+}
+
+/** `NestedUnion` read from a JSON body; validate the result with `NestedUnionSchema`. */
+export function decodeNestedUnion(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['stringValue'] !== undefined && value['stringValue'] !== null) return { 'stringValue': value['stringValue'] }
+  return value
+}
+
+/** `aws_protocoltests_restjson_nested_GreetingStruct` as it is written in a JSON body. */
+export function encodeaws_protocoltests_restjson_nested_GreetingStruct(value: aws_protocoltests_restjson_nested_GreetingStruct): Record<string, unknown> {
+  return { 'salutation': value.salutation ?? undefined }
+}
+
+/** `aws_protocoltests_restjson_nested_GreetingStruct` read from a JSON body; validate the result with `aws_protocoltests_restjson_nested_GreetingStructSchema`. */
+export function decodeaws_protocoltests_restjson_nested_GreetingStruct(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'salutation': value['salutation'] ?? undefined }
+}
+
+/** `NoInputAndOutputOutput` as it is written in a JSON body. */
+export function encodeNoInputAndOutputOutput(_value: NoInputAndOutputOutput): Record<string, unknown> {
+  return {}
+}
+
+/** `NoInputAndOutputOutput` read from a JSON body; validate the result with `NoInputAndOutputOutputSchema`. */
+export function decodeNoInputAndOutputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
+/** `OmitsNullSerializesEmptyStringInput` as it is written in a JSON body. */
+export function encodeOmitsNullSerializesEmptyStringInput(value: OmitsNullSerializesEmptyStringInput): Record<string, unknown> {
+  return { 'nullValue': value.nullValue ?? undefined, 'emptyString': value.emptyString ?? undefined }
+}
+
+/** `OmitsNullSerializesEmptyStringInput` read from a JSON body; validate the result with `OmitsNullSerializesEmptyStringInputSchema`. */
+export function decodeOmitsNullSerializesEmptyStringInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'nullValue': value['nullValue'] ?? undefined, 'emptyString': value['emptyString'] ?? undefined }
+}
+
+/** `PayloadConfig` as it is written in a JSON body. */
+export function encodePayloadConfig(value: PayloadConfig): Record<string, unknown> {
+  return { 'data': value.data ?? undefined }
+}
+
+/** `PayloadConfig` read from a JSON body; validate the result with `PayloadConfigSchema`. */
+export function decodePayloadConfig(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'data': value['data'] ?? undefined }
+}
+
+/** `UnionWithJsonName` as it is written in a JSON body. */
+export function encodeUnionWithJsonName(value: UnionWithJsonName): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['foo'] !== undefined) return { 'FOO': fields['foo'] }
+  if (fields['bar'] !== undefined) return { 'bar': fields['bar'] }
+  if (fields['baz'] !== undefined) return { '_baz': fields['baz'] }
+  return value
+}
+
+/** `UnionWithJsonName` read from a JSON body; validate the result with `UnionWithJsonNameSchema`. */
+export function decodeUnionWithJsonName(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['FOO'] !== undefined && value['FOO'] !== null) return { 'foo': value['FOO'] }
+  if (value['bar'] !== undefined && value['bar'] !== null) return { 'bar': value['bar'] }
+  if (value['_baz'] !== undefined && value['_baz'] !== null) return { 'baz': value['_baz'] }
+  return value
+}
+
+/** `QueryIdempotencyTokenAutoFillInput` as it is written in a JSON body. */
+export function encodeQueryIdempotencyTokenAutoFillInput(value: QueryIdempotencyTokenAutoFillInput): Record<string, unknown> {
+  return { 'token': value.token ?? undefined }
+}
+
+/** `QueryIdempotencyTokenAutoFillInput` read from a JSON body; validate the result with `QueryIdempotencyTokenAutoFillInputSchema`. */
+export function decodeQueryIdempotencyTokenAutoFillInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'token': value['token'] ?? undefined }
+}
+
+/** `RecursiveShapesInputOutputNested1` as it is written in a JSON body. */
+export function encodeRecursiveShapesInputOutputNested1(value: RecursiveShapesInputOutputNested1): Record<string, unknown> {
+  return { 'foo': value.foo ?? undefined, 'nested': value.nested == null ? undefined : encodeRecursiveShapesInputOutputNested2(value.nested) }
+}
+
+/** `RecursiveShapesInputOutputNested1` read from a JSON body; validate the result with `RecursiveShapesInputOutputNested1Schema`. */
+export function decodeRecursiveShapesInputOutputNested1(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'foo': value['foo'] ?? undefined, 'nested': value['nested'] == null ? undefined : decodeRecursiveShapesInputOutputNested2(value['nested']) }
+}
+
+/** `RecursiveShapesInputOutputNested2` as it is written in a JSON body. */
+export function encodeRecursiveShapesInputOutputNested2(value: RecursiveShapesInputOutputNested2): Record<string, unknown> {
+  return { 'bar': value.bar ?? undefined, 'recursiveMember': value.recursiveMember == null ? undefined : encodeRecursiveShapesInputOutputNested1(value.recursiveMember) }
+}
+
+/** `RecursiveShapesInputOutputNested2` read from a JSON body; validate the result with `RecursiveShapesInputOutputNested2Schema`. */
+export function decodeRecursiveShapesInputOutputNested2(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'bar': value['bar'] ?? undefined, 'recursiveMember': value['recursiveMember'] == null ? undefined : decodeRecursiveShapesInputOutputNested1(value['recursiveMember']) }
+}
+
+/** `SimpleScalarPropertiesInputOutput` as it is written in a JSON body. */
+export function encodeSimpleScalarPropertiesInputOutput(value: SimpleScalarPropertiesInputOutput): Record<string, unknown> {
+  return { 'foo': value.foo ?? undefined, 'stringValue': value.stringValue ?? undefined, 'trueBooleanValue': value.trueBooleanValue ?? undefined, 'falseBooleanValue': value.falseBooleanValue ?? undefined, 'byteValue': value.byteValue ?? undefined, 'shortValue': value.shortValue ?? undefined, 'integerValue': value.integerValue ?? undefined, 'longValue': value.longValue ?? undefined, 'floatValue': value.floatValue ?? undefined, 'DoubleDribble': value.doubleValue ?? undefined }
+}
+
+/** `SimpleScalarPropertiesInputOutput` read from a JSON body; validate the result with `SimpleScalarPropertiesInputOutputSchema`. */
+export function decodeSimpleScalarPropertiesInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'foo': value['foo'] ?? undefined, 'stringValue': value['stringValue'] ?? undefined, 'trueBooleanValue': value['trueBooleanValue'] ?? undefined, 'falseBooleanValue': value['falseBooleanValue'] ?? undefined, 'byteValue': value['byteValue'] ?? undefined, 'shortValue': value['shortValue'] ?? undefined, 'integerValue': value['integerValue'] ?? undefined, 'longValue': value['longValue'] ?? undefined, 'floatValue': value['floatValue'] ?? undefined, 'doubleValue': value['DoubleDribble'] ?? undefined }
+}
+
+/** `StructureListMember` as it is written in a JSON body. */
+export function encodeStructureListMember(value: StructureListMember): Record<string, unknown> {
+  return { 'value': value.a ?? undefined, 'other': value.b ?? undefined }
+}
+
+/** `StructureListMember` read from a JSON body; validate the result with `StructureListMemberSchema`. */
+export function decodeStructureListMember(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'a': value['value'] ?? undefined, 'b': value['other'] ?? undefined }
+}
+
+/** `TestConfig` as it is written in a JSON body. */
+export function encodeTestConfig(value: TestConfig): Record<string, unknown> {
+  return { 'timeout': value.timeout ?? undefined }
+}
+
+/** `TestConfig` read from a JSON body; validate the result with `TestConfigSchema`. */
+export function decodeTestConfig(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'timeout': value['timeout'] ?? undefined }
+}
+
+/** `EventHeaderValue` as it is written in a JSON body. */
+export function encodeEventHeaderValue(value: EventHeaderValue): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['boolean'] !== undefined) return { 'boolean': fields['boolean'] }
+  if (fields['byte'] !== undefined) return { 'byte': fields['byte'] }
+  if (fields['short'] !== undefined) return { 'short': fields['short'] }
+  if (fields['integer'] !== undefined) return { 'integer': fields['integer'] }
+  if (fields['long'] !== undefined) return { 'long': fields['long'] }
+  if (fields['blob'] !== undefined) return { 'blob': fields['blob'] }
+  if (fields['string'] !== undefined) return { 'string': fields['string'] }
+  if (fields['timestamp'] !== undefined) return { 'timestamp': wireEpochSeconds((fields['timestamp'] as Date)) }
+  return value
+}
+
+/** `EventHeaderValue` read from a JSON body; validate the result with `EventHeaderValueSchema`. */
+export function decodeEventHeaderValue(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['boolean'] !== undefined && value['boolean'] !== null) return { 'boolean': value['boolean'] }
+  if (value['byte'] !== undefined && value['byte'] !== null) return { 'byte': value['byte'] }
+  if (value['short'] !== undefined && value['short'] !== null) return { 'short': value['short'] }
+  if (value['integer'] !== undefined && value['integer'] !== null) return { 'integer': value['integer'] }
+  if (value['long'] !== undefined && value['long'] !== null) return { 'long': value['long'] }
+  if (value['blob'] !== undefined && value['blob'] !== null) return { 'blob': value['blob'] }
+  if (value['string'] !== undefined && value['string'] !== null) return { 'string': value['string'] }
+  if (value['timestamp'] !== undefined && value['timestamp'] !== null) return { 'timestamp': wireTimestamp(value['timestamp']) }
+  return value
+}
+
+/** `HttpMalformedResponseBodyAssertion` as it is written in a JSON body. */
+export function encodeHttpMalformedResponseBodyAssertion(value: HttpMalformedResponseBodyAssertion): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['contents'] !== undefined) return { 'contents': fields['contents'] }
+  if (fields['messageRegex'] !== undefined) return { 'messageRegex': fields['messageRegex'] }
+  return value
+}
+
+/** `HttpMalformedResponseBodyAssertion` read from a JSON body; validate the result with `HttpMalformedResponseBodyAssertionSchema`. */
+export function decodeHttpMalformedResponseBodyAssertion(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['contents'] !== undefined && value['contents'] !== null) return { 'contents': value['contents'] }
+  if (value['messageRegex'] !== undefined && value['messageRegex'] !== null) return { 'messageRegex': value['messageRegex'] }
+  return value
+}
+
+/** `TestFailureExpectation` as it is written in a JSON body. */
+export function encodeTestFailureExpectation(value: TestFailureExpectation): Record<string, unknown> {
+  return { 'errorId': value.errorId ?? undefined }
+}
+
+/** `TestFailureExpectation` read from a JSON body; validate the result with `TestFailureExpectationSchema`. */
+export function decodeTestFailureExpectation(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'errorId': value['errorId'] ?? undefined }
+}
+
+/** `ReservedFieldsDefinition` as it is written in a JSON body. */
+export function encodeReservedFieldsDefinition(value: ReservedFieldsDefinition): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['name'] !== undefined) return { 'name': fields['name'] }
+  if (fields['number'] !== undefined) return { 'number': fields['number'] }
+  if (fields['range'] !== undefined) return { 'range': encodeRange((fields['range'] as Range)) }
+  return value
+}
+
+/** `ReservedFieldsDefinition` read from a JSON body; validate the result with `ReservedFieldsDefinitionSchema`. */
+export function decodeReservedFieldsDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['name'] !== undefined && value['name'] !== null) return { 'name': value['name'] }
+  if (value['number'] !== undefined && value['number'] !== null) return { 'number': value['number'] }
+  if (value['range'] !== undefined && value['range'] !== null) return { 'range': decodeRange(value['range']) }
+  return value
+}
+
+/** `PlayerAction` as it is written in a JSON body. */
+export function encodePlayerAction(value: PlayerAction): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['quit'] !== undefined) return { 'quit': encodeUnit((fields['quit'] as Unit)) }
+  return value
+}
+
+/** `PlayerAction` read from a JSON body; validate the result with `PlayerActionSchema`. */
+export function decodePlayerAction(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['quit'] !== undefined && value['quit'] !== null) return { 'quit': decodeUnit(value['quit']) }
+  return value
+}
+
+/** `TaggableServiceApiConfig` as it is written in a JSON body. */
+export function encodeTaggableServiceApiConfig(value: TaggableServiceApiConfig): Record<string, unknown> {
+  return { 'tagApi': value.tagApi ?? undefined, 'untagApi': value.untagApi ?? undefined, 'listTagsApi': value.listTagsApi ?? undefined }
+}
+
+/** `TaggableServiceApiConfig` read from a JSON body; validate the result with `TaggableServiceApiConfigSchema`. */
+export function decodeTaggableServiceApiConfig(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'tagApi': value['tagApi'] ?? undefined, 'untagApi': value['untagApi'] ?? undefined, 'listTagsApi': value['listTagsApi'] ?? undefined }
+}
+
+/** `TaggableApiConfig` as it is written in a JSON body. */
+export function encodeTaggableApiConfig(value: TaggableApiConfig): Record<string, unknown> {
+  return { 'tagApi': value.tagApi ?? undefined, 'untagApi': value.untagApi ?? undefined, 'listTagsApi': value.listTagsApi ?? undefined }
+}
+
+/** `TaggableApiConfig` read from a JSON body; validate the result with `TaggableApiConfigSchema`. */
+export function decodeTaggableApiConfig(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'tagApi': value['tagApi'] ?? undefined, 'untagApi': value['untagApi'] ?? undefined, 'listTagsApi': value['listTagsApi'] ?? undefined }
+}
+
+/** `ComplexError` as it is written in a JSON body. */
+export function encodeComplexError(value: ComplexError): Record<string, unknown> {
+  return { 'Header': value.Header ?? undefined, 'TopLevel': value.TopLevel ?? undefined, 'Nested': value.Nested == null ? undefined : encodeComplexNestedErrorData(value.Nested) }
+}
+
+/** `ComplexError` read from a JSON body; validate the result with `ComplexErrorSchema`. */
+export function decodeComplexError(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'Header': value['Header'] ?? undefined, 'TopLevel': value['TopLevel'] ?? undefined, 'Nested': value['Nested'] == null ? undefined : decodeComplexNestedErrorData(value['Nested']) }
+}
+
+/** `DatetimeOffsetsOutput` as it is written in a JSON body. */
+export function encodeDatetimeOffsetsOutput(value: DatetimeOffsetsOutput): Record<string, unknown> {
+  return { 'datetime': value.datetime == null ? undefined : wireDateTime(value.datetime) }
+}
+
+/** `DatetimeOffsetsOutput` read from a JSON body; validate the result with `DatetimeOffsetsOutputSchema`. */
+export function decodeDatetimeOffsetsOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'datetime': value['datetime'] == null ? undefined : wireTimestamp(value['datetime']) }
+}
+
+/** `FractionalSecondsOutput` as it is written in a JSON body. */
+export function encodeFractionalSecondsOutput(value: FractionalSecondsOutput): Record<string, unknown> {
+  return { 'datetime': value.datetime == null ? undefined : wireDateTime(value.datetime) }
+}
+
+/** `FractionalSecondsOutput` read from a JSON body; validate the result with `FractionalSecondsOutputSchema`. */
+export function decodeFractionalSecondsOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'datetime': value['datetime'] == null ? undefined : wireTimestamp(value['datetime']) }
+}
+
+export function encodeDenseStructMap(value: DenseStructMap): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, encodeaws_protocoltests_shared_GreetingStruct(e)]))
+}
+
+export function decodeDenseStructMap(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, e === null ? null : decodeaws_protocoltests_shared_GreetingStruct(e)]))
+}
+
+export function encodeSparseStructMap(value: SparseStructMap): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, (e === null ? null : encodeaws_protocoltests_shared_GreetingStruct(e))]))
+}
+
+export function decodeSparseStructMap(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, e === null ? null : decodeaws_protocoltests_shared_GreetingStruct(e)]))
+}
+
+/** `DocumentTypeAsPayloadInputOutput` as it is written in a JSON body. */
+export function encodeDocumentTypeAsPayloadInputOutput(value: DocumentTypeAsPayloadInputOutput): Record<string, unknown> {
+  return { 'documentValue': value.documentValue ?? undefined }
+}
+
+/** `DocumentTypeAsPayloadInputOutput` read from a JSON body; validate the result with `DocumentTypeAsPayloadInputOutputSchema`. */
+export function decodeDocumentTypeAsPayloadInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'documentValue': value['documentValue'] ?? undefined }
+}
+
+/** `DocumentTypeInputOutput` as it is written in a JSON body. */
+export function encodeDocumentTypeInputOutput(value: DocumentTypeInputOutput): Record<string, unknown> {
+  return { 'stringValue': value.stringValue ?? undefined, 'documentValue': value.documentValue ?? undefined }
+}
+
+/** `DocumentTypeInputOutput` read from a JSON body; validate the result with `DocumentTypeInputOutputSchema`. */
+export function decodeDocumentTypeInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'stringValue': value['stringValue'] ?? undefined, 'documentValue': value['documentValue'] ?? undefined }
+}
+
+/** `HttpPayloadWithStructureInputOutput` as it is written in a JSON body. */
+export function encodeHttpPayloadWithStructureInputOutput(value: HttpPayloadWithStructureInputOutput): Record<string, unknown> {
+  return { 'nested': value.nested == null ? undefined : encodeNestedPayload(value.nested) }
+}
+
+/** `HttpPayloadWithStructureInputOutput` read from a JSON body; validate the result with `HttpPayloadWithStructureInputOutputSchema`. */
+export function decodeHttpPayloadWithStructureInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'nested': value['nested'] == null ? undefined : decodeNestedPayload(value['nested']) }
+}
+
+/** `HttpPrefixHeadersInResponseOutput` as it is written in a JSON body. */
+export function encodeHttpPrefixHeadersInResponseOutput(value: HttpPrefixHeadersInResponseOutput): Record<string, unknown> {
+  return { 'prefixHeaders': value.prefixHeaders ?? undefined }
+}
+
+/** `HttpPrefixHeadersInResponseOutput` read from a JSON body; validate the result with `HttpPrefixHeadersInResponseOutputSchema`. */
+export function decodeHttpPrefixHeadersInResponseOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'prefixHeaders': value['prefixHeaders'] ?? undefined }
+}
+
+/** `HttpPrefixHeadersInput` as it is written in a JSON body. */
+export function encodeHttpPrefixHeadersInput(value: HttpPrefixHeadersInput): Record<string, unknown> {
+  return { 'foo': value.foo ?? undefined, 'fooMap': value.fooMap ?? undefined }
+}
+
+/** `HttpPrefixHeadersInput` read from a JSON body; validate the result with `HttpPrefixHeadersInputSchema`. */
+export function decodeHttpPrefixHeadersInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'foo': value['foo'] ?? undefined, 'fooMap': value['fooMap'] ?? undefined }
+}
+
+/** `HttpPrefixHeadersOutput` as it is written in a JSON body. */
+export function encodeHttpPrefixHeadersOutput(value: HttpPrefixHeadersOutput): Record<string, unknown> {
+  return { 'foo': value.foo ?? undefined, 'fooMap': value.fooMap ?? undefined }
+}
+
+/** `HttpPrefixHeadersOutput` read from a JSON body; validate the result with `HttpPrefixHeadersOutputSchema`. */
+export function decodeHttpPrefixHeadersOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'foo': value['foo'] ?? undefined, 'fooMap': value['fooMap'] ?? undefined }
+}
+
+/** `QueryPrecedenceInput` as it is written in a JSON body. */
+export function encodeQueryPrecedenceInput(value: QueryPrecedenceInput): Record<string, unknown> {
+  return { 'foo': value.foo ?? undefined, 'baz': value.baz ?? undefined }
+}
+
+/** `QueryPrecedenceInput` read from a JSON body; validate the result with `QueryPrecedenceInputSchema`. */
+export function decodeQueryPrecedenceInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'foo': value['foo'] ?? undefined, 'baz': value['baz'] ?? undefined }
+}
+
+/** `HttpRequestWithLabelsAndTimestampFormatInput` as it is written in a JSON body. */
+export function encodeHttpRequestWithLabelsAndTimestampFormatInput(value: HttpRequestWithLabelsAndTimestampFormatInput): Record<string, unknown> {
+  return { 'memberEpochSeconds': value.memberEpochSeconds == null ? undefined : wireEpochSeconds(value.memberEpochSeconds), 'memberHttpDate': value.memberHttpDate == null ? undefined : wireHttpDate(value.memberHttpDate), 'memberDateTime': value.memberDateTime == null ? undefined : wireDateTime(value.memberDateTime), 'defaultFormat': value.defaultFormat == null ? undefined : wireEpochSeconds(value.defaultFormat), 'targetEpochSeconds': value.targetEpochSeconds == null ? undefined : wireEpochSeconds(value.targetEpochSeconds), 'targetHttpDate': value.targetHttpDate == null ? undefined : wireHttpDate(value.targetHttpDate), 'targetDateTime': value.targetDateTime == null ? undefined : wireDateTime(value.targetDateTime) }
+}
+
+/** `HttpRequestWithLabelsAndTimestampFormatInput` read from a JSON body; validate the result with `HttpRequestWithLabelsAndTimestampFormatInputSchema`. */
+export function decodeHttpRequestWithLabelsAndTimestampFormatInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'memberEpochSeconds': value['memberEpochSeconds'] == null ? undefined : wireTimestamp(value['memberEpochSeconds']), 'memberHttpDate': value['memberHttpDate'] == null ? undefined : wireTimestamp(value['memberHttpDate']), 'memberDateTime': value['memberDateTime'] == null ? undefined : wireTimestamp(value['memberDateTime']), 'defaultFormat': value['defaultFormat'] == null ? undefined : wireTimestamp(value['defaultFormat']), 'targetEpochSeconds': value['targetEpochSeconds'] == null ? undefined : wireTimestamp(value['targetEpochSeconds']), 'targetHttpDate': value['targetHttpDate'] == null ? undefined : wireTimestamp(value['targetHttpDate']), 'targetDateTime': value['targetDateTime'] == null ? undefined : wireTimestamp(value['targetDateTime']) }
+}
+
+/** `JsonTimestampsInputOutput` as it is written in a JSON body. */
+export function encodeJsonTimestampsInputOutput(value: JsonTimestampsInputOutput): Record<string, unknown> {
+  return { 'normal': value.normal == null ? undefined : wireEpochSeconds(value.normal), 'dateTime': value.dateTime == null ? undefined : wireDateTime(value.dateTime), 'dateTimeOnTarget': value.dateTimeOnTarget == null ? undefined : wireDateTime(value.dateTimeOnTarget), 'epochSeconds': value.epochSeconds == null ? undefined : wireEpochSeconds(value.epochSeconds), 'epochSecondsOnTarget': value.epochSecondsOnTarget == null ? undefined : wireEpochSeconds(value.epochSecondsOnTarget), 'httpDate': value.httpDate == null ? undefined : wireHttpDate(value.httpDate), 'httpDateOnTarget': value.httpDateOnTarget == null ? undefined : wireHttpDate(value.httpDateOnTarget) }
+}
+
+/** `JsonTimestampsInputOutput` read from a JSON body; validate the result with `JsonTimestampsInputOutputSchema`. */
+export function decodeJsonTimestampsInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'normal': value['normal'] == null ? undefined : wireTimestamp(value['normal']), 'dateTime': value['dateTime'] == null ? undefined : wireTimestamp(value['dateTime']), 'dateTimeOnTarget': value['dateTimeOnTarget'] == null ? undefined : wireTimestamp(value['dateTimeOnTarget']), 'epochSeconds': value['epochSeconds'] == null ? undefined : wireTimestamp(value['epochSeconds']), 'epochSecondsOnTarget': value['epochSecondsOnTarget'] == null ? undefined : wireTimestamp(value['epochSecondsOnTarget']), 'httpDate': value['httpDate'] == null ? undefined : wireTimestamp(value['httpDate']), 'httpDateOnTarget': value['httpDateOnTarget'] == null ? undefined : wireTimestamp(value['httpDateOnTarget']) }
+}
+
+/** `TimestampFormatHeadersIO` as it is written in a JSON body. */
+export function encodeTimestampFormatHeadersIO(value: TimestampFormatHeadersIO): Record<string, unknown> {
+  return { 'memberEpochSeconds': value.memberEpochSeconds == null ? undefined : wireEpochSeconds(value.memberEpochSeconds), 'memberHttpDate': value.memberHttpDate == null ? undefined : wireHttpDate(value.memberHttpDate), 'memberDateTime': value.memberDateTime == null ? undefined : wireDateTime(value.memberDateTime), 'defaultFormat': value.defaultFormat == null ? undefined : wireEpochSeconds(value.defaultFormat), 'targetEpochSeconds': value.targetEpochSeconds == null ? undefined : wireEpochSeconds(value.targetEpochSeconds), 'targetHttpDate': value.targetHttpDate == null ? undefined : wireHttpDate(value.targetHttpDate), 'targetDateTime': value.targetDateTime == null ? undefined : wireDateTime(value.targetDateTime) }
+}
+
+/** `TimestampFormatHeadersIO` read from a JSON body; validate the result with `TimestampFormatHeadersIOSchema`. */
+export function decodeTimestampFormatHeadersIO(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'memberEpochSeconds': value['memberEpochSeconds'] == null ? undefined : wireTimestamp(value['memberEpochSeconds']), 'memberHttpDate': value['memberHttpDate'] == null ? undefined : wireTimestamp(value['memberHttpDate']), 'memberDateTime': value['memberDateTime'] == null ? undefined : wireTimestamp(value['memberDateTime']), 'defaultFormat': value['defaultFormat'] == null ? undefined : wireTimestamp(value['defaultFormat']), 'targetEpochSeconds': value['targetEpochSeconds'] == null ? undefined : wireTimestamp(value['targetEpochSeconds']), 'targetHttpDate': value['targetHttpDate'] == null ? undefined : wireTimestamp(value['targetHttpDate']), 'targetDateTime': value['targetDateTime'] == null ? undefined : wireTimestamp(value['targetDateTime']) }
+}
+
+/** `TestPayloadStructureInputOutput` as it is written in a JSON body. */
+export function encodeTestPayloadStructureInputOutput(value: TestPayloadStructureInputOutput): Record<string, unknown> {
+  return { 'testId': value.testId ?? undefined, 'payloadConfig': value.payloadConfig == null ? undefined : encodePayloadConfig(value.payloadConfig) }
+}
+
+/** `TestPayloadStructureInputOutput` read from a JSON body; validate the result with `TestPayloadStructureInputOutputSchema`. */
+export function decodeTestPayloadStructureInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'testId': value['testId'] ?? undefined, 'payloadConfig': value['payloadConfig'] == null ? undefined : decodePayloadConfig(value['payloadConfig']) }
+}
+
+/** `PostUnionWithJsonNameInput` as it is written in a JSON body. */
+export function encodePostUnionWithJsonNameInput(value: PostUnionWithJsonNameInput): Record<string, unknown> {
+  return { 'value': value.value == null ? undefined : encodeUnionWithJsonName(value.value) }
+}
+
+/** `PostUnionWithJsonNameInput` read from a JSON body; validate the result with `PostUnionWithJsonNameInputSchema`. */
+export function decodePostUnionWithJsonNameInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'value': value['value'] == null ? undefined : decodeUnionWithJsonName(value['value']) }
+}
+
+/** `PostUnionWithJsonNameOutput` as it is written in a JSON body. */
+export function encodePostUnionWithJsonNameOutput(value: PostUnionWithJsonNameOutput): Record<string, unknown> {
+  return { 'value': value.value == null ? undefined : encodeUnionWithJsonName(value.value) }
+}
+
+/** `PostUnionWithJsonNameOutput` read from a JSON body; validate the result with `PostUnionWithJsonNameOutputSchema`. */
+export function decodePostUnionWithJsonNameOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'value': value['value'] == null ? undefined : decodeUnionWithJsonName(value['value']) }
+}
+
+/** `RecursiveShapesInputOutput` as it is written in a JSON body. */
+export function encodeRecursiveShapesInputOutput(value: RecursiveShapesInputOutput): Record<string, unknown> {
+  return { 'nested': value.nested == null ? undefined : encodeRecursiveShapesInputOutputNested1(value.nested) }
+}
+
+/** `RecursiveShapesInputOutput` read from a JSON body; validate the result with `RecursiveShapesInputOutputSchema`. */
+export function decodeRecursiveShapesInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'nested': value['nested'] == null ? undefined : decodeRecursiveShapesInputOutputNested1(value['nested']) }
+}
+
+export function encodeStructureList(value: StructureList): unknown[] {
+  return value.map((e) => encodeStructureListMember(e))
+}
+
+export function decodeStructureList(value: unknown): unknown {
+  return Array.isArray(value) ? value.map((e: unknown) => (e === null ? null : decodeStructureListMember(e))) : value
+}
+
+/** `TestBodyStructureInputOutput` as it is written in a JSON body. */
+export function encodeTestBodyStructureInputOutput(value: TestBodyStructureInputOutput): Record<string, unknown> {
+  return { 'testId': value.testId ?? undefined, 'testConfig': value.testConfig == null ? undefined : encodeTestConfig(value.testConfig) }
+}
+
+/** `TestBodyStructureInputOutput` read from a JSON body; validate the result with `TestBodyStructureInputOutputSchema`. */
+export function decodeTestBodyStructureInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'testId': value['testId'] ?? undefined, 'testConfig': value['testConfig'] == null ? undefined : decodeTestConfig(value['testConfig']) }
+}
+
+export function encodeEventHeaders(value: EventHeaders): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, encodeEventHeaderValue(e)]))
+}
+
+export function decodeEventHeaders(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([k, e]) => [k, e === null ? null : decodeEventHeaderValue(e)]))
+}
+
+/** `HttpMalformedRequestDefinition` as it is written in a JSON body. */
+export function encodeHttpMalformedRequestDefinition(value: HttpMalformedRequestDefinition): Record<string, unknown> {
+  return { 'method': value.method ?? undefined, 'uri': value.uri ?? undefined, 'host': value.host ?? undefined, 'queryParams': value.queryParams ?? undefined, 'headers': value.headers ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined }
+}
+
+/** `HttpMalformedRequestDefinition` read from a JSON body; validate the result with `HttpMalformedRequestDefinitionSchema`. */
+export function decodeHttpMalformedRequestDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'method': value['method'] ?? undefined, 'uri': value['uri'] ?? undefined, 'host': value['host'] ?? undefined, 'queryParams': value['queryParams'] ?? undefined, 'headers': value['headers'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined }
+}
+
+/** `HttpMalformedResponseBodyDefinition` as it is written in a JSON body. */
+export function encodeHttpMalformedResponseBodyDefinition(value: HttpMalformedResponseBodyDefinition): Record<string, unknown> {
+  return { 'assertion': value.assertion == null ? undefined : encodeHttpMalformedResponseBodyAssertion(value.assertion), 'mediaType': value.mediaType ?? undefined }
+}
+
+/** `HttpMalformedResponseBodyDefinition` read from a JSON body; validate the result with `HttpMalformedResponseBodyDefinitionSchema`. */
+export function decodeHttpMalformedResponseBodyDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'assertion': value['assertion'] == null ? undefined : decodeHttpMalformedResponseBodyAssertion(value['assertion']), 'mediaType': value['mediaType'] ?? undefined }
+}
+
+/** `TestExpectation` as it is written in a JSON body. */
+export function encodeTestExpectation(value: TestExpectation): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['success'] !== undefined) return { 'success': encodeUnit((fields['success'] as Unit)) }
+  if (fields['failure'] !== undefined) return { 'failure': encodeTestFailureExpectation((fields['failure'] as TestFailureExpectation)) }
+  return value
+}
+
+/** `TestExpectation` read from a JSON body; validate the result with `TestExpectationSchema`. */
+export function decodeTestExpectation(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['success'] !== undefined && value['success'] !== null) return { 'success': decodeUnit(value['success']) }
+  if (value['failure'] !== undefined && value['failure'] !== null) return { 'failure': decodeTestFailureExpectation(value['failure']) }
+  return value
+}
+
+/** `PostPlayerActionInput` as it is written in a JSON body. */
+export function encodePostPlayerActionInput(value: PostPlayerActionInput): Record<string, unknown> {
+  return { 'action': value.action == null ? undefined : encodePlayerAction(value.action) }
+}
+
+/** `PostPlayerActionInput` read from a JSON body; validate the result with `PostPlayerActionInputSchema`. */
+export function decodePostPlayerActionInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'action': value['action'] == null ? undefined : decodePlayerAction(value['action']) }
+}
+
+/** `PostPlayerActionOutput` as it is written in a JSON body. */
+export function encodePostPlayerActionOutput(value: PostPlayerActionOutput): Record<string, unknown> {
+  return { 'action': value.action == null ? undefined : encodePlayerAction(value.action) }
+}
+
+/** `PostPlayerActionOutput` read from a JSON body; validate the result with `PostPlayerActionOutputSchema`. */
+export function decodePostPlayerActionOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'action': value['action'] == null ? undefined : decodePlayerAction(value['action']) }
+}
+
+/** `MyUnion` as it is written in a JSON body. */
+export function encodeMyUnion(value: MyUnion): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['stringValue'] !== undefined) return { 'stringValue': fields['stringValue'] }
+  if (fields['booleanValue'] !== undefined) return { 'booleanValue': fields['booleanValue'] }
+  if (fields['numberValue'] !== undefined) return { 'numberValue': fields['numberValue'] }
+  if (fields['blobValue'] !== undefined) return { 'blobValue': fields['blobValue'] }
+  if (fields['timestampValue'] !== undefined) return { 'timestampValue': wireEpochSeconds((fields['timestampValue'] as Date)) }
+  if (fields['enumValue'] !== undefined) return { 'enumValue': fields['enumValue'] }
+  if (fields['listValue'] !== undefined) return { 'listValue': fields['listValue'] }
+  if (fields['mapValue'] !== undefined) return { 'mapValue': fields['mapValue'] }
+  if (fields['structureValue'] !== undefined) return { 'structureValue': encodeaws_protocoltests_shared_GreetingStruct((fields['structureValue'] as aws_protocoltests_shared_GreetingStruct)) }
+  if (fields['renamedStructureValue'] !== undefined) return { 'renamedStructureValue': encodeaws_protocoltests_restjson_nested_GreetingStruct((fields['renamedStructureValue'] as aws_protocoltests_restjson_nested_GreetingStruct)) }
+  if (fields['unionValue'] !== undefined) return { 'unionValue': encodeNestedUnion((fields['unionValue'] as NestedUnion)) }
+  return value
+}
+
+/** `MyUnion` read from a JSON body; validate the result with `MyUnionSchema`. */
+export function decodeMyUnion(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['stringValue'] !== undefined && value['stringValue'] !== null) return { 'stringValue': value['stringValue'] }
+  if (value['booleanValue'] !== undefined && value['booleanValue'] !== null) return { 'booleanValue': value['booleanValue'] }
+  if (value['numberValue'] !== undefined && value['numberValue'] !== null) return { 'numberValue': value['numberValue'] }
+  if (value['blobValue'] !== undefined && value['blobValue'] !== null) return { 'blobValue': value['blobValue'] }
+  if (value['timestampValue'] !== undefined && value['timestampValue'] !== null) return { 'timestampValue': wireTimestamp(value['timestampValue']) }
+  if (value['enumValue'] !== undefined && value['enumValue'] !== null) return { 'enumValue': value['enumValue'] }
+  if (value['listValue'] !== undefined && value['listValue'] !== null) return { 'listValue': value['listValue'] }
+  if (value['mapValue'] !== undefined && value['mapValue'] !== null) return { 'mapValue': value['mapValue'] }
+  if (value['structureValue'] !== undefined && value['structureValue'] !== null) return { 'structureValue': decodeaws_protocoltests_shared_GreetingStruct(value['structureValue']) }
+  if (value['renamedStructureValue'] !== undefined && value['renamedStructureValue'] !== null) return { 'renamedStructureValue': decodeaws_protocoltests_restjson_nested_GreetingStruct(value['renamedStructureValue']) }
+  if (value['unionValue'] !== undefined && value['unionValue'] !== null) return { 'unionValue': decodeNestedUnion(value['unionValue']) }
+  return value
+}
+
+/** `QueryParamsAsStringListMapInput` as it is written in a JSON body. */
+export function encodeQueryParamsAsStringListMapInput(value: QueryParamsAsStringListMapInput): Record<string, unknown> {
+  return { 'qux': value.qux ?? undefined, 'foo': value.foo ?? undefined }
+}
+
+/** `QueryParamsAsStringListMapInput` read from a JSON body; validate the result with `QueryParamsAsStringListMapInputSchema`. */
+export function decodeQueryParamsAsStringListMapInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'qux': value['qux'] ?? undefined, 'foo': value['foo'] ?? undefined }
+}
+
+/** `JsonMapsInputOutput` as it is written in a JSON body. */
+export function encodeJsonMapsInputOutput(value: JsonMapsInputOutput): Record<string, unknown> {
+  return { 'denseStructMap': value.denseStructMap == null ? undefined : encodeDenseStructMap(value.denseStructMap), 'denseNumberMap': value.denseNumberMap ?? undefined, 'denseBooleanMap': value.denseBooleanMap ?? undefined, 'denseStringMap': value.denseStringMap ?? undefined, 'denseSetMap': value.denseSetMap ?? undefined }
+}
+
+/** `JsonMapsInputOutput` read from a JSON body; validate the result with `JsonMapsInputOutputSchema`. */
+export function decodeJsonMapsInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'denseStructMap': value['denseStructMap'] == null ? undefined : decodeDenseStructMap(value['denseStructMap']), 'denseNumberMap': value['denseNumberMap'] ?? undefined, 'denseBooleanMap': value['denseBooleanMap'] ?? undefined, 'denseStringMap': value['denseStringMap'] ?? undefined, 'denseSetMap': value['denseSetMap'] ?? undefined }
+}
+
+/** `SparseJsonMapsInputOutput` as it is written in a JSON body. */
+export function encodeSparseJsonMapsInputOutput(value: SparseJsonMapsInputOutput): Record<string, unknown> {
+  return { 'sparseStructMap': value.sparseStructMap == null ? undefined : encodeSparseStructMap(value.sparseStructMap), 'sparseNumberMap': value.sparseNumberMap ?? undefined, 'sparseBooleanMap': value.sparseBooleanMap ?? undefined, 'sparseStringMap': value.sparseStringMap ?? undefined, 'sparseSetMap': value.sparseSetMap ?? undefined }
+}
+
+/** `SparseJsonMapsInputOutput` read from a JSON body; validate the result with `SparseJsonMapsInputOutputSchema`. */
+export function decodeSparseJsonMapsInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'sparseStructMap': value['sparseStructMap'] == null ? undefined : decodeSparseStructMap(value['sparseStructMap']), 'sparseNumberMap': value['sparseNumberMap'] ?? undefined, 'sparseBooleanMap': value['sparseBooleanMap'] ?? undefined, 'sparseStringMap': value['sparseStringMap'] ?? undefined, 'sparseSetMap': value['sparseSetMap'] ?? undefined }
+}
+
+/** `Event` as it is written in a JSON body. */
+export function encodeEvent(value: Event): Record<string, unknown> {
+  return { 'type': value.type ?? undefined, 'params': value.params ?? undefined, 'headers': value.headers == null ? undefined : encodeEventHeaders(value.headers), 'forbidHeaders': value.forbidHeaders ?? undefined, 'requireHeaders': value.requireHeaders ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined, 'bytes': value.bytes ?? undefined, 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined }
+}
+
+/** `Event` read from a JSON body; validate the result with `EventSchema`. */
+export function decodeEvent(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'type': value['type'] ?? undefined, 'params': value['params'] ?? undefined, 'headers': value['headers'] == null ? undefined : decodeEventHeaders(value['headers']), 'forbidHeaders': value['forbidHeaders'] ?? undefined, 'requireHeaders': value['requireHeaders'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined, 'bytes': value['bytes'] ?? undefined, 'vendorParams': value['vendorParams'] == null ? {} : value['vendorParams'], 'vendorParamsShape': value['vendorParamsShape'] ?? undefined }
+}
+
+/** `HttpMalformedResponseDefinition` as it is written in a JSON body. */
+export function encodeHttpMalformedResponseDefinition(value: HttpMalformedResponseDefinition): Record<string, unknown> {
+  return { 'headers': value.headers ?? undefined, 'code': value.code ?? undefined, 'body': value.body == null ? undefined : encodeHttpMalformedResponseBodyDefinition(value.body) }
+}
+
+/** `HttpMalformedResponseDefinition` read from a JSON body; validate the result with `HttpMalformedResponseDefinitionSchema`. */
+export function decodeHttpMalformedResponseDefinition(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'headers': value['headers'] ?? undefined, 'code': value['code'] ?? undefined, 'body': value['body'] == null ? undefined : decodeHttpMalformedResponseBodyDefinition(value['body']) }
+}
+
+/** `HttpRequestTestCase` as it is written in a JSON body. */
+export function encodeHttpRequestTestCase(value: HttpRequestTestCase): Record<string, unknown> {
+  return { 'headers': value.headers ?? undefined, 'forbidHeaders': value.forbidHeaders ?? undefined, 'requireHeaders': value.requireHeaders ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined, 'method': value.method ?? undefined, 'uri': value.uri ?? undefined, 'host': value.host ?? undefined, 'resolvedHost': value.resolvedHost ?? undefined, 'queryParams': value.queryParams ?? undefined, 'forbidQueryParams': value.forbidQueryParams ?? undefined, 'requireQueryParams': value.requireQueryParams ?? undefined, 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'authScheme': value.authScheme ?? undefined, 'params': value.params ?? undefined, 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined, 'documentation': value.documentation ?? undefined, 'tags': value.tags ?? undefined, 'appliesTo': value.appliesTo ?? undefined }
+}
+
+/** `HttpRequestTestCase` read from a JSON body; validate the result with `HttpRequestTestCaseSchema`. */
+export function decodeHttpRequestTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'headers': value['headers'] ?? undefined, 'forbidHeaders': value['forbidHeaders'] ?? undefined, 'requireHeaders': value['requireHeaders'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined, 'method': value['method'] ?? undefined, 'uri': value['uri'] ?? undefined, 'host': value['host'] ?? undefined, 'resolvedHost': value['resolvedHost'] ?? undefined, 'queryParams': value['queryParams'] ?? undefined, 'forbidQueryParams': value['forbidQueryParams'] ?? undefined, 'requireQueryParams': value['requireQueryParams'] ?? undefined, 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'authScheme': value['authScheme'] ?? undefined, 'params': value['params'] ?? undefined, 'vendorParams': value['vendorParams'] ?? undefined, 'vendorParamsShape': value['vendorParamsShape'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'tags': value['tags'] ?? undefined, 'appliesTo': value['appliesTo'] ?? undefined }
+}
+
+/** `HttpResponseTestCase` as it is written in a JSON body. */
+export function encodeHttpResponseTestCase(value: HttpResponseTestCase): Record<string, unknown> {
+  return { 'headers': value.headers ?? undefined, 'forbidHeaders': value.forbidHeaders ?? undefined, 'requireHeaders': value.requireHeaders ?? undefined, 'body': value.body ?? undefined, 'bodyMediaType': value.bodyMediaType ?? undefined, 'code': value.code ?? undefined, 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'authScheme': value.authScheme ?? undefined, 'params': value.params ?? undefined, 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined, 'documentation': value.documentation ?? undefined, 'tags': value.tags ?? undefined, 'appliesTo': value.appliesTo ?? undefined }
+}
+
+/** `HttpResponseTestCase` read from a JSON body; validate the result with `HttpResponseTestCaseSchema`. */
+export function decodeHttpResponseTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'headers': value['headers'] ?? undefined, 'forbidHeaders': value['forbidHeaders'] ?? undefined, 'requireHeaders': value['requireHeaders'] ?? undefined, 'body': value['body'] ?? undefined, 'bodyMediaType': value['bodyMediaType'] ?? undefined, 'code': value['code'] ?? undefined, 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'authScheme': value['authScheme'] ?? undefined, 'params': value['params'] ?? undefined, 'vendorParams': value['vendorParams'] ?? undefined, 'vendorParamsShape': value['vendorParamsShape'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'tags': value['tags'] ?? undefined, 'appliesTo': value['appliesTo'] ?? undefined }
+}
+
+/** `UnionInputOutput` as it is written in a JSON body. */
+export function encodeUnionInputOutput(value: UnionInputOutput): Record<string, unknown> {
+  return { 'contents': value.contents == null ? undefined : encodeMyUnion(value.contents) }
+}
+
+/** `UnionInputOutput` read from a JSON body; validate the result with `UnionInputOutputSchema`. */
+export function decodeUnionInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'contents': value['contents'] == null ? undefined : decodeMyUnion(value['contents']) }
+}
+
+/** `JsonEnumsInputOutput` as it is written in a JSON body. */
+export function encodeJsonEnumsInputOutput(value: JsonEnumsInputOutput): Record<string, unknown> {
+  return { 'fooEnum1': value.fooEnum1 ?? undefined, 'fooEnum2': value.fooEnum2 ?? undefined, 'fooEnum3': value.fooEnum3 ?? undefined, 'fooEnumList': value.fooEnumList ?? undefined, 'fooEnumSet': value.fooEnumSet ?? undefined, 'fooEnumMap': value.fooEnumMap ?? undefined }
+}
+
+/** `JsonEnumsInputOutput` read from a JSON body; validate the result with `JsonEnumsInputOutputSchema`. */
+export function decodeJsonEnumsInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'fooEnum1': value['fooEnum1'] ?? undefined, 'fooEnum2': value['fooEnum2'] ?? undefined, 'fooEnum3': value['fooEnum3'] ?? undefined, 'fooEnumList': value['fooEnumList'] ?? undefined, 'fooEnumSet': value['fooEnumSet'] ?? undefined, 'fooEnumMap': value['fooEnumMap'] ?? undefined }
+}
+
+/** `AllQueryStringTypesInput` as it is written in a JSON body. */
+export function encodeAllQueryStringTypesInput(value: AllQueryStringTypesInput): Record<string, unknown> {
+  return { 'queryString': value.queryString ?? undefined, 'queryStringList': value.queryStringList ?? undefined, 'queryStringSet': value.queryStringSet ?? undefined, 'queryByte': value.queryByte ?? undefined, 'queryShort': value.queryShort ?? undefined, 'queryInteger': value.queryInteger ?? undefined, 'queryIntegerList': value.queryIntegerList ?? undefined, 'queryIntegerSet': value.queryIntegerSet ?? undefined, 'queryLong': value.queryLong ?? undefined, 'queryFloat': value.queryFloat ?? undefined, 'queryDouble': value.queryDouble ?? undefined, 'queryDoubleList': value.queryDoubleList ?? undefined, 'queryBoolean': value.queryBoolean ?? undefined, 'queryBooleanList': value.queryBooleanList ?? undefined, 'queryTimestamp': value.queryTimestamp == null ? undefined : wireEpochSeconds(value.queryTimestamp), 'queryTimestampList': value.queryTimestampList == null ? undefined : encodeTimestampList(value.queryTimestampList), 'queryEnum': value.queryEnum ?? undefined, 'queryEnumList': value.queryEnumList ?? undefined, 'queryIntegerEnum': value.queryIntegerEnum ?? undefined, 'queryIntegerEnumList': value.queryIntegerEnumList ?? undefined, 'queryParamsMapOfStringList': value.queryParamsMapOfStringList ?? undefined }
+}
+
+/** `AllQueryStringTypesInput` read from a JSON body; validate the result with `AllQueryStringTypesInputSchema`. */
+export function decodeAllQueryStringTypesInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'queryString': value['queryString'] ?? undefined, 'queryStringList': value['queryStringList'] ?? undefined, 'queryStringSet': value['queryStringSet'] ?? undefined, 'queryByte': value['queryByte'] ?? undefined, 'queryShort': value['queryShort'] ?? undefined, 'queryInteger': value['queryInteger'] ?? undefined, 'queryIntegerList': value['queryIntegerList'] ?? undefined, 'queryIntegerSet': value['queryIntegerSet'] ?? undefined, 'queryLong': value['queryLong'] ?? undefined, 'queryFloat': value['queryFloat'] ?? undefined, 'queryDouble': value['queryDouble'] ?? undefined, 'queryDoubleList': value['queryDoubleList'] ?? undefined, 'queryBoolean': value['queryBoolean'] ?? undefined, 'queryBooleanList': value['queryBooleanList'] ?? undefined, 'queryTimestamp': value['queryTimestamp'] == null ? undefined : wireTimestamp(value['queryTimestamp']), 'queryTimestampList': value['queryTimestampList'] == null ? undefined : decodeTimestampList(value['queryTimestampList']), 'queryEnum': value['queryEnum'] ?? undefined, 'queryEnumList': value['queryEnumList'] ?? undefined, 'queryIntegerEnum': value['queryIntegerEnum'] ?? undefined, 'queryIntegerEnumList': value['queryIntegerEnumList'] ?? undefined, 'queryParamsMapOfStringList': value['queryParamsMapOfStringList'] ?? undefined }
+}
+
+/** `JsonListsInputOutput` as it is written in a JSON body. */
+export function encodeJsonListsInputOutput(value: JsonListsInputOutput): Record<string, unknown> {
+  return { 'stringList': value.stringList ?? undefined, 'stringSet': value.stringSet ?? undefined, 'integerList': value.integerList ?? undefined, 'booleanList': value.booleanList ?? undefined, 'timestampList': value.timestampList == null ? undefined : encodeTimestampList(value.timestampList), 'enumList': value.enumList ?? undefined, 'intEnumList': value.intEnumList ?? undefined, 'nestedStringList': value.nestedStringList ?? undefined, 'myStructureList': value.structureList == null ? undefined : encodeStructureList(value.structureList) }
+}
+
+/** `JsonListsInputOutput` read from a JSON body; validate the result with `JsonListsInputOutputSchema`. */
+export function decodeJsonListsInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'stringList': value['stringList'] ?? undefined, 'stringSet': value['stringSet'] ?? undefined, 'integerList': value['integerList'] ?? undefined, 'booleanList': value['booleanList'] ?? undefined, 'timestampList': value['timestampList'] == null ? undefined : decodeTimestampList(value['timestampList']), 'enumList': value['enumList'] ?? undefined, 'intEnumList': value['intEnumList'] ?? undefined, 'nestedStringList': value['nestedStringList'] ?? undefined, 'structureList': value['myStructureList'] == null ? undefined : decodeStructureList(value['myStructureList']) }
+}
+
+/** `OmitsSerializingEmptyListsInput` as it is written in a JSON body. */
+export function encodeOmitsSerializingEmptyListsInput(value: OmitsSerializingEmptyListsInput): Record<string, unknown> {
+  return { 'queryStringList': value.queryStringList ?? undefined, 'queryIntegerList': value.queryIntegerList ?? undefined, 'queryDoubleList': value.queryDoubleList ?? undefined, 'queryBooleanList': value.queryBooleanList ?? undefined, 'queryTimestampList': value.queryTimestampList == null ? undefined : encodeTimestampList(value.queryTimestampList), 'queryEnumList': value.queryEnumList ?? undefined, 'queryIntegerEnumList': value.queryIntegerEnumList ?? undefined }
+}
+
+/** `OmitsSerializingEmptyListsInput` read from a JSON body; validate the result with `OmitsSerializingEmptyListsInputSchema`. */
+export function decodeOmitsSerializingEmptyListsInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'queryStringList': value['queryStringList'] ?? undefined, 'queryIntegerList': value['queryIntegerList'] ?? undefined, 'queryDoubleList': value['queryDoubleList'] ?? undefined, 'queryBooleanList': value['queryBooleanList'] ?? undefined, 'queryTimestampList': value['queryTimestampList'] == null ? undefined : decodeTimestampList(value['queryTimestampList']), 'queryEnumList': value['queryEnumList'] ?? undefined, 'queryIntegerEnumList': value['queryIntegerEnumList'] ?? undefined }
+}
+
+/** `JsonIntEnumsInputOutput` as it is written in a JSON body. */
+export function encodeJsonIntEnumsInputOutput(value: JsonIntEnumsInputOutput): Record<string, unknown> {
+  return { 'integerEnum1': value.integerEnum1 ?? undefined, 'integerEnum2': value.integerEnum2 ?? undefined, 'integerEnum3': value.integerEnum3 ?? undefined, 'integerEnumList': value.integerEnumList ?? undefined, 'integerEnumSet': value.integerEnumSet ?? undefined, 'integerEnumMap': value.integerEnumMap ?? undefined }
+}
+
+/** `JsonIntEnumsInputOutput` read from a JSON body; validate the result with `JsonIntEnumsInputOutputSchema`. */
+export function decodeJsonIntEnumsInputOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'integerEnum1': value['integerEnum1'] ?? undefined, 'integerEnum2': value['integerEnum2'] ?? undefined, 'integerEnum3': value['integerEnum3'] ?? undefined, 'integerEnumList': value['integerEnumList'] ?? undefined, 'integerEnumSet': value['integerEnumSet'] ?? undefined, 'integerEnumMap': value['integerEnumMap'] ?? undefined }
+}
+
+export function encodeEvents(value: Events): unknown[] {
+  return value.map((e) => encodeEvent(e))
+}
+
+export function decodeEvents(value: unknown): unknown {
+  return Array.isArray(value) ? value.map((e: unknown) => (e === null ? null : decodeEvent(e))) : value
+}
+
+/** `HttpMalformedRequestTestCase` as it is written in a JSON body. */
+export function encodeHttpMalformedRequestTestCase(value: HttpMalformedRequestTestCase): Record<string, unknown> {
+  return { 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'request': value.request == null ? undefined : encodeHttpMalformedRequestDefinition(value.request), 'response': value.response == null ? undefined : encodeHttpMalformedResponseDefinition(value.response), 'documentation': value.documentation ?? undefined, 'tags': value.tags ?? undefined, 'testParameters': value.testParameters ?? undefined }
+}
+
+/** `HttpMalformedRequestTestCase` read from a JSON body; validate the result with `HttpMalformedRequestTestCaseSchema`. */
+export function decodeHttpMalformedRequestTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'request': value['request'] == null ? undefined : decodeHttpMalformedRequestDefinition(value['request']), 'response': value['response'] == null ? undefined : decodeHttpMalformedResponseDefinition(value['response']), 'documentation': value['documentation'] ?? undefined, 'tags': value['tags'] ?? undefined, 'testParameters': value['testParameters'] ?? undefined }
+}
+
+/** `EventStreamTestCase` as it is written in a JSON body. */
+export function encodeEventStreamTestCase(value: EventStreamTestCase): Record<string, unknown> {
+  return { 'id': value.id ?? undefined, 'protocol': value.protocol ?? undefined, 'initialRequestParams': value.initialRequestParams ?? undefined, 'initialRequest': value.initialRequest ?? undefined, 'initialRequestShape': value.initialRequestShape ?? undefined, 'initialResponseParams': value.initialResponseParams ?? undefined, 'initialResponse': value.initialResponse ?? undefined, 'initialResponseShape': value.initialResponseShape ?? undefined, 'events': value.events == null ? undefined : encodeEvents(value.events), 'expectation': value.expectation == null ? undefined : encodeTestExpectation(value.expectation), 'vendorParams': value.vendorParams ?? undefined, 'vendorParamsShape': value.vendorParamsShape ?? undefined, 'documentation': value.documentation ?? undefined, 'appliesTo': value.appliesTo ?? undefined, 'tags': value.tags ?? undefined }
+}
+
+/** `EventStreamTestCase` read from a JSON body; validate the result with `EventStreamTestCaseSchema`. */
+export function decodeEventStreamTestCase(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'id': value['id'] ?? undefined, 'protocol': value['protocol'] ?? undefined, 'initialRequestParams': value['initialRequestParams'] ?? undefined, 'initialRequest': value['initialRequest'] ?? undefined, 'initialRequestShape': value['initialRequestShape'] ?? undefined, 'initialResponseParams': value['initialResponseParams'] ?? undefined, 'initialResponse': value['initialResponse'] ?? undefined, 'initialResponseShape': value['initialResponseShape'] ?? undefined, 'events': value['events'] == null ? undefined : decodeEvents(value['events']), 'expectation': value['expectation'] == null ? undefined : decodeTestExpectation(value['expectation']), 'vendorParams': value['vendorParams'] ?? undefined, 'vendorParamsShape': value['vendorParamsShape'] ?? undefined, 'documentation': value['documentation'] ?? undefined, 'appliesTo': value['appliesTo'] ?? undefined, 'tags': value['tags'] ?? undefined }
+}
+
+
 // --- Transport ---
 
 /** Per-operation transport options. The generator threads these straight
@@ -1015,7 +2074,8 @@ export interface TransportRequest {
   operation: string
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   url: string
-  query?: Record<string, string | number | boolean | undefined>
+  /** A list value is sent as the parameter repeated, once per element. */
+  query?: Record<string, string | number | boolean | readonly string[] | undefined>
   headers?: Record<string, string>
   body?: unknown
   options?: TransportOptions
@@ -1069,6 +2129,178 @@ export class UnauthenticatedError extends Error {
 }
 
 
+// --- Response decoding ---
+
+/** `ComplexError` read from a response: its body, headers and status. */
+export function decodeComplexErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): ComplexError {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return ComplexErrorSchema.parse({ 'Header': res.headers['x-header'] === undefined ? undefined : res.headers['x-header'], 'TopLevel': body['TopLevel'] ?? undefined, 'Nested': body['Nested'] == null ? undefined : decodeComplexNestedErrorData(body['Nested']) }) as ComplexError
+}
+
+/** `DatetimeOffsetsOutput` read from a response: its body, headers and status. */
+export function decodeDatetimeOffsetsOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): DatetimeOffsetsOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return DatetimeOffsetsOutputSchema.parse({ 'datetime': body['datetime'] == null ? undefined : wireTimestamp(body['datetime']) }) as DatetimeOffsetsOutput
+}
+
+/** `DocumentTypeAsPayloadInputOutput` read from a response: its body, headers and status. */
+export function decodeDocumentTypeAsPayloadInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): DocumentTypeAsPayloadInputOutput {
+  return DocumentTypeAsPayloadInputOutputSchema.parse({ 'documentValue': res.body == null ? undefined : res.body }) as DocumentTypeAsPayloadInputOutput
+}
+
+/** `DocumentTypeInputOutput` read from a response: its body, headers and status. */
+export function decodeDocumentTypeInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): DocumentTypeInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return DocumentTypeInputOutputSchema.parse({ 'stringValue': body['stringValue'] ?? undefined, 'documentValue': body['documentValue'] ?? undefined }) as DocumentTypeInputOutput
+}
+
+/** `EmptyInputAndEmptyOutputOutput` read from a response: its body, headers and status. */
+export function decodeEmptyInputAndEmptyOutputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): EmptyInputAndEmptyOutputOutput {
+  return EmptyInputAndEmptyOutputOutputSchema.parse({  }) as EmptyInputAndEmptyOutputOutput
+}
+
+/** `FooError` read from a response: its body, headers and status. */
+export function decodeFooErrorResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): FooError {
+  return FooErrorSchema.parse({  }) as FooError
+}
+
+/** `FractionalSecondsOutput` read from a response: its body, headers and status. */
+export function decodeFractionalSecondsOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): FractionalSecondsOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return FractionalSecondsOutputSchema.parse({ 'datetime': body['datetime'] == null ? undefined : wireTimestamp(body['datetime']) }) as FractionalSecondsOutput
+}
+
+/** `GreetingWithErrorsOutput` read from a response: its body, headers and status. */
+export function decodeGreetingWithErrorsOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): GreetingWithErrorsOutput {
+  return GreetingWithErrorsOutputSchema.parse({ 'greeting': res.headers['x-greeting'] === undefined ? undefined : res.headers['x-greeting'] }) as GreetingWithErrorsOutput
+}
+
+/** `HttpPayloadWithStructureInputOutput` read from a response: its body, headers and status. */
+export function decodeHttpPayloadWithStructureInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HttpPayloadWithStructureInputOutput {
+  return HttpPayloadWithStructureInputOutputSchema.parse({ 'nested': res.body == null ? undefined : decodeNestedPayload(res.body) }) as HttpPayloadWithStructureInputOutput
+}
+
+/** `HttpPrefixHeadersInResponseOutput` read from a response: its body, headers and status. */
+export function decodeHttpPrefixHeadersInResponseOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HttpPrefixHeadersInResponseOutput {
+  return HttpPrefixHeadersInResponseOutputSchema.parse({ 'prefixHeaders': wirePrefixHeaders(res.headers, '') }) as HttpPrefixHeadersInResponseOutput
+}
+
+/** `HttpPrefixHeadersOutput` read from a response: its body, headers and status. */
+export function decodeHttpPrefixHeadersOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HttpPrefixHeadersOutput {
+  return HttpPrefixHeadersOutputSchema.parse({ 'foo': res.headers['x-foo'] === undefined ? undefined : res.headers['x-foo'], 'fooMap': wirePrefixHeaders(res.headers, 'x-foo-') }) as HttpPrefixHeadersOutput
+}
+
+/** `HttpResponseCodeOutput` read from a response: its body, headers and status. */
+export function decodeHttpResponseCodeOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): HttpResponseCodeOutput {
+  return HttpResponseCodeOutputSchema.parse({ 'Status': res.status }) as HttpResponseCodeOutput
+}
+
+/** `IgnoreQueryParamsInResponseOutput` read from a response: its body, headers and status. */
+export function decodeIgnoreQueryParamsInResponseOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): IgnoreQueryParamsInResponseOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return IgnoreQueryParamsInResponseOutputSchema.parse({ 'baz': body['baz'] ?? undefined }) as IgnoreQueryParamsInResponseOutput
+}
+
+/** `InvalidGreeting` read from a response: its body, headers and status. */
+export function decodeInvalidGreetingResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): InvalidGreeting {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return InvalidGreetingSchema.parse({ 'Message': body['Message'] ?? undefined }) as InvalidGreeting
+}
+
+/** `JsonBlobsInputOutput` read from a response: its body, headers and status. */
+export function decodeJsonBlobsInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): JsonBlobsInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return JsonBlobsInputOutputSchema.parse({ 'data': body['data'] ?? undefined }) as JsonBlobsInputOutput
+}
+
+/** `JsonEnumsInputOutput` read from a response: its body, headers and status. */
+export function decodeJsonEnumsInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): JsonEnumsInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return JsonEnumsInputOutputSchema.parse({ 'fooEnum1': body['fooEnum1'] ?? undefined, 'fooEnum2': body['fooEnum2'] ?? undefined, 'fooEnum3': body['fooEnum3'] ?? undefined, 'fooEnumList': body['fooEnumList'] ?? undefined, 'fooEnumSet': body['fooEnumSet'] ?? undefined, 'fooEnumMap': body['fooEnumMap'] ?? undefined }) as JsonEnumsInputOutput
+}
+
+/** `JsonIntEnumsInputOutput` read from a response: its body, headers and status. */
+export function decodeJsonIntEnumsInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): JsonIntEnumsInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return JsonIntEnumsInputOutputSchema.parse({ 'integerEnum1': body['integerEnum1'] ?? undefined, 'integerEnum2': body['integerEnum2'] ?? undefined, 'integerEnum3': body['integerEnum3'] ?? undefined, 'integerEnumList': body['integerEnumList'] ?? undefined, 'integerEnumSet': body['integerEnumSet'] ?? undefined, 'integerEnumMap': body['integerEnumMap'] ?? undefined }) as JsonIntEnumsInputOutput
+}
+
+/** `JsonListsInputOutput` read from a response: its body, headers and status. */
+export function decodeJsonListsInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): JsonListsInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return JsonListsInputOutputSchema.parse({ 'stringList': body['stringList'] ?? undefined, 'stringSet': body['stringSet'] ?? undefined, 'integerList': body['integerList'] ?? undefined, 'booleanList': body['booleanList'] ?? undefined, 'timestampList': body['timestampList'] == null ? undefined : decodeTimestampList(body['timestampList']), 'enumList': body['enumList'] ?? undefined, 'intEnumList': body['intEnumList'] ?? undefined, 'nestedStringList': body['nestedStringList'] ?? undefined, 'structureList': body['myStructureList'] == null ? undefined : decodeStructureList(body['myStructureList']) }) as JsonListsInputOutput
+}
+
+/** `JsonMapsInputOutput` read from a response: its body, headers and status. */
+export function decodeJsonMapsInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): JsonMapsInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return JsonMapsInputOutputSchema.parse({ 'denseStructMap': body['denseStructMap'] == null ? undefined : decodeDenseStructMap(body['denseStructMap']), 'denseNumberMap': body['denseNumberMap'] ?? undefined, 'denseBooleanMap': body['denseBooleanMap'] ?? undefined, 'denseStringMap': body['denseStringMap'] ?? undefined, 'denseSetMap': body['denseSetMap'] ?? undefined }) as JsonMapsInputOutput
+}
+
+/** `JsonTimestampsInputOutput` read from a response: its body, headers and status. */
+export function decodeJsonTimestampsInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): JsonTimestampsInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return JsonTimestampsInputOutputSchema.parse({ 'normal': body['normal'] == null ? undefined : wireTimestamp(body['normal']), 'dateTime': body['dateTime'] == null ? undefined : wireTimestamp(body['dateTime']), 'dateTimeOnTarget': body['dateTimeOnTarget'] == null ? undefined : wireTimestamp(body['dateTimeOnTarget']), 'epochSeconds': body['epochSeconds'] == null ? undefined : wireTimestamp(body['epochSeconds']), 'epochSecondsOnTarget': body['epochSecondsOnTarget'] == null ? undefined : wireTimestamp(body['epochSecondsOnTarget']), 'httpDate': body['httpDate'] == null ? undefined : wireTimestamp(body['httpDate']), 'httpDateOnTarget': body['httpDateOnTarget'] == null ? undefined : wireTimestamp(body['httpDateOnTarget']) }) as JsonTimestampsInputOutput
+}
+
+/** `NoInputAndOutputOutput` read from a response: its body, headers and status. */
+export function decodeNoInputAndOutputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): NoInputAndOutputOutput {
+  return NoInputAndOutputOutputSchema.parse({  }) as NoInputAndOutputOutput
+}
+
+/** `PostPlayerActionOutput` read from a response: its body, headers and status. */
+export function decodePostPlayerActionOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): PostPlayerActionOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return PostPlayerActionOutputSchema.parse({ 'action': body['action'] == null ? undefined : decodePlayerAction(body['action']) }) as PostPlayerActionOutput
+}
+
+/** `PostUnionWithJsonNameOutput` read from a response: its body, headers and status. */
+export function decodePostUnionWithJsonNameOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): PostUnionWithJsonNameOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return PostUnionWithJsonNameOutputSchema.parse({ 'value': body['value'] == null ? undefined : decodeUnionWithJsonName(body['value']) }) as PostUnionWithJsonNameOutput
+}
+
+/** `RecursiveShapesInputOutput` read from a response: its body, headers and status. */
+export function decodeRecursiveShapesInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): RecursiveShapesInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return RecursiveShapesInputOutputSchema.parse({ 'nested': body['nested'] == null ? undefined : decodeRecursiveShapesInputOutputNested1(body['nested']) }) as RecursiveShapesInputOutput
+}
+
+/** `SimpleScalarPropertiesInputOutput` read from a response: its body, headers and status. */
+export function decodeSimpleScalarPropertiesInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): SimpleScalarPropertiesInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return SimpleScalarPropertiesInputOutputSchema.parse({ 'foo': res.headers['x-foo'] === undefined ? undefined : res.headers['x-foo'], 'stringValue': body['stringValue'] ?? undefined, 'trueBooleanValue': body['trueBooleanValue'] ?? undefined, 'falseBooleanValue': body['falseBooleanValue'] ?? undefined, 'byteValue': body['byteValue'] ?? undefined, 'shortValue': body['shortValue'] ?? undefined, 'integerValue': body['integerValue'] ?? undefined, 'longValue': body['longValue'] ?? undefined, 'floatValue': body['floatValue'] ?? undefined, 'doubleValue': body['DoubleDribble'] ?? undefined }) as SimpleScalarPropertiesInputOutput
+}
+
+/** `SparseJsonMapsInputOutput` read from a response: its body, headers and status. */
+export function decodeSparseJsonMapsInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): SparseJsonMapsInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return SparseJsonMapsInputOutputSchema.parse({ 'sparseStructMap': body['sparseStructMap'] == null ? undefined : decodeSparseStructMap(body['sparseStructMap']), 'sparseNumberMap': body['sparseNumberMap'] ?? undefined, 'sparseBooleanMap': body['sparseBooleanMap'] ?? undefined, 'sparseStringMap': body['sparseStringMap'] ?? undefined, 'sparseSetMap': body['sparseSetMap'] ?? undefined }) as SparseJsonMapsInputOutput
+}
+
+/** `TestBodyStructureInputOutput` read from a response: its body, headers and status. */
+export function decodeTestBodyStructureInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): TestBodyStructureInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return TestBodyStructureInputOutputSchema.parse({ 'testId': res.headers['x-amz-test-id'] === undefined ? undefined : res.headers['x-amz-test-id'], 'testConfig': body['testConfig'] == null ? undefined : decodeTestConfig(body['testConfig']) }) as TestBodyStructureInputOutput
+}
+
+/** `TestPayloadStructureInputOutput` read from a response: its body, headers and status. */
+export function decodeTestPayloadStructureInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): TestPayloadStructureInputOutput {
+  return TestPayloadStructureInputOutputSchema.parse({ 'testId': res.headers['x-amz-test-id'] === undefined ? undefined : res.headers['x-amz-test-id'], 'payloadConfig': res.body == null ? undefined : decodePayloadConfig(res.body) }) as TestPayloadStructureInputOutput
+}
+
+/** `TimestampFormatHeadersIO` read from a response: its body, headers and status. */
+export function decodeTimestampFormatHeadersIOResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): TimestampFormatHeadersIO {
+  return TimestampFormatHeadersIOSchema.parse({ 'memberEpochSeconds': res.headers['x-memberepochseconds'] === undefined ? undefined : wireTimestamp(res.headers['x-memberepochseconds']), 'memberHttpDate': res.headers['x-memberhttpdate'] === undefined ? undefined : wireTimestamp(res.headers['x-memberhttpdate']), 'memberDateTime': res.headers['x-memberdatetime'] === undefined ? undefined : wireTimestamp(res.headers['x-memberdatetime']), 'defaultFormat': res.headers['x-defaultformat'] === undefined ? undefined : wireTimestamp(res.headers['x-defaultformat']), 'targetEpochSeconds': res.headers['x-targetepochseconds'] === undefined ? undefined : wireTimestamp(res.headers['x-targetepochseconds']), 'targetHttpDate': res.headers['x-targethttpdate'] === undefined ? undefined : wireTimestamp(res.headers['x-targethttpdate']), 'targetDateTime': res.headers['x-targetdatetime'] === undefined ? undefined : wireTimestamp(res.headers['x-targetdatetime']) }) as TimestampFormatHeadersIO
+}
+
+/** `UnionInputOutput` read from a response: its body, headers and status. */
+export function decodeUnionInputOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): UnionInputOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return UnionInputOutputSchema.parse({ 'contents': body['contents'] == null ? undefined : decodeMyUnion(body['contents']) }) as UnionInputOutput
+}
+
+
 // --- Service clients ---
 
 export class RestJsonClient {
@@ -1080,33 +2312,34 @@ export class RestJsonClient {
   /** This example uses all query string types. */
   async allQueryStringTypes(input: AllQueryStringTypesInput, opts?: TransportOptions): Promise<void> {
     const url = `/AllQueryStringTypesInput`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const query: Record<string, string | readonly string[] | undefined> = {}
+    if (input.queryParamsMapOfStringList !== undefined) for (const [k, v] of Object.entries(input.queryParamsMapOfStringList)) query[k] = v
     if (input.queryString !== undefined) query['String'] = String(input.queryString)
-    if (input.queryStringList !== undefined) query['StringList'] = String(input.queryStringList)
-    if (input.queryStringSet !== undefined) query['StringSet'] = String(input.queryStringSet)
-    if (input.queryByte !== undefined) query['Byte'] = input.queryByte
-    if (input.queryShort !== undefined) query['Short'] = input.queryShort
-    if (input.queryInteger !== undefined) query['Integer'] = input.queryInteger
-    if (input.queryIntegerList !== undefined) query['IntegerList'] = String(input.queryIntegerList)
-    if (input.queryIntegerSet !== undefined) query['IntegerSet'] = String(input.queryIntegerSet)
-    if (input.queryLong !== undefined) query['Long'] = input.queryLong
-    if (input.queryFloat !== undefined) query['Float'] = input.queryFloat
-    if (input.queryDouble !== undefined) query['Double'] = input.queryDouble
-    if (input.queryDoubleList !== undefined) query['DoubleList'] = String(input.queryDoubleList)
-    if (input.queryBoolean !== undefined) query['Boolean'] = input.queryBoolean
-    if (input.queryBooleanList !== undefined) query['BooleanList'] = String(input.queryBooleanList)
-    if (input.queryTimestamp !== undefined) query['Timestamp'] = input.queryTimestamp.toISOString()
-    if (input.queryTimestampList !== undefined) query['TimestampList'] = String(input.queryTimestampList)
+    if (input.queryStringList !== undefined) query['StringList'] = input.queryStringList.map((e) => String(e))
+    if (input.queryStringSet !== undefined) query['StringSet'] = input.queryStringSet.map((e) => String(e))
+    if (input.queryByte !== undefined) query['Byte'] = String(input.queryByte)
+    if (input.queryShort !== undefined) query['Short'] = String(input.queryShort)
+    if (input.queryInteger !== undefined) query['Integer'] = String(input.queryInteger)
+    if (input.queryIntegerList !== undefined) query['IntegerList'] = input.queryIntegerList.map((e) => String(e))
+    if (input.queryIntegerSet !== undefined) query['IntegerSet'] = input.queryIntegerSet.map((e) => String(e))
+    if (input.queryLong !== undefined) query['Long'] = String(input.queryLong)
+    if (input.queryFloat !== undefined) query['Float'] = String(input.queryFloat)
+    if (input.queryDouble !== undefined) query['Double'] = String(input.queryDouble)
+    if (input.queryDoubleList !== undefined) query['DoubleList'] = input.queryDoubleList.map((e) => String(e))
+    if (input.queryBoolean !== undefined) query['Boolean'] = String(input.queryBoolean)
+    if (input.queryBooleanList !== undefined) query['BooleanList'] = input.queryBooleanList.map((e) => String(e))
+    if (input.queryTimestamp !== undefined) query['Timestamp'] = wireDateTime(input.queryTimestamp)
+    if (input.queryTimestampList !== undefined) query['TimestampList'] = input.queryTimestampList.map((e) => wireDateTime(e))
     if (input.queryEnum !== undefined) query['Enum'] = String(input.queryEnum)
-    if (input.queryEnumList !== undefined) query['EnumList'] = String(input.queryEnumList)
-    if (input.queryIntegerEnum !== undefined) query['IntegerEnum'] = input.queryIntegerEnum
-    if (input.queryIntegerEnumList !== undefined) query['IntegerEnumList'] = String(input.queryIntegerEnumList)
+    if (input.queryEnumList !== undefined) query['EnumList'] = input.queryEnumList.map((e) => String(e))
+    if (input.queryIntegerEnum !== undefined) query['IntegerEnum'] = String(input.queryIntegerEnum)
+    if (input.queryIntegerEnumList !== undefined) query['IntegerEnumList'] = input.queryIntegerEnumList.map((e) => String(e))
     const res = await this.transport.request({
       operation: 'RestJsonClient.allQueryStringTypes',
       method: 'GET',
       url,
       query,
-      body: { queryParamsMapOfStringList: input.queryParamsMapOfStringList },
+      body: undefined,
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
@@ -1117,8 +2350,8 @@ export class RestJsonClient {
 
   /** This example uses fixed query string params and variable query string params. The fixed query string parameters and variable parameters must both be serialized (implementations may need to merge them together). */
   async constantAndVariableQueryString(input: ConstantAndVariableQueryStringInput, opts?: TransportOptions): Promise<void> {
-    const url = `/ConstantAndVariableQueryString`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const url = `/ConstantAndVariableQueryString?foo=bar`
+    const query: Record<string, string | readonly string[] | undefined> = {}
     if (input.baz !== undefined) query['baz'] = String(input.baz)
     if (input.maybeSet !== undefined) query['maybeSet'] = String(input.maybeSet)
     const res = await this.transport.request({
@@ -1137,7 +2370,7 @@ export class RestJsonClient {
 
   /** This example uses a constant query string parameters and a label. This simply tests that labels and query string parameters are compatible. The fixed query string parameter named "hello" should in no way conflict with the label, `{hello}`. */
   async constantQueryString(input: ConstantQueryStringInput, opts?: TransportOptions): Promise<void> {
-    const url = `/ConstantQueryString/${encodeURIComponent(String(input.hello))}`
+    const url = `/ConstantQueryString/${wireEncodeLabel(String(input.hello))}?foo=bar&hello`
     const res = await this.transport.request({
       operation: 'RestJsonClient.constantQueryString',
       method: 'GET',
@@ -1161,7 +2394,7 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return DatetimeOffsetsOutputSchema.parse(res.body)
+      return decodeDatetimeOffsetsOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.datetimeOffsets', res.status, res.body, res.headers)
   }
@@ -1173,11 +2406,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.documentType',
       method: 'PUT',
       url,
-      body: { stringValue: input.stringValue, documentValue: input.documentValue },
+      body: { 'stringValue': input.stringValue ?? undefined, 'documentValue': input.documentValue ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return DocumentTypeInputOutputSchema.parse(res.body)
+      return decodeDocumentTypeInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.documentType', res.status, res.body, res.headers)
   }
@@ -1189,11 +2422,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.documentTypeAsPayload',
       method: 'PUT',
       url,
-      body: input.documentValue,
+      body: input.documentValue === undefined ? undefined : input.documentValue,
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { documentValue: DocumentSchema.parse(res.body) }
+      return decodeDocumentTypeAsPayloadInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.documentTypeAsPayload', res.status, res.body, res.headers)
   }
@@ -1209,7 +2442,7 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return EmptyInputAndEmptyOutputOutputSchema.parse(res.body)
+      return decodeEmptyInputAndEmptyOutputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.emptyInputAndEmptyOutput', res.status, res.body, res.headers)
   }
@@ -1235,7 +2468,7 @@ export class RestJsonClient {
       operation: 'RestJsonClient.endpointWithHostLabelOperation',
       method: 'POST',
       url,
-      body: { label: input.label },
+      body: { 'label': input.label ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
@@ -1254,7 +2487,7 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return FractionalSecondsOutputSchema.parse(res.body)
+      return decodeFractionalSecondsOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.fractionalSeconds', res.status, res.body, res.headers)
   }
@@ -1270,20 +2503,16 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(GreetingWithErrorsOutputSchema.omit({ 'greeting': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-greeting'] !== undefined) {
-        raw['greeting'] = res.headers['x-greeting']
-      }
-      return GreetingWithErrorsOutputSchema.parse(raw) as GreetingWithErrorsOutput
+      return decodeGreetingWithErrorsOutputResponse(res)
     }
     if (res.status === 400) {
-      throw new InvalidGreetingError(InvalidGreetingSchema.parse(res.body))
+      throw new InvalidGreetingError(decodeInvalidGreetingResponse(res))
     }
     if (res.status === 403) {
-      throw new ComplexErrorError(ComplexErrorSchema.parse(res.body))
+      throw new ComplexErrorError(decodeComplexErrorResponse(res))
     }
     if (res.status === 500) {
-      throw new FooErrorError(FooErrorSchema.parse(res.body))
+      throw new FooErrorError(decodeFooErrorResponse(res))
     }
     throw new UnexpectedResponseError('RestJsonClient.greetingWithErrors', res.status, res.body, res.headers)
   }
@@ -1310,11 +2539,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.httpPayloadWithStructure',
       method: 'PUT',
       url,
-      body: input.nested,
+      body: input.nested === undefined ? undefined : encodeNestedPayload(input.nested),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return { nested: NestedPayloadSchema.parse(res.body) }
+      return decodeHttpPayloadWithStructureInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.httpPayloadWithStructure', res.status, res.body, res.headers)
   }
@@ -1323,21 +2552,18 @@ export class RestJsonClient {
   async httpPrefixHeaders(input: HttpPrefixHeadersInput, opts?: TransportOptions): Promise<HttpPrefixHeadersOutput> {
     const url = `/HttpPrefixHeaders`
     const headers: Record<string, string> = {}
+    if (input.fooMap !== undefined) for (const [k, v] of Object.entries(input.fooMap)) headers['x-foo-' + k] = v
     if (input.foo !== undefined) headers['x-foo'] = String(input.foo)
     const res = await this.transport.request({
       operation: 'RestJsonClient.httpPrefixHeaders',
       method: 'GET',
       url,
       headers,
-      body: { fooMap: input.fooMap },
+      body: undefined,
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(HttpPrefixHeadersOutputSchema.omit({ 'foo': true, 'fooMap': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-foo'] !== undefined) {
-        raw['foo'] = res.headers['x-foo']
-      }
-      return HttpPrefixHeadersOutputSchema.parse(raw) as HttpPrefixHeadersOutput
+      return decodeHttpPrefixHeadersOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.httpPrefixHeaders', res.status, res.body, res.headers)
   }
@@ -1353,28 +2579,13 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return HttpPrefixHeadersInResponseOutputSchema.omit({ 'prefixHeaders': true }).parse(res.body)
+      return decodeHttpPrefixHeadersInResponseOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.httpPrefixHeadersInResponse', res.status, res.body, res.headers)
   }
 
-  async httpRequestWithFloatLabels(input: HttpRequestWithFloatLabelsInput, opts?: TransportOptions): Promise<void> {
-    const url = `/FloatHttpLabels/${encodeURIComponent(String(input.float))}/${encodeURIComponent(String(input.double))}`
-    const res = await this.transport.request({
-      operation: 'RestJsonClient.httpRequestWithFloatLabels',
-      method: 'GET',
-      url,
-      body: undefined,
-      options: opts,
-    })
-    if (res.status >= 200 && res.status < 300) {
-      return undefined
-    }
-    throw new UnexpectedResponseError('RestJsonClient.httpRequestWithFloatLabels', res.status, res.body, res.headers)
-  }
-
   async httpRequestWithGreedyLabelInPath(input: HttpRequestWithGreedyLabelInPathInput, opts?: TransportOptions): Promise<void> {
-    const url = `/HttpRequestWithGreedyLabelInPath/foo/${encodeURIComponent(String(input.foo))}/baz/${encodeURIComponent(String(input.baz))}`
+    const url = `/HttpRequestWithGreedyLabelInPath/foo/${wireEncodeLabel(String(input.foo))}/baz/${wireEncodeGreedyLabel(String(input.baz))}`
     const res = await this.transport.request({
       operation: 'RestJsonClient.httpRequestWithGreedyLabelInPath',
       method: 'GET',
@@ -1390,7 +2601,7 @@ export class RestJsonClient {
 
   /** The example tests how requests are serialized when there's no input payload but there are HTTP labels. */
   async httpRequestWithLabels(input: HttpRequestWithLabelsInput, opts?: TransportOptions): Promise<void> {
-    const url = `/HttpRequestWithLabels/${encodeURIComponent(String(input.string))}/${encodeURIComponent(String(input.short))}/${encodeURIComponent(String(input.integer))}/${encodeURIComponent(String(input.long))}/${encodeURIComponent(String(input.float))}/${encodeURIComponent(String(input.double))}/${encodeURIComponent(String(input.boolean))}/${encodeURIComponent(String(input.timestamp))}`
+    const url = `/HttpRequestWithLabels/${wireEncodeLabel(String(input.string))}/${wireEncodeLabel(String(input.short))}/${wireEncodeLabel(String(input.integer))}/${wireEncodeLabel(String(input.long))}/${wireEncodeLabel(String(input.float))}/${wireEncodeLabel(String(input.double))}/${wireEncodeLabel(String(input.boolean))}/${wireEncodeLabel(wireDateTime(input.timestamp))}`
     const res = await this.transport.request({
       operation: 'RestJsonClient.httpRequestWithLabels',
       method: 'GET',
@@ -1406,7 +2617,7 @@ export class RestJsonClient {
 
   /** The example tests how requests serialize different timestamp formats in the URI path. */
   async httpRequestWithLabelsAndTimestampFormat(input: HttpRequestWithLabelsAndTimestampFormatInput, opts?: TransportOptions): Promise<void> {
-    const url = `/HttpRequestWithLabelsAndTimestampFormat/${encodeURIComponent(String(input.memberEpochSeconds))}/${encodeURIComponent(String(input.memberHttpDate))}/${encodeURIComponent(String(input.memberDateTime))}/${encodeURIComponent(String(input.defaultFormat))}/${encodeURIComponent(String(input.targetEpochSeconds))}/${encodeURIComponent(String(input.targetHttpDate))}/${encodeURIComponent(String(input.targetDateTime))}`
+    const url = `/HttpRequestWithLabelsAndTimestampFormat/${wireEncodeLabel(String(wireEpochSeconds(input.memberEpochSeconds)))}/${wireEncodeLabel(wireHttpDate(input.memberHttpDate))}/${wireEncodeLabel(wireDateTime(input.memberDateTime))}/${wireEncodeLabel(wireDateTime(input.defaultFormat))}/${wireEncodeLabel(String(wireEpochSeconds(input.targetEpochSeconds)))}/${wireEncodeLabel(wireHttpDate(input.targetHttpDate))}/${wireEncodeLabel(wireDateTime(input.targetDateTime))}`
     const res = await this.transport.request({
       operation: 'RestJsonClient.httpRequestWithLabelsAndTimestampFormat',
       method: 'GET',
@@ -1421,7 +2632,7 @@ export class RestJsonClient {
   }
 
   async httpRequestWithRegexLiteral(input: HttpRequestWithRegexLiteralInput, opts?: TransportOptions): Promise<void> {
-    const url = `/ReDosLiteral/${encodeURIComponent(String(input.str))}/(a+)+`
+    const url = `/ReDosLiteral/${wireEncodeLabel(String(input.str))}/(a+)+`
     const res = await this.transport.request({
       operation: 'RestJsonClient.httpRequestWithRegexLiteral',
       method: 'GET',
@@ -1444,10 +2655,8 @@ export class RestJsonClient {
       body: undefined,
       options: opts,
     })
-    if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(HttpResponseCodeOutputSchema.omit({ 'Status': true }).parse(res.body) as Record<string, unknown>) }
-      raw['Status'] = res.status
-      return HttpResponseCodeOutputSchema.parse(raw) as HttpResponseCodeOutput
+    if (res.status >= 200 && res.status < 400) {
+      return decodeHttpResponseCodeOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.httpResponseCode', res.status, res.body, res.headers)
   }
@@ -1463,100 +2672,9 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return IgnoreQueryParamsInResponseOutputSchema.omit({ 'baz': true }).parse(res.body)
+      return decodeIgnoreQueryParamsInResponseOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.ignoreQueryParamsInResponse', res.status, res.body, res.headers)
-  }
-
-  /** The example tests how requests and responses are serialized when there is no input or output payload but there are HTTP header bindings. */
-  async inputAndOutputWithHeaders(input: InputAndOutputWithHeadersIO, opts?: TransportOptions): Promise<InputAndOutputWithHeadersIO> {
-    const url = `/InputAndOutputWithHeaders`
-    const headers: Record<string, string> = {}
-    if (input.headerString !== undefined) headers['X-String'] = String(input.headerString)
-    if (input.headerByte !== undefined) headers['X-Byte'] = String(input.headerByte)
-    if (input.headerShort !== undefined) headers['X-Short'] = String(input.headerShort)
-    if (input.headerInteger !== undefined) headers['X-Integer'] = String(input.headerInteger)
-    if (input.headerLong !== undefined) headers['X-Long'] = String(input.headerLong)
-    if (input.headerFloat !== undefined) headers['X-Float'] = String(input.headerFloat)
-    if (input.headerDouble !== undefined) headers['X-Double'] = String(input.headerDouble)
-    if (input.headerTrueBool !== undefined) headers['X-Boolean1'] = String(input.headerTrueBool)
-    if (input.headerFalseBool !== undefined) headers['X-Boolean2'] = String(input.headerFalseBool)
-    if (input.headerStringList !== undefined) headers['X-StringList'] = String(input.headerStringList)
-    if (input.headerStringSet !== undefined) headers['X-StringSet'] = String(input.headerStringSet)
-    if (input.headerIntegerList !== undefined) headers['X-IntegerList'] = String(input.headerIntegerList)
-    if (input.headerBooleanList !== undefined) headers['X-BooleanList'] = String(input.headerBooleanList)
-    if (input.headerTimestampList !== undefined) headers['X-TimestampList'] = String(input.headerTimestampList)
-    if (input.headerEnum !== undefined) headers['X-Enum'] = String(input.headerEnum)
-    if (input.headerEnumList !== undefined) headers['X-EnumList'] = String(input.headerEnumList)
-    if (input.headerIntegerEnum !== undefined) headers['X-IntegerEnum'] = String(input.headerIntegerEnum)
-    if (input.headerIntegerEnumList !== undefined) headers['X-IntegerEnumList'] = String(input.headerIntegerEnumList)
-    const res = await this.transport.request({
-      operation: 'RestJsonClient.inputAndOutputWithHeaders',
-      method: 'POST',
-      url,
-      headers,
-      body: undefined,
-      options: opts,
-    })
-    if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(InputAndOutputWithHeadersIOSchema.omit({ 'headerBooleanList': true, 'headerByte': true, 'headerDouble': true, 'headerEnum': true, 'headerEnumList': true, 'headerFalseBool': true, 'headerFloat': true, 'headerInteger': true, 'headerIntegerEnum': true, 'headerIntegerEnumList': true, 'headerIntegerList': true, 'headerLong': true, 'headerShort': true, 'headerString': true, 'headerStringList': true, 'headerStringSet': true, 'headerTimestampList': true, 'headerTrueBool': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-string'] !== undefined) {
-        raw['headerString'] = res.headers['x-string']
-      }
-      if (res.headers['x-byte'] !== undefined) {
-        raw['headerByte'] = Number(res.headers['x-byte'])
-      }
-      if (res.headers['x-short'] !== undefined) {
-        raw['headerShort'] = Number(res.headers['x-short'])
-      }
-      if (res.headers['x-integer'] !== undefined) {
-        raw['headerInteger'] = Number(res.headers['x-integer'])
-      }
-      if (res.headers['x-long'] !== undefined) {
-        raw['headerLong'] = Number(res.headers['x-long'])
-      }
-      if (res.headers['x-float'] !== undefined) {
-        raw['headerFloat'] = Number(res.headers['x-float'])
-      }
-      if (res.headers['x-double'] !== undefined) {
-        raw['headerDouble'] = Number(res.headers['x-double'])
-      }
-      if (res.headers['x-boolean1'] !== undefined) {
-        raw['headerTrueBool'] = (res.headers['x-boolean1'] === 'true')
-      }
-      if (res.headers['x-boolean2'] !== undefined) {
-        raw['headerFalseBool'] = (res.headers['x-boolean2'] === 'true')
-      }
-      if (res.headers['x-stringlist'] !== undefined) {
-        raw['headerStringList'] = res.headers['x-stringlist']
-      }
-      if (res.headers['x-stringset'] !== undefined) {
-        raw['headerStringSet'] = res.headers['x-stringset']
-      }
-      if (res.headers['x-integerlist'] !== undefined) {
-        raw['headerIntegerList'] = res.headers['x-integerlist']
-      }
-      if (res.headers['x-booleanlist'] !== undefined) {
-        raw['headerBooleanList'] = res.headers['x-booleanlist']
-      }
-      if (res.headers['x-timestamplist'] !== undefined) {
-        raw['headerTimestampList'] = res.headers['x-timestamplist']
-      }
-      if (res.headers['x-enum'] !== undefined) {
-        raw['headerEnum'] = res.headers['x-enum']
-      }
-      if (res.headers['x-enumlist'] !== undefined) {
-        raw['headerEnumList'] = res.headers['x-enumlist']
-      }
-      if (res.headers['x-integerenum'] !== undefined) {
-        raw['headerIntegerEnum'] = Number(res.headers['x-integerenum'])
-      }
-      if (res.headers['x-integerenumlist'] !== undefined) {
-        raw['headerIntegerEnumList'] = res.headers['x-integerenumlist']
-      }
-      return InputAndOutputWithHeadersIOSchema.parse(raw) as InputAndOutputWithHeadersIO
-    }
-    throw new UnexpectedResponseError('RestJsonClient.inputAndOutputWithHeaders', res.status, res.body, res.headers)
   }
 
   /** Blobs are base64 encoded */
@@ -1566,11 +2684,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.jsonBlobs',
       method: 'POST',
       url,
-      body: { data: input.data },
+      body: { 'data': input.data ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return JsonBlobsInputOutputSchema.parse(res.body)
+      return decodeJsonBlobsInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.jsonBlobs', res.status, res.body, res.headers)
   }
@@ -1582,11 +2700,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.jsonEnums',
       method: 'PUT',
       url,
-      body: { fooEnum1: input.fooEnum1, fooEnum2: input.fooEnum2, fooEnum3: input.fooEnum3, fooEnumList: input.fooEnumList, fooEnumSet: input.fooEnumSet, fooEnumMap: input.fooEnumMap },
+      body: { 'fooEnum1': input.fooEnum1 ?? undefined, 'fooEnum2': input.fooEnum2 ?? undefined, 'fooEnum3': input.fooEnum3 ?? undefined, 'fooEnumList': input.fooEnumList ?? undefined, 'fooEnumSet': input.fooEnumSet ?? undefined, 'fooEnumMap': input.fooEnumMap ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return JsonEnumsInputOutputSchema.parse(res.body)
+      return decodeJsonEnumsInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.jsonEnums', res.status, res.body, res.headers)
   }
@@ -1598,11 +2716,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.jsonIntEnums',
       method: 'PUT',
       url,
-      body: { integerEnum1: input.integerEnum1, integerEnum2: input.integerEnum2, integerEnum3: input.integerEnum3, integerEnumList: input.integerEnumList, integerEnumSet: input.integerEnumSet, integerEnumMap: input.integerEnumMap },
+      body: { 'integerEnum1': input.integerEnum1 ?? undefined, 'integerEnum2': input.integerEnum2 ?? undefined, 'integerEnum3': input.integerEnum3 ?? undefined, 'integerEnumList': input.integerEnumList ?? undefined, 'integerEnumSet': input.integerEnumSet ?? undefined, 'integerEnumMap': input.integerEnumMap ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return JsonIntEnumsInputOutputSchema.parse(res.body)
+      return decodeJsonIntEnumsInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.jsonIntEnums', res.status, res.body, res.headers)
   }
@@ -1614,11 +2732,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.jsonLists',
       method: 'PUT',
       url,
-      body: { stringList: input.stringList, stringSet: input.stringSet, integerList: input.integerList, booleanList: input.booleanList, timestampList: input.timestampList, enumList: input.enumList, intEnumList: input.intEnumList, nestedStringList: input.nestedStringList, structureList: input.structureList },
+      body: { 'stringList': input.stringList ?? undefined, 'stringSet': input.stringSet ?? undefined, 'integerList': input.integerList ?? undefined, 'booleanList': input.booleanList ?? undefined, 'timestampList': input.timestampList == null ? undefined : encodeTimestampList(input.timestampList), 'enumList': input.enumList ?? undefined, 'intEnumList': input.intEnumList ?? undefined, 'nestedStringList': input.nestedStringList ?? undefined, 'myStructureList': input.structureList == null ? undefined : encodeStructureList(input.structureList) },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return JsonListsInputOutputSchema.parse(res.body)
+      return decodeJsonListsInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.jsonLists', res.status, res.body, res.headers)
   }
@@ -1630,11 +2748,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.jsonMaps',
       method: 'POST',
       url,
-      body: { denseStructMap: input.denseStructMap, denseNumberMap: input.denseNumberMap, denseBooleanMap: input.denseBooleanMap, denseStringMap: input.denseStringMap, denseSetMap: input.denseSetMap },
+      body: { 'denseStructMap': input.denseStructMap == null ? undefined : encodeDenseStructMap(input.denseStructMap), 'denseNumberMap': input.denseNumberMap ?? undefined, 'denseBooleanMap': input.denseBooleanMap ?? undefined, 'denseStringMap': input.denseStringMap ?? undefined, 'denseSetMap': input.denseSetMap ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return JsonMapsInputOutputSchema.parse(res.body)
+      return decodeJsonMapsInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.jsonMaps', res.status, res.body, res.headers)
   }
@@ -1646,11 +2764,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.jsonTimestamps',
       method: 'POST',
       url,
-      body: { normal: input.normal, dateTime: input.dateTime, dateTimeOnTarget: input.dateTimeOnTarget, epochSeconds: input.epochSeconds, epochSecondsOnTarget: input.epochSecondsOnTarget, httpDate: input.httpDate, httpDateOnTarget: input.httpDateOnTarget },
+      body: { 'normal': input.normal == null ? undefined : wireEpochSeconds(input.normal), 'dateTime': input.dateTime == null ? undefined : wireDateTime(input.dateTime), 'dateTimeOnTarget': input.dateTimeOnTarget == null ? undefined : wireDateTime(input.dateTimeOnTarget), 'epochSeconds': input.epochSeconds == null ? undefined : wireEpochSeconds(input.epochSeconds), 'epochSecondsOnTarget': input.epochSecondsOnTarget == null ? undefined : wireEpochSeconds(input.epochSecondsOnTarget), 'httpDate': input.httpDate == null ? undefined : wireHttpDate(input.httpDate), 'httpDateOnTarget': input.httpDateOnTarget == null ? undefined : wireHttpDate(input.httpDateOnTarget) },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return JsonTimestampsInputOutputSchema.parse(res.body)
+      return decodeJsonTimestampsInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.jsonTimestamps', res.status, res.body, res.headers)
   }
@@ -1662,11 +2780,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.jsonUnions',
       method: 'PUT',
       url,
-      body: { contents: input.contents },
+      body: { 'contents': input.contents == null ? undefined : encodeMyUnion(input.contents) },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return UnionInputOutputSchema.parse(res.body)
+      return decodeUnionInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.jsonUnions', res.status, res.body, res.headers)
   }
@@ -1698,7 +2816,7 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return NoInputAndOutputOutputSchema.parse(res.body)
+      return decodeNoInputAndOutputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.noInputAndOutput', res.status, res.body, res.headers)
   }
@@ -1706,7 +2824,7 @@ export class RestJsonClient {
   /** Omits null, but serializes empty string value. */
   async omitsNullSerializesEmptyString(input: OmitsNullSerializesEmptyStringInput, opts?: TransportOptions): Promise<void> {
     const url = `/OmitsNullSerializesEmptyString`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const query: Record<string, string | readonly string[] | undefined> = {}
     if (input.nullValue !== undefined) query['Null'] = String(input.nullValue)
     if (input.emptyString !== undefined) query['Empty'] = String(input.emptyString)
     const res = await this.transport.request({
@@ -1726,14 +2844,14 @@ export class RestJsonClient {
   /** Omits serializing empty lists. Because empty strings are serilized as `Foo=`, empty lists cannot also be serialized as `Foo=` and instead must be omitted. */
   async omitsSerializingEmptyLists(input: OmitsSerializingEmptyListsInput, opts?: TransportOptions): Promise<void> {
     const url = `/OmitsSerializingEmptyLists`
-    const query: Record<string, string | number | boolean | undefined> = {}
-    if (input.queryStringList !== undefined) query['StringList'] = String(input.queryStringList)
-    if (input.queryIntegerList !== undefined) query['IntegerList'] = String(input.queryIntegerList)
-    if (input.queryDoubleList !== undefined) query['DoubleList'] = String(input.queryDoubleList)
-    if (input.queryBooleanList !== undefined) query['BooleanList'] = String(input.queryBooleanList)
-    if (input.queryTimestampList !== undefined) query['TimestampList'] = String(input.queryTimestampList)
-    if (input.queryEnumList !== undefined) query['EnumList'] = String(input.queryEnumList)
-    if (input.queryIntegerEnumList !== undefined) query['IntegerEnumList'] = String(input.queryIntegerEnumList)
+    const query: Record<string, string | readonly string[] | undefined> = {}
+    if (input.queryStringList !== undefined) query['StringList'] = input.queryStringList.map((e) => String(e))
+    if (input.queryIntegerList !== undefined) query['IntegerList'] = input.queryIntegerList.map((e) => String(e))
+    if (input.queryDoubleList !== undefined) query['DoubleList'] = input.queryDoubleList.map((e) => String(e))
+    if (input.queryBooleanList !== undefined) query['BooleanList'] = input.queryBooleanList.map((e) => String(e))
+    if (input.queryTimestampList !== undefined) query['TimestampList'] = input.queryTimestampList.map((e) => wireDateTime(e))
+    if (input.queryEnumList !== undefined) query['EnumList'] = input.queryEnumList.map((e) => String(e))
+    if (input.queryIntegerEnumList !== undefined) query['IntegerEnumList'] = input.queryIntegerEnumList.map((e) => String(e))
     const res = await this.transport.request({
       operation: 'RestJsonClient.omitsSerializingEmptyLists',
       method: 'POST',
@@ -1755,11 +2873,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.postPlayerAction',
       method: 'POST',
       url,
-      body: { action: input.action },
+      body: { 'action': input.action == null ? undefined : encodePlayerAction(input.action) },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return PostPlayerActionOutputSchema.parse(res.body)
+      return decodePostPlayerActionOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.postPlayerAction', res.status, res.body, res.headers)
   }
@@ -1771,11 +2889,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.postUnionWithJsonName',
       method: 'POST',
       url,
-      body: { value: input.value },
+      body: { 'value': input.value == null ? undefined : encodeUnionWithJsonName(input.value) },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return PostUnionWithJsonNameOutputSchema.parse(res.body)
+      return decodePostUnionWithJsonNameOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.postUnionWithJsonName', res.status, res.body, res.headers)
   }
@@ -1783,7 +2901,7 @@ export class RestJsonClient {
   /** Automatically adds idempotency tokens. */
   async queryIdempotencyTokenAutoFill(input: QueryIdempotencyTokenAutoFillInput, opts?: TransportOptions): Promise<void> {
     const url = `/QueryIdempotencyTokenAutoFill`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const query: Record<string, string | readonly string[] | undefined> = {}
     if (input.token !== undefined) query['token'] = String(input.token)
     const res = await this.transport.request({
       operation: 'RestJsonClient.queryIdempotencyTokenAutoFill',
@@ -1801,14 +2919,15 @@ export class RestJsonClient {
 
   async queryParamsAsStringListMap(input: QueryParamsAsStringListMapInput, opts?: TransportOptions): Promise<void> {
     const url = `/StringListMap`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const query: Record<string, string | readonly string[] | undefined> = {}
+    if (input.foo !== undefined) for (const [k, v] of Object.entries(input.foo)) query[k] = v
     if (input.qux !== undefined) query['corge'] = String(input.qux)
     const res = await this.transport.request({
       operation: 'RestJsonClient.queryParamsAsStringListMap',
       method: 'POST',
       url,
       query,
-      body: { foo: input.foo },
+      body: undefined,
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
@@ -1819,20 +2938,37 @@ export class RestJsonClient {
 
   async queryPrecedence(input: QueryPrecedenceInput, opts?: TransportOptions): Promise<void> {
     const url = `/Precedence`
-    const query: Record<string, string | number | boolean | undefined> = {}
+    const query: Record<string, string | readonly string[] | undefined> = {}
+    if (input.baz !== undefined) for (const [k, v] of Object.entries(input.baz)) query[k] = v
     if (input.foo !== undefined) query['bar'] = String(input.foo)
     const res = await this.transport.request({
       operation: 'RestJsonClient.queryPrecedence',
       method: 'POST',
       url,
       query,
-      body: { baz: input.baz },
+      body: undefined,
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
       return undefined
     }
     throw new UnexpectedResponseError('RestJsonClient.queryPrecedence', res.status, res.body, res.headers)
+  }
+
+  /** Recursive shapes */
+  async recursiveShapes(input: RecursiveShapesInputOutput, opts?: TransportOptions): Promise<RecursiveShapesInputOutput> {
+    const url = `/RecursiveShapes`
+    const res = await this.transport.request({
+      operation: 'RestJsonClient.recursiveShapes',
+      method: 'PUT',
+      url,
+      body: { 'nested': input.nested == null ? undefined : encodeRecursiveShapesInputOutputNested1(input.nested) },
+      options: opts,
+    })
+    if (res.status >= 200 && res.status < 300) {
+      return decodeRecursiveShapesInputOutputResponse(res)
+    }
+    throw new UnexpectedResponseError('RestJsonClient.recursiveShapes', res.status, res.body, res.headers)
   }
 
   async simpleScalarProperties(input: SimpleScalarPropertiesInputOutput, opts?: TransportOptions): Promise<SimpleScalarPropertiesInputOutput> {
@@ -1844,15 +2980,11 @@ export class RestJsonClient {
       method: 'PUT',
       url,
       headers,
-      body: { stringValue: input.stringValue, trueBooleanValue: input.trueBooleanValue, falseBooleanValue: input.falseBooleanValue, byteValue: input.byteValue, shortValue: input.shortValue, integerValue: input.integerValue, longValue: input.longValue, floatValue: input.floatValue, doubleValue: input.doubleValue },
+      body: { 'stringValue': input.stringValue ?? undefined, 'trueBooleanValue': input.trueBooleanValue ?? undefined, 'falseBooleanValue': input.falseBooleanValue ?? undefined, 'byteValue': input.byteValue ?? undefined, 'shortValue': input.shortValue ?? undefined, 'integerValue': input.integerValue ?? undefined, 'longValue': input.longValue ?? undefined, 'floatValue': input.floatValue ?? undefined, 'DoubleDribble': input.doubleValue ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(SimpleScalarPropertiesInputOutputSchema.omit({ 'foo': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-foo'] !== undefined) {
-        raw['foo'] = res.headers['x-foo']
-      }
-      return SimpleScalarPropertiesInputOutputSchema.parse(raw) as SimpleScalarPropertiesInputOutput
+      return decodeSimpleScalarPropertiesInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.simpleScalarProperties', res.status, res.body, res.headers)
   }
@@ -1864,11 +2996,11 @@ export class RestJsonClient {
       operation: 'RestJsonClient.sparseJsonMaps',
       method: 'POST',
       url,
-      body: { sparseStructMap: input.sparseStructMap, sparseNumberMap: input.sparseNumberMap, sparseBooleanMap: input.sparseBooleanMap, sparseStringMap: input.sparseStringMap, sparseSetMap: input.sparseSetMap },
+      body: { 'sparseStructMap': input.sparseStructMap == null ? undefined : encodeSparseStructMap(input.sparseStructMap), 'sparseNumberMap': input.sparseNumberMap ?? undefined, 'sparseBooleanMap': input.sparseBooleanMap ?? undefined, 'sparseStringMap': input.sparseStringMap ?? undefined, 'sparseSetMap': input.sparseSetMap ?? undefined },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return SparseJsonMapsInputOutputSchema.parse(res.body)
+      return decodeSparseJsonMapsInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.sparseJsonMaps', res.status, res.body, res.headers)
   }
@@ -1883,15 +3015,11 @@ export class RestJsonClient {
       method: 'POST',
       url,
       headers,
-      body: { testConfig: input.testConfig },
+      body: { 'testConfig': input.testConfig == null ? undefined : encodeTestConfig(input.testConfig) },
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(TestBodyStructureInputOutputSchema.omit({ 'testId': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-amz-test-id'] !== undefined) {
-        raw['testId'] = res.headers['x-amz-test-id']
-      }
-      return TestBodyStructureInputOutputSchema.parse(raw) as TestBodyStructureInputOutput
+      return decodeTestBodyStructureInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.testBodyStructure', res.status, res.body, res.headers)
   }
@@ -1906,15 +3034,11 @@ export class RestJsonClient {
       method: 'POST',
       url,
       headers,
-      body: input.payloadConfig,
+      body: input.payloadConfig === undefined ? undefined : encodePayloadConfig(input.payloadConfig),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...({ payloadConfig: PayloadConfigSchema.parse(res.body) } as Record<string, unknown>) }
-      if (res.headers['x-amz-test-id'] !== undefined) {
-        raw['testId'] = res.headers['x-amz-test-id']
-      }
-      return TestPayloadStructureInputOutputSchema.parse(raw) as TestPayloadStructureInputOutput
+      return decodeTestPayloadStructureInputOutputResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.testPayloadStructure', res.status, res.body, res.headers)
   }
@@ -1923,13 +3047,13 @@ export class RestJsonClient {
   async timestampFormatHeaders(input: TimestampFormatHeadersIO, opts?: TransportOptions): Promise<TimestampFormatHeadersIO> {
     const url = `/TimestampFormatHeaders`
     const headers: Record<string, string> = {}
-    if (input.memberEpochSeconds !== undefined) headers['X-memberEpochSeconds'] = String(input.memberEpochSeconds)
-    if (input.memberHttpDate !== undefined) headers['X-memberHttpDate'] = String(input.memberHttpDate)
-    if (input.memberDateTime !== undefined) headers['X-memberDateTime'] = String(input.memberDateTime)
-    if (input.defaultFormat !== undefined) headers['X-defaultFormat'] = String(input.defaultFormat)
-    if (input.targetEpochSeconds !== undefined) headers['X-targetEpochSeconds'] = String(input.targetEpochSeconds)
-    if (input.targetHttpDate !== undefined) headers['X-targetHttpDate'] = String(input.targetHttpDate)
-    if (input.targetDateTime !== undefined) headers['X-targetDateTime'] = String(input.targetDateTime)
+    if (input.memberEpochSeconds !== undefined) headers['X-memberEpochSeconds'] = String(wireEpochSeconds(input.memberEpochSeconds))
+    if (input.memberHttpDate !== undefined) headers['X-memberHttpDate'] = wireHttpDate(input.memberHttpDate)
+    if (input.memberDateTime !== undefined) headers['X-memberDateTime'] = wireDateTime(input.memberDateTime)
+    if (input.defaultFormat !== undefined) headers['X-defaultFormat'] = wireHttpDate(input.defaultFormat)
+    if (input.targetEpochSeconds !== undefined) headers['X-targetEpochSeconds'] = String(wireEpochSeconds(input.targetEpochSeconds))
+    if (input.targetHttpDate !== undefined) headers['X-targetHttpDate'] = wireHttpDate(input.targetHttpDate)
+    if (input.targetDateTime !== undefined) headers['X-targetDateTime'] = wireDateTime(input.targetDateTime)
     const res = await this.transport.request({
       operation: 'RestJsonClient.timestampFormatHeaders',
       method: 'POST',
@@ -1939,29 +3063,7 @@ export class RestJsonClient {
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      const raw: Record<string, unknown> = { ...(TimestampFormatHeadersIOSchema.omit({ 'defaultFormat': true, 'memberDateTime': true, 'memberEpochSeconds': true, 'memberHttpDate': true, 'targetDateTime': true, 'targetEpochSeconds': true, 'targetHttpDate': true }).parse(res.body) as Record<string, unknown>) }
-      if (res.headers['x-memberepochseconds'] !== undefined) {
-        raw['memberEpochSeconds'] = res.headers['x-memberepochseconds']
-      }
-      if (res.headers['x-memberhttpdate'] !== undefined) {
-        raw['memberHttpDate'] = res.headers['x-memberhttpdate']
-      }
-      if (res.headers['x-memberdatetime'] !== undefined) {
-        raw['memberDateTime'] = res.headers['x-memberdatetime']
-      }
-      if (res.headers['x-defaultformat'] !== undefined) {
-        raw['defaultFormat'] = res.headers['x-defaultformat']
-      }
-      if (res.headers['x-targetepochseconds'] !== undefined) {
-        raw['targetEpochSeconds'] = res.headers['x-targetepochseconds']
-      }
-      if (res.headers['x-targethttpdate'] !== undefined) {
-        raw['targetHttpDate'] = res.headers['x-targethttpdate']
-      }
-      if (res.headers['x-targetdatetime'] !== undefined) {
-        raw['targetDateTime'] = res.headers['x-targetdatetime']
-      }
-      return TimestampFormatHeadersIOSchema.parse(raw) as TimestampFormatHeadersIO
+      return decodeTimestampFormatHeadersIOResponse(res)
     }
     throw new UnexpectedResponseError('RestJsonClient.timestampFormatHeaders', res.status, res.body, res.headers)
   }
@@ -2163,7 +3265,6 @@ export interface RestJsonHandlers {
   httpPrefixHeaders(input: HttpPrefixHeadersInput): HttpPrefixHeadersOutput | Promise<HttpPrefixHeadersOutput>
   /** Clients that perform this test extract all headers from the response. */
   httpPrefixHeadersInResponse(input: HttpPrefixHeadersInResponseInput): HttpPrefixHeadersInResponseOutput | Promise<HttpPrefixHeadersInResponseOutput>
-  httpRequestWithFloatLabels(input: HttpRequestWithFloatLabelsInput): void | Promise<void>
   httpRequestWithGreedyLabelInPath(input: HttpRequestWithGreedyLabelInPathInput): void | Promise<void>
   /** The example tests how requests are serialized when there's no input payload but there are HTTP labels. */
   httpRequestWithLabels(input: HttpRequestWithLabelsInput): void | Promise<void>
@@ -2173,8 +3274,6 @@ export interface RestJsonHandlers {
   httpResponseCode(): HttpResponseCodeOutput | Promise<HttpResponseCodeOutput>
   /** This example ensures that query string bound request parameters are serialized in the body of responses if the structure is used in both the request and response. */
   ignoreQueryParamsInResponse(): IgnoreQueryParamsInResponseOutput | Promise<IgnoreQueryParamsInResponseOutput>
-  /** The example tests how requests and responses are serialized when there is no input or output payload but there are HTTP header bindings. */
-  inputAndOutputWithHeaders(input: InputAndOutputWithHeadersIO): InputAndOutputWithHeadersIO | Promise<InputAndOutputWithHeadersIO>
   /** Blobs are base64 encoded */
   jsonBlobs(input: JsonBlobsInputOutput): JsonBlobsInputOutput | Promise<JsonBlobsInputOutput>
   /** This example serializes enums as top level properties, in lists, sets, and maps. */
@@ -2205,6 +3304,8 @@ export interface RestJsonHandlers {
   queryIdempotencyTokenAutoFill(input: QueryIdempotencyTokenAutoFillInput): void | Promise<void>
   queryParamsAsStringListMap(input: QueryParamsAsStringListMapInput): void | Promise<void>
   queryPrecedence(input: QueryPrecedenceInput): void | Promise<void>
+  /** Recursive shapes */
+  recursiveShapes(input: RecursiveShapesInputOutput): RecursiveShapesInputOutput | Promise<RecursiveShapesInputOutput>
   simpleScalarProperties(input: SimpleScalarPropertiesInputOutput): SimpleScalarPropertiesInputOutput | Promise<SimpleScalarPropertiesInputOutput>
   /** This example tests sparse map serialization. */
   sparseJsonMaps(input: SparseJsonMapsInputOutput): SparseJsonMapsInputOutput | Promise<SparseJsonMapsInputOutput>
@@ -2228,67 +3329,65 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['String'] !== undefined) {
-          raw['queryString'] = req.query['String'] as string
+          raw['queryString'] = (req.query['String'] as string)
         }
         if (req.query['StringList'] !== undefined) {
-          raw['queryStringList'] = req.query['StringList'] as string
+          raw['queryStringList'] = (req.query['StringList'] as string)
         }
         if (req.query['StringSet'] !== undefined) {
-          raw['queryStringSet'] = req.query['StringSet'] as string
+          raw['queryStringSet'] = (req.query['StringSet'] as string)
         }
         if (req.query['Byte'] !== undefined) {
-          raw['queryByte'] = Number(req.query['Byte'] as string)
+          raw['queryByte'] = Number((req.query['Byte'] as string))
         }
         if (req.query['Short'] !== undefined) {
-          raw['queryShort'] = Number(req.query['Short'] as string)
+          raw['queryShort'] = Number((req.query['Short'] as string))
         }
         if (req.query['Integer'] !== undefined) {
-          raw['queryInteger'] = Number(req.query['Integer'] as string)
+          raw['queryInteger'] = Number((req.query['Integer'] as string))
         }
         if (req.query['IntegerList'] !== undefined) {
-          raw['queryIntegerList'] = req.query['IntegerList'] as string
+          raw['queryIntegerList'] = (req.query['IntegerList'] as string)
         }
         if (req.query['IntegerSet'] !== undefined) {
-          raw['queryIntegerSet'] = req.query['IntegerSet'] as string
+          raw['queryIntegerSet'] = (req.query['IntegerSet'] as string)
         }
         if (req.query['Long'] !== undefined) {
-          raw['queryLong'] = Number(req.query['Long'] as string)
+          raw['queryLong'] = Number((req.query['Long'] as string))
         }
         if (req.query['Float'] !== undefined) {
-          raw['queryFloat'] = Number(req.query['Float'] as string)
+          raw['queryFloat'] = Number((req.query['Float'] as string))
         }
         if (req.query['Double'] !== undefined) {
-          raw['queryDouble'] = Number(req.query['Double'] as string)
+          raw['queryDouble'] = Number((req.query['Double'] as string))
         }
         if (req.query['DoubleList'] !== undefined) {
-          raw['queryDoubleList'] = req.query['DoubleList'] as string
+          raw['queryDoubleList'] = (req.query['DoubleList'] as string)
         }
         if (req.query['Boolean'] !== undefined) {
-          raw['queryBoolean'] = (req.query['Boolean'] as string === 'true')
+          raw['queryBoolean'] = ((req.query['Boolean'] as string) === 'true')
         }
         if (req.query['BooleanList'] !== undefined) {
-          raw['queryBooleanList'] = req.query['BooleanList'] as string
+          raw['queryBooleanList'] = (req.query['BooleanList'] as string)
         }
         if (req.query['Timestamp'] !== undefined) {
-          raw['queryTimestamp'] = req.query['Timestamp'] as string
+          raw['queryTimestamp'] = wireTimestamp((req.query['Timestamp'] as string))
         }
         if (req.query['TimestampList'] !== undefined) {
-          raw['queryTimestampList'] = req.query['TimestampList'] as string
+          raw['queryTimestampList'] = (req.query['TimestampList'] as string)
         }
         if (req.query['Enum'] !== undefined) {
-          raw['queryEnum'] = req.query['Enum'] as string
+          raw['queryEnum'] = (req.query['Enum'] as string)
         }
         if (req.query['EnumList'] !== undefined) {
-          raw['queryEnumList'] = req.query['EnumList'] as string
+          raw['queryEnumList'] = (req.query['EnumList'] as string)
         }
         if (req.query['IntegerEnum'] !== undefined) {
-          raw['queryIntegerEnum'] = Number(req.query['IntegerEnum'] as string)
+          raw['queryIntegerEnum'] = Number((req.query['IntegerEnum'] as string))
         }
         if (req.query['IntegerEnumList'] !== undefined) {
-          raw['queryIntegerEnumList'] = req.query['IntegerEnumList'] as string
+          raw['queryIntegerEnumList'] = (req.query['IntegerEnumList'] as string)
         }
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['queryParamsMapOfStringList'] = body['queryParamsMapOfStringList']
         return AllQueryStringTypesInputSchema.parse(raw) as AllQueryStringTypesInput
       },
       encodeBody: () => ({}),
@@ -2300,10 +3399,10 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['baz'] !== undefined) {
-          raw['baz'] = req.query['baz'] as string
+          raw['baz'] = (req.query['baz'] as string)
         }
         if (req.query['maybeSet'] !== undefined) {
-          raw['maybeSet'] = req.query['maybeSet'] as string
+          raw['maybeSet'] = (req.query['maybeSet'] as string)
         }
         return ConstantAndVariableQueryStringInputSchema.parse(raw) as ConstantAndVariableQueryStringInput
       },
@@ -2325,7 +3424,7 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       method: 'POST',
       segments: [{ literal: 'DatetimeOffsets' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as DatetimeOffsetsOutput; return { 'datetime': o.datetime == null ? undefined : wireDateTime(o.datetime) } },
     },
     {
       key: 'documentType',
@@ -2333,12 +3432,12 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'DocumentType' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['stringValue'] = body['stringValue']
-        raw['documentValue'] = body['documentValue']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['stringValue'] = body['stringValue'] ?? undefined
+        raw['documentValue'] = body['documentValue'] ?? undefined
         return DocumentTypeInputOutputSchema.parse(raw) as DocumentTypeInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as DocumentTypeInputOutput; return { 'stringValue': o.stringValue ?? undefined, 'documentValue': o.documentValue ?? undefined } },
     },
     {
       key: 'documentTypeAsPayload',
@@ -2346,10 +3445,10 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'DocumentTypeAsPayload' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        raw['documentValue'] = req.body
+        raw['documentValue'] = req.body == null ? undefined : req.body
         return DocumentTypeAsPayloadInputOutputSchema.parse(raw) as DocumentTypeAsPayloadInputOutput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['documentValue'],
+      encodeBody: (output) => { const o = output as DocumentTypeAsPayloadInputOutput; return o.documentValue === undefined ? undefined : o.documentValue },
     },
     {
       key: 'emptyInputAndEmptyOutput',
@@ -2359,7 +3458,7 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
         const raw: Record<string, unknown> = {}
         return EmptyInputAndEmptyOutputInputSchema.parse(raw) as EmptyInputAndEmptyOutputInput
       },
-      encodeBody: (output) => output,
+      encodeBody: () => undefined,
     },
     {
       key: 'endpointOperation',
@@ -2374,8 +3473,8 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'EndpointWithHostLabelOperation' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['label'] = body['label']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['label'] = body['label'] ?? undefined
         return HostLabelInputSchema.parse(raw) as HostLabelInput
       },
       encodeBody: () => ({}),
@@ -2385,14 +3484,14 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       method: 'POST',
       segments: [{ literal: 'FractionalSeconds' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as FractionalSecondsOutput; return { 'datetime': o.datetime == null ? undefined : wireDateTime(o.datetime) } },
     },
     {
       key: 'greetingWithErrors',
       method: 'PUT',
       segments: [{ literal: 'GreetingWithErrors' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => { const { greeting: _greeting, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: () => undefined,
     },
     {
       key: 'hostWithPathOperation',
@@ -2407,10 +3506,10 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'HttpPayloadWithStructure' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        raw['nested'] = req.body
+        raw['nested'] = req.body == null ? undefined : decodeNestedPayload(req.body)
         return HttpPayloadWithStructureInputOutputSchema.parse(raw) as HttpPayloadWithStructureInputOutput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['nested'],
+      encodeBody: (output) => { const o = output as HttpPayloadWithStructureInputOutput; return o.nested === undefined ? undefined : encodeNestedPayload(o.nested) },
     },
     {
       key: 'httpPrefixHeaders',
@@ -2418,11 +3517,9 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'HttpPrefixHeaders' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['fooMap'] = body['fooMap']
         return HttpPrefixHeadersInputSchema.parse(raw) as HttpPrefixHeadersInput
       },
-      encodeBody: (output) => { const { foo: _foo, fooMap: _fooMap, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: () => undefined,
     },
     {
       key: 'httpPrefixHeadersInResponse',
@@ -2432,19 +3529,7 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
         const raw: Record<string, unknown> = {}
         return HttpPrefixHeadersInResponseInputSchema.parse(raw) as HttpPrefixHeadersInResponseInput
       },
-      encodeBody: (output) => { const { prefixHeaders: _prefixHeaders, ...body } = output as Record<string, unknown>; return body },
-    },
-    {
-      key: 'httpRequestWithFloatLabels',
-      method: 'GET',
-      segments: [{ literal: 'FloatHttpLabels' }, { label: 'float' }, { label: 'double' }],
-      decodeInput: (req) => {
-        const raw: Record<string, unknown> = {}
-        raw['float'] = Number(req.pathParams['float'])
-        raw['double'] = Number(req.pathParams['double'])
-        return HttpRequestWithFloatLabelsInputSchema.parse(raw) as HttpRequestWithFloatLabelsInput
-      },
-      encodeBody: () => ({}),
+      encodeBody: () => undefined,
     },
     {
       key: 'httpRequestWithGreedyLabelInPath',
@@ -2471,7 +3556,7 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
         raw['float'] = Number(req.pathParams['float'])
         raw['double'] = Number(req.pathParams['double'])
         raw['boolean'] = (req.pathParams['boolean'] === 'true')
-        raw['timestamp'] = req.pathParams['timestamp']
+        raw['timestamp'] = wireTimestamp(req.pathParams['timestamp'])
         return HttpRequestWithLabelsInputSchema.parse(raw) as HttpRequestWithLabelsInput
       },
       encodeBody: () => ({}),
@@ -2482,13 +3567,13 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'HttpRequestWithLabelsAndTimestampFormat' }, { label: 'memberEpochSeconds' }, { label: 'memberHttpDate' }, { label: 'memberDateTime' }, { label: 'defaultFormat' }, { label: 'targetEpochSeconds' }, { label: 'targetHttpDate' }, { label: 'targetDateTime' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        raw['memberEpochSeconds'] = req.pathParams['memberEpochSeconds']
-        raw['memberHttpDate'] = req.pathParams['memberHttpDate']
-        raw['memberDateTime'] = req.pathParams['memberDateTime']
-        raw['defaultFormat'] = req.pathParams['defaultFormat']
-        raw['targetEpochSeconds'] = req.pathParams['targetEpochSeconds']
-        raw['targetHttpDate'] = req.pathParams['targetHttpDate']
-        raw['targetDateTime'] = req.pathParams['targetDateTime']
+        raw['memberEpochSeconds'] = wireTimestamp(req.pathParams['memberEpochSeconds'])
+        raw['memberHttpDate'] = wireTimestamp(req.pathParams['memberHttpDate'])
+        raw['memberDateTime'] = wireTimestamp(req.pathParams['memberDateTime'])
+        raw['defaultFormat'] = wireTimestamp(req.pathParams['defaultFormat'])
+        raw['targetEpochSeconds'] = wireTimestamp(req.pathParams['targetEpochSeconds'])
+        raw['targetHttpDate'] = wireTimestamp(req.pathParams['targetHttpDate'])
+        raw['targetDateTime'] = wireTimestamp(req.pathParams['targetDateTime'])
         return HttpRequestWithLabelsAndTimestampFormatInputSchema.parse(raw) as HttpRequestWithLabelsAndTimestampFormatInput
       },
       encodeBody: () => ({}),
@@ -2509,24 +3594,14 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       method: 'PUT',
       segments: [{ literal: 'HttpResponseCode' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => { const { Status: _Status, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: () => undefined,
     },
     {
       key: 'ignoreQueryParamsInResponse',
       method: 'GET',
       segments: [{ literal: 'IgnoreQueryParamsInResponse' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => { const { baz: _baz, ...body } = output as Record<string, unknown>; return body },
-    },
-    {
-      key: 'inputAndOutputWithHeaders',
-      method: 'POST',
-      segments: [{ literal: 'InputAndOutputWithHeaders' }],
-      decodeInput: (req) => {
-        const raw: Record<string, unknown> = {}
-        return InputAndOutputWithHeadersIOSchema.parse(raw) as InputAndOutputWithHeadersIO
-      },
-      encodeBody: (output) => { const { headerBooleanList: _headerBooleanList, headerByte: _headerByte, headerDouble: _headerDouble, headerEnum: _headerEnum, headerEnumList: _headerEnumList, headerFalseBool: _headerFalseBool, headerFloat: _headerFloat, headerInteger: _headerInteger, headerIntegerEnum: _headerIntegerEnum, headerIntegerEnumList: _headerIntegerEnumList, headerIntegerList: _headerIntegerList, headerLong: _headerLong, headerShort: _headerShort, headerString: _headerString, headerStringList: _headerStringList, headerStringSet: _headerStringSet, headerTimestampList: _headerTimestampList, headerTrueBool: _headerTrueBool, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: (output) => { const o = output as IgnoreQueryParamsInResponseOutput; return { 'baz': o.baz ?? undefined } },
     },
     {
       key: 'jsonBlobs',
@@ -2534,11 +3609,11 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'JsonBlobs' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['data'] = body['data']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['data'] = body['data'] ?? undefined
         return JsonBlobsInputOutputSchema.parse(raw) as JsonBlobsInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as JsonBlobsInputOutput; return { 'data': o.data ?? undefined } },
     },
     {
       key: 'jsonEnums',
@@ -2546,16 +3621,16 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'JsonEnums' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['fooEnum1'] = body['fooEnum1']
-        raw['fooEnum2'] = body['fooEnum2']
-        raw['fooEnum3'] = body['fooEnum3']
-        raw['fooEnumList'] = body['fooEnumList']
-        raw['fooEnumSet'] = body['fooEnumSet']
-        raw['fooEnumMap'] = body['fooEnumMap']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['fooEnum1'] = body['fooEnum1'] ?? undefined
+        raw['fooEnum2'] = body['fooEnum2'] ?? undefined
+        raw['fooEnum3'] = body['fooEnum3'] ?? undefined
+        raw['fooEnumList'] = body['fooEnumList'] ?? undefined
+        raw['fooEnumSet'] = body['fooEnumSet'] ?? undefined
+        raw['fooEnumMap'] = body['fooEnumMap'] ?? undefined
         return JsonEnumsInputOutputSchema.parse(raw) as JsonEnumsInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as JsonEnumsInputOutput; return { 'fooEnum1': o.fooEnum1 ?? undefined, 'fooEnum2': o.fooEnum2 ?? undefined, 'fooEnum3': o.fooEnum3 ?? undefined, 'fooEnumList': o.fooEnumList ?? undefined, 'fooEnumSet': o.fooEnumSet ?? undefined, 'fooEnumMap': o.fooEnumMap ?? undefined } },
     },
     {
       key: 'jsonIntEnums',
@@ -2563,16 +3638,16 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'JsonIntEnums' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['integerEnum1'] = body['integerEnum1']
-        raw['integerEnum2'] = body['integerEnum2']
-        raw['integerEnum3'] = body['integerEnum3']
-        raw['integerEnumList'] = body['integerEnumList']
-        raw['integerEnumSet'] = body['integerEnumSet']
-        raw['integerEnumMap'] = body['integerEnumMap']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['integerEnum1'] = body['integerEnum1'] ?? undefined
+        raw['integerEnum2'] = body['integerEnum2'] ?? undefined
+        raw['integerEnum3'] = body['integerEnum3'] ?? undefined
+        raw['integerEnumList'] = body['integerEnumList'] ?? undefined
+        raw['integerEnumSet'] = body['integerEnumSet'] ?? undefined
+        raw['integerEnumMap'] = body['integerEnumMap'] ?? undefined
         return JsonIntEnumsInputOutputSchema.parse(raw) as JsonIntEnumsInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as JsonIntEnumsInputOutput; return { 'integerEnum1': o.integerEnum1 ?? undefined, 'integerEnum2': o.integerEnum2 ?? undefined, 'integerEnum3': o.integerEnum3 ?? undefined, 'integerEnumList': o.integerEnumList ?? undefined, 'integerEnumSet': o.integerEnumSet ?? undefined, 'integerEnumMap': o.integerEnumMap ?? undefined } },
     },
     {
       key: 'jsonLists',
@@ -2580,19 +3655,19 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'JsonLists' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['stringList'] = body['stringList']
-        raw['stringSet'] = body['stringSet']
-        raw['integerList'] = body['integerList']
-        raw['booleanList'] = body['booleanList']
-        raw['timestampList'] = body['timestampList']
-        raw['enumList'] = body['enumList']
-        raw['intEnumList'] = body['intEnumList']
-        raw['nestedStringList'] = body['nestedStringList']
-        raw['structureList'] = body['structureList']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['stringList'] = body['stringList'] ?? undefined
+        raw['stringSet'] = body['stringSet'] ?? undefined
+        raw['integerList'] = body['integerList'] ?? undefined
+        raw['booleanList'] = body['booleanList'] ?? undefined
+        raw['timestampList'] = body['timestampList'] == null ? undefined : decodeTimestampList(body['timestampList'])
+        raw['enumList'] = body['enumList'] ?? undefined
+        raw['intEnumList'] = body['intEnumList'] ?? undefined
+        raw['nestedStringList'] = body['nestedStringList'] ?? undefined
+        raw['structureList'] = body['myStructureList'] == null ? undefined : decodeStructureList(body['myStructureList'])
         return JsonListsInputOutputSchema.parse(raw) as JsonListsInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as JsonListsInputOutput; return { 'stringList': o.stringList ?? undefined, 'stringSet': o.stringSet ?? undefined, 'integerList': o.integerList ?? undefined, 'booleanList': o.booleanList ?? undefined, 'timestampList': o.timestampList == null ? undefined : encodeTimestampList(o.timestampList), 'enumList': o.enumList ?? undefined, 'intEnumList': o.intEnumList ?? undefined, 'nestedStringList': o.nestedStringList ?? undefined, 'myStructureList': o.structureList == null ? undefined : encodeStructureList(o.structureList) } },
     },
     {
       key: 'jsonMaps',
@@ -2600,15 +3675,15 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'JsonMaps' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['denseStructMap'] = body['denseStructMap']
-        raw['denseNumberMap'] = body['denseNumberMap']
-        raw['denseBooleanMap'] = body['denseBooleanMap']
-        raw['denseStringMap'] = body['denseStringMap']
-        raw['denseSetMap'] = body['denseSetMap']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['denseStructMap'] = body['denseStructMap'] == null ? undefined : decodeDenseStructMap(body['denseStructMap'])
+        raw['denseNumberMap'] = body['denseNumberMap'] ?? undefined
+        raw['denseBooleanMap'] = body['denseBooleanMap'] ?? undefined
+        raw['denseStringMap'] = body['denseStringMap'] ?? undefined
+        raw['denseSetMap'] = body['denseSetMap'] ?? undefined
         return JsonMapsInputOutputSchema.parse(raw) as JsonMapsInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as JsonMapsInputOutput; return { 'denseStructMap': o.denseStructMap == null ? undefined : encodeDenseStructMap(o.denseStructMap), 'denseNumberMap': o.denseNumberMap ?? undefined, 'denseBooleanMap': o.denseBooleanMap ?? undefined, 'denseStringMap': o.denseStringMap ?? undefined, 'denseSetMap': o.denseSetMap ?? undefined } },
     },
     {
       key: 'jsonTimestamps',
@@ -2616,17 +3691,17 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'JsonTimestamps' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['normal'] = body['normal']
-        raw['dateTime'] = body['dateTime']
-        raw['dateTimeOnTarget'] = body['dateTimeOnTarget']
-        raw['epochSeconds'] = body['epochSeconds']
-        raw['epochSecondsOnTarget'] = body['epochSecondsOnTarget']
-        raw['httpDate'] = body['httpDate']
-        raw['httpDateOnTarget'] = body['httpDateOnTarget']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['normal'] = body['normal'] == null ? undefined : wireTimestamp(body['normal'])
+        raw['dateTime'] = body['dateTime'] == null ? undefined : wireTimestamp(body['dateTime'])
+        raw['dateTimeOnTarget'] = body['dateTimeOnTarget'] == null ? undefined : wireTimestamp(body['dateTimeOnTarget'])
+        raw['epochSeconds'] = body['epochSeconds'] == null ? undefined : wireTimestamp(body['epochSeconds'])
+        raw['epochSecondsOnTarget'] = body['epochSecondsOnTarget'] == null ? undefined : wireTimestamp(body['epochSecondsOnTarget'])
+        raw['httpDate'] = body['httpDate'] == null ? undefined : wireTimestamp(body['httpDate'])
+        raw['httpDateOnTarget'] = body['httpDateOnTarget'] == null ? undefined : wireTimestamp(body['httpDateOnTarget'])
         return JsonTimestampsInputOutputSchema.parse(raw) as JsonTimestampsInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as JsonTimestampsInputOutput; return { 'normal': o.normal == null ? undefined : wireEpochSeconds(o.normal), 'dateTime': o.dateTime == null ? undefined : wireDateTime(o.dateTime), 'dateTimeOnTarget': o.dateTimeOnTarget == null ? undefined : wireDateTime(o.dateTimeOnTarget), 'epochSeconds': o.epochSeconds == null ? undefined : wireEpochSeconds(o.epochSeconds), 'epochSecondsOnTarget': o.epochSecondsOnTarget == null ? undefined : wireEpochSeconds(o.epochSecondsOnTarget), 'httpDate': o.httpDate == null ? undefined : wireHttpDate(o.httpDate), 'httpDateOnTarget': o.httpDateOnTarget == null ? undefined : wireHttpDate(o.httpDateOnTarget) } },
     },
     {
       key: 'jsonUnions',
@@ -2634,11 +3709,11 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'JsonUnions' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['contents'] = body['contents']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['contents'] = body['contents'] == null ? undefined : decodeMyUnion(body['contents'])
         return UnionInputOutputSchema.parse(raw) as UnionInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as UnionInputOutput; return { 'contents': o.contents == null ? undefined : encodeMyUnion(o.contents) } },
     },
     {
       key: 'noInputAndNoOutput',
@@ -2652,7 +3727,7 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       method: 'POST',
       segments: [{ literal: 'NoInputAndOutputOutput' }],
       decodeInput: () => undefined,
-      encodeBody: (output) => output,
+      encodeBody: () => undefined,
     },
     {
       key: 'omitsNullSerializesEmptyString',
@@ -2661,10 +3736,10 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['Null'] !== undefined) {
-          raw['nullValue'] = req.query['Null'] as string
+          raw['nullValue'] = (req.query['Null'] as string)
         }
         if (req.query['Empty'] !== undefined) {
-          raw['emptyString'] = req.query['Empty'] as string
+          raw['emptyString'] = (req.query['Empty'] as string)
         }
         return OmitsNullSerializesEmptyStringInputSchema.parse(raw) as OmitsNullSerializesEmptyStringInput
       },
@@ -2677,25 +3752,25 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['StringList'] !== undefined) {
-          raw['queryStringList'] = req.query['StringList'] as string
+          raw['queryStringList'] = (req.query['StringList'] as string)
         }
         if (req.query['IntegerList'] !== undefined) {
-          raw['queryIntegerList'] = req.query['IntegerList'] as string
+          raw['queryIntegerList'] = (req.query['IntegerList'] as string)
         }
         if (req.query['DoubleList'] !== undefined) {
-          raw['queryDoubleList'] = req.query['DoubleList'] as string
+          raw['queryDoubleList'] = (req.query['DoubleList'] as string)
         }
         if (req.query['BooleanList'] !== undefined) {
-          raw['queryBooleanList'] = req.query['BooleanList'] as string
+          raw['queryBooleanList'] = (req.query['BooleanList'] as string)
         }
         if (req.query['TimestampList'] !== undefined) {
-          raw['queryTimestampList'] = req.query['TimestampList'] as string
+          raw['queryTimestampList'] = (req.query['TimestampList'] as string)
         }
         if (req.query['EnumList'] !== undefined) {
-          raw['queryEnumList'] = req.query['EnumList'] as string
+          raw['queryEnumList'] = (req.query['EnumList'] as string)
         }
         if (req.query['IntegerEnumList'] !== undefined) {
-          raw['queryIntegerEnumList'] = req.query['IntegerEnumList'] as string
+          raw['queryIntegerEnumList'] = (req.query['IntegerEnumList'] as string)
         }
         return OmitsSerializingEmptyListsInputSchema.parse(raw) as OmitsSerializingEmptyListsInput
       },
@@ -2707,11 +3782,11 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'PostPlayerAction' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['action'] = body['action']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['action'] = body['action'] == null ? undefined : decodePlayerAction(body['action'])
         return PostPlayerActionInputSchema.parse(raw) as PostPlayerActionInput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as PostPlayerActionOutput; return { 'action': o.action == null ? undefined : encodePlayerAction(o.action) } },
     },
     {
       key: 'postUnionWithJsonName',
@@ -2719,11 +3794,11 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'PostUnionWithJsonName' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['value'] = body['value']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['value'] = body['value'] == null ? undefined : decodeUnionWithJsonName(body['value'])
         return PostUnionWithJsonNameInputSchema.parse(raw) as PostUnionWithJsonNameInput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as PostUnionWithJsonNameOutput; return { 'value': o.value == null ? undefined : encodeUnionWithJsonName(o.value) } },
     },
     {
       key: 'queryIdempotencyTokenAutoFill',
@@ -2732,7 +3807,7 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['token'] !== undefined) {
-          raw['token'] = req.query['token'] as string
+          raw['token'] = (req.query['token'] as string)
         }
         return QueryIdempotencyTokenAutoFillInputSchema.parse(raw) as QueryIdempotencyTokenAutoFillInput
       },
@@ -2745,10 +3820,8 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['corge'] !== undefined) {
-          raw['qux'] = req.query['corge'] as string
+          raw['qux'] = (req.query['corge'] as string)
         }
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['foo'] = body['foo']
         return QueryParamsAsStringListMapInputSchema.parse(raw) as QueryParamsAsStringListMapInput
       },
       encodeBody: () => ({}),
@@ -2760,13 +3833,23 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
         if (req.query['bar'] !== undefined) {
-          raw['foo'] = req.query['bar'] as string
+          raw['foo'] = (req.query['bar'] as string)
         }
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['baz'] = body['baz']
         return QueryPrecedenceInputSchema.parse(raw) as QueryPrecedenceInput
       },
       encodeBody: () => ({}),
+    },
+    {
+      key: 'recursiveShapes',
+      method: 'PUT',
+      segments: [{ literal: 'RecursiveShapes' }],
+      decodeInput: (req) => {
+        const raw: Record<string, unknown> = {}
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['nested'] = body['nested'] == null ? undefined : decodeRecursiveShapesInputOutputNested1(body['nested'])
+        return RecursiveShapesInputOutputSchema.parse(raw) as RecursiveShapesInputOutput
+      },
+      encodeBody: (output) => { const o = output as RecursiveShapesInputOutput; return { 'nested': o.nested == null ? undefined : encodeRecursiveShapesInputOutputNested1(o.nested) } },
     },
     {
       key: 'simpleScalarProperties',
@@ -2774,19 +3857,19 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'SimpleScalarProperties' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['stringValue'] = body['stringValue']
-        raw['trueBooleanValue'] = body['trueBooleanValue']
-        raw['falseBooleanValue'] = body['falseBooleanValue']
-        raw['byteValue'] = body['byteValue']
-        raw['shortValue'] = body['shortValue']
-        raw['integerValue'] = body['integerValue']
-        raw['longValue'] = body['longValue']
-        raw['floatValue'] = body['floatValue']
-        raw['doubleValue'] = body['doubleValue']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['stringValue'] = body['stringValue'] ?? undefined
+        raw['trueBooleanValue'] = body['trueBooleanValue'] ?? undefined
+        raw['falseBooleanValue'] = body['falseBooleanValue'] ?? undefined
+        raw['byteValue'] = body['byteValue'] ?? undefined
+        raw['shortValue'] = body['shortValue'] ?? undefined
+        raw['integerValue'] = body['integerValue'] ?? undefined
+        raw['longValue'] = body['longValue'] ?? undefined
+        raw['floatValue'] = body['floatValue'] ?? undefined
+        raw['doubleValue'] = body['DoubleDribble'] ?? undefined
         return SimpleScalarPropertiesInputOutputSchema.parse(raw) as SimpleScalarPropertiesInputOutput
       },
-      encodeBody: (output) => { const { foo: _foo, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: (output) => { const o = output as SimpleScalarPropertiesInputOutput; return { 'stringValue': o.stringValue ?? undefined, 'trueBooleanValue': o.trueBooleanValue ?? undefined, 'falseBooleanValue': o.falseBooleanValue ?? undefined, 'byteValue': o.byteValue ?? undefined, 'shortValue': o.shortValue ?? undefined, 'integerValue': o.integerValue ?? undefined, 'longValue': o.longValue ?? undefined, 'floatValue': o.floatValue ?? undefined, 'DoubleDribble': o.doubleValue ?? undefined } },
     },
     {
       key: 'sparseJsonMaps',
@@ -2794,15 +3877,15 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'SparseJsonMaps' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['sparseStructMap'] = body['sparseStructMap']
-        raw['sparseNumberMap'] = body['sparseNumberMap']
-        raw['sparseBooleanMap'] = body['sparseBooleanMap']
-        raw['sparseStringMap'] = body['sparseStringMap']
-        raw['sparseSetMap'] = body['sparseSetMap']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['sparseStructMap'] = body['sparseStructMap'] == null ? undefined : decodeSparseStructMap(body['sparseStructMap'])
+        raw['sparseNumberMap'] = body['sparseNumberMap'] ?? undefined
+        raw['sparseBooleanMap'] = body['sparseBooleanMap'] ?? undefined
+        raw['sparseStringMap'] = body['sparseStringMap'] ?? undefined
+        raw['sparseSetMap'] = body['sparseSetMap'] ?? undefined
         return SparseJsonMapsInputOutputSchema.parse(raw) as SparseJsonMapsInputOutput
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as SparseJsonMapsInputOutput; return { 'sparseStructMap': o.sparseStructMap == null ? undefined : encodeSparseStructMap(o.sparseStructMap), 'sparseNumberMap': o.sparseNumberMap ?? undefined, 'sparseBooleanMap': o.sparseBooleanMap ?? undefined, 'sparseStringMap': o.sparseStringMap ?? undefined, 'sparseSetMap': o.sparseSetMap ?? undefined } },
     },
     {
       key: 'testBodyStructure',
@@ -2810,11 +3893,11 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'body' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['testConfig'] = body['testConfig']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['testConfig'] = body['testConfig'] == null ? undefined : decodeTestConfig(body['testConfig'])
         return TestBodyStructureInputOutputSchema.parse(raw) as TestBodyStructureInputOutput
       },
-      encodeBody: (output) => { const { testId: _testId, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: (output) => { const o = output as TestBodyStructureInputOutput; return { 'testConfig': o.testConfig == null ? undefined : encodeTestConfig(o.testConfig) } },
     },
     {
       key: 'testPayloadStructure',
@@ -2822,10 +3905,10 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
       segments: [{ literal: 'payload' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        raw['payloadConfig'] = req.body
+        raw['payloadConfig'] = req.body == null ? undefined : decodePayloadConfig(req.body)
         return TestPayloadStructureInputOutputSchema.parse(raw) as TestPayloadStructureInputOutput
       },
-      encodeBody: (output) => (output as Record<string, unknown>)['payloadConfig'],
+      encodeBody: (output) => { const o = output as TestPayloadStructureInputOutput; return o.payloadConfig === undefined ? undefined : encodePayloadConfig(o.payloadConfig) },
     },
     {
       key: 'timestampFormatHeaders',
@@ -2835,7 +3918,7 @@ export const RestJsonMock: MockServiceDescriptor<RestJsonHandlers> = {
         const raw: Record<string, unknown> = {}
         return TimestampFormatHeadersIOSchema.parse(raw) as TimestampFormatHeadersIO
       },
-      encodeBody: (output) => { const { defaultFormat: _defaultFormat, memberDateTime: _memberDateTime, memberEpochSeconds: _memberEpochSeconds, memberHttpDate: _memberHttpDate, targetDateTime: _targetDateTime, targetEpochSeconds: _targetEpochSeconds, targetHttpDate: _targetHttpDate, ...body } = output as Record<string, unknown>; return body },
+      encodeBody: () => undefined,
     },
     {
       key: 'unitInputAndOutput',
