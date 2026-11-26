@@ -39,7 +39,14 @@ export {
   readableToAsyncIterable,
 } from './ndjson.js'
 
-export { NdjsonParseError, StreamRequestError, UnauthenticatedError } from './errors.js'
+export { decodeSse, encodeSse } from './sse.js'
+
+export {
+  NdjsonParseError,
+  SseParseError,
+  StreamRequestError,
+  UnauthenticatedError,
+} from './errors.js'
 
 // Exported so a hand-rolled transport can honor `@lossless` members: plain
 // `JSON.parse` / `JSON.stringify` cannot, and using them silently rounds a

@@ -2,7 +2,7 @@ $version: "2"
 
 // A model exercising every construct the codegen emits, so `tsc` sees the
 // whole surface: data shapes, errors, a unary client, a streaming client
-// (both framings, both directions), and the mock stubs for both.
+// (all three framings, both directions), and the mock stubs for both.
 
 namespace test
 
@@ -11,6 +11,7 @@ use alloy#jsonUnknown
 use alloy#openEnum
 use alloy#simpleRestJson
 use org.polyvariant.ndjson#ndjsonRestJson
+use org.polyvariant.ndjson#serverSentEvents
 use org.polyvariant.smithy.ts#lossless
 
 // --- Data shapes: one of every kind the generator handles ---
@@ -167,7 +168,7 @@ list People {
 operation Ping {
 }
 
-// --- A streaming service: ndjson and binary, in and out ---
+// --- A streaming service: ndjson, server-sent events and binary, in and out ---
 
 @ndjsonRestJson
 service Feed {
@@ -175,6 +176,8 @@ service Feed {
         Watch
         Upload
         Echo
+        Notify
+        Report
         Plain
     ]
     errors: [
@@ -239,6 +242,36 @@ operation Echo {
     }
 }
 
+/// Streams server-sent events out, closed by a terminator event.
+@http(method: "POST", uri: "/notify")
+operation Notify {
+    input := {
+        @required
+        topic: String
+    }
+
+    output := {
+        @required
+        @httpPayload
+        notifications: Notification
+    }
+}
+
+/// Streams server-sent events in, with no terminator.
+@http(method: "POST", uri: "/report")
+operation Report {
+    input := {
+        @required
+        @httpPayload
+        entries: ReportEntry
+    }
+
+    output := {
+        @required
+        received: Integer
+    }
+}
+
 /// A unary operation on a streaming service.
 @http(method: "GET", uri: "/plain")
 operation Plain {
@@ -256,6 +289,24 @@ union FeedEvent {
 }
 
 structure Done {}
+
+@streaming
+@serverSentEvents(terminator: "[DONE]")
+union Notification {
+    item: Person
+    completed: Done
+}
+
+@streaming
+@serverSentEvents
+union ReportEntry {
+    line: Line
+}
+
+structure Line {
+    @required
+    text: String
+}
 
 structure Failure {
     @required

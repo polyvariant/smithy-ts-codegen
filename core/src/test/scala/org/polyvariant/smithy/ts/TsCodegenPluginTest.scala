@@ -362,6 +362,95 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(out.contains("encodeBody: () => undefined,"))
   }
 
+  private val sseModel =
+    """|$version: "2"
+       |namespace test
+       |
+       |use org.polyvariant.ndjson#ndjsonRestJson
+       |use org.polyvariant.ndjson#serverSentEvents
+       |
+       |@ndjsonRestJson
+       |service Chat {
+       |  operations: [Converse, Collect]
+       |}
+       |
+       |@http(method: "POST", uri: "/converse")
+       |operation Converse {
+       |  input := {
+       |    @required
+       |    prompt: String
+       |  }
+       |  output := {
+       |    @required
+       |    @httpPayload
+       |    chunks: Chunk
+       |  }
+       |}
+       |
+       |@http(method: "POST", uri: "/collect")
+       |operation Collect {
+       |  input := {
+       |    @required
+       |    @httpPayload
+       |    entries: Entry
+       |  }
+       |  output := {
+       |    @required
+       |    received: Integer
+       |  }
+       |}
+       |
+       |@streaming
+       |@serverSentEvents(terminator: "[DONE]")
+       |union Chunk {
+       |  text: Text
+       |}
+       |
+       |@streaming
+       |@serverSentEvents
+       |union Entry {
+       |  line: Text
+       |}
+       |
+       |structure Text {
+       |  @required
+       |  value: String
+       |}
+       |""".stripMargin
+
+  test("streams a @serverSentEvents union output as sse, with its terminator") {
+    val out = generate(sseModel)
+
+    assert(clue(out).contains("export type ConverseOutput = { chunks: AsyncIterable<Chunk> }"))
+    assert(out.contains("responseStreamEncoding: 'sse',"))
+    assert(out.contains("responseStreamTerminator: '[DONE]',"))
+    // elements are validated against the union schema, exactly as for ndjson
+    assert(out.contains("decodeStream(res.stream, ChunkSchema,"))
+    assert(out.contains("export type StreamEncoding = 'ndjson' | 'sse' | 'binary'"))
+  }
+
+  test("streams a @serverSentEvents union input as sse, with no terminator when none is declared") {
+    val out = generate(sseModel)
+
+    assert(clue(out).contains("requestStreamEncoding: 'sse',"))
+    assert(!out.contains("requestStreamTerminator: "))
+  }
+
+  test("a @serverSentEvents mock passes its framing and terminator on") {
+    val out = generate(sseModel)
+
+    // `Converse` declares a terminator, so its mock operation carries it
+    assert(clue(out).contains("responseStreamTerminator: '[DONE]',"))
+    assert(out.contains("streamTerminator: op.responseStreamTerminator"))
+  }
+
+  test("a union without @serverSentEvents stays ndjson") {
+    val out = generate(ndjsonModel)
+
+    assert(clue(out).contains("responseStreamEncoding: 'ndjson',"))
+    assert(!out.contains("StreamTerminator: '"))
+  }
+
   test("does not emit the streaming transport for a model without streaming") {
     val out = generate(
       """|$version: "2"

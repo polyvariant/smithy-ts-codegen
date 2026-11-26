@@ -58,7 +58,7 @@ ThisBuild / githubWorkflowBuildPostamble ++= Seq(
 val smithyVersion = "1.75.0"
 val alloyVersion = "0.3.41"
 val smithy4sVersion = "0.19.13"
-val smithy4sNdjsonVersion = "0.3.2"
+val smithy4sNdjsonVersion = "0.4.0"
 
 val commonSettings = Seq(
   scalacOptions ++= Seq(

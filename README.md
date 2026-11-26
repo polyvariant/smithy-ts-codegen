@@ -173,12 +173,17 @@ Notes:
 Operations of an [`org.polyvariant.ndjson#ndjsonRestJson`](https://github.com/polyvariant/smithy4s-ndjson)
 service may stream their request body, their response body, or both. Smithy restricts
 `@streaming` to `blob` and `union`, and the protocol requires such a member to carry
-`@httpPayload`, which gives exactly two framings — applied identically in both directions:
+`@httpPayload`, which gives three framings — applied identically in both directions:
 
 | Smithy | Wire | TypeScript |
 | --- | --- | --- |
 | `@streaming blob` | `application/octet-stream`, body verbatim | `AsyncIterable<Uint8Array>` |
 | `@streaming union` | `application/x-ndjson`, one JSON value per line | `AsyncIterable<TheUnion>` |
+| `@streaming @serverSentEvents union` | `text/event-stream`, one event per JSON value | `AsyncIterable<TheUnion>` |
+
+A `@serverSentEvents(terminator: "[DONE]")` union is closed by one more event whose data is the
+terminator: the transport writes it after the last element of a streamed request, and skips it when
+reading a response, so it never reaches your code as an element.
 
 A streamed member is surfaced as an `AsyncIterable` on the generated type itself, so a
 streaming operation's signature reads like any other:
@@ -196,7 +201,7 @@ await client.upload({ id, body: chunks /* AsyncIterable<Uint8Array> */ })
 ```
 
 The promise resolves as soon as the response status is known; elements are pulled lazily,
-and ndjson elements are validated against the union's schema one at a time (a bad element
+and ndjson and server-sent-event elements are validated against the union's schema one at a time (a bad element
 throws `StreamDecodeError` at that element rather than truncating the stream). Because a
 streamed response commits its status before the first element, **a mid-stream failure can't
 be an HTTP status** — model it as a member of the streamed union (the protocol expects a
@@ -251,7 +256,7 @@ const directory = new DirectoryClient(transport)
 const feed = new FeedClient(transport, transport)   // streaming ops take both
 ```
 
-It covers the whole contract — unary requests, ndjson and binary framing in both
+It covers the whole contract — unary requests, ndjson, server-sent-event and binary framing in both
 directions, 401 handling, and a middleware seam (`chain` / `around` / `tap` /
 `interceptorStack`) for tracing, auth headers and error reporting. The framing
 primitives are exported on their own for transports it doesn't ship.
@@ -396,13 +401,15 @@ Substitute at **every** JSON boundary the transport has. There are more than the
 | Writing a request body | `stringifyLossless(req.body)` |
 | Reading an ndjson response line | `parseLossless(line)`, per line |
 | Writing an ndjson request element | `stringifyLossless(element) + '\n'`, per element |
+| Reading a server-sent event | `parseLossless(data)`, per event |
+| Writing a server-sent-event request element | `stringifyLossless(element)` as the event's `data` |
 
 **Do not use `res.json()`.** It is the natural way to read a body and it cannot be fixed from the
 outside: the rounding happens inside it, before you ever hold the value. Read `text()` and parse it
 yourself.
 
-The last two rows apply only if the transport implements `StreamTransport`. Note that
-`StreamTransportResponse.stream` is specified as *already-parsed* ndjson elements — so parsing them
+The last four rows apply only if the transport implements `StreamTransport`. Note that
+`StreamTransportResponse.stream` is specified as *already-parsed* ndjson and server-sent-event elements — so parsing them
 losslessly is the transport's job, not something the generated client can do afterwards.
 
 Reading a body has two cases that are not about precision but are easy to get wrong, and the
@@ -427,7 +434,7 @@ Nothing else needs special handling — in particular, a `@lossless` member boun
 header parameter is passed through as-is by the generated client, since those are strings on the wire
 and were never lossy.
 
-For a complete reference, `runtime/src/fetch.ts` and `runtime/src/ndjson.ts` in this repository are
+For a complete reference, `runtime/src/fetch.ts`, `runtime/src/ndjson.ts` and `runtime/src/sse.ts` in this repository are
 these substitutions over an otherwise ordinary `fetch` transport.
 
 The trait is member-scoped, not shape-scoped: whether a field can exceed the safe range is a

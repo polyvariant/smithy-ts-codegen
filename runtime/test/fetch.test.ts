@@ -191,6 +191,43 @@ test('a streamed request sends ndjson and its content-type', async () => {
   assert.equal(sent, '{"a":1}\n{"a":2}\n')
 })
 
+test('an sse response asks for text/event-stream and is deframed, skipping the terminator', async () => {
+  const f = fakeFetch(
+    () =>
+      new Response('data: {"item":1}\n\ndata: [DONE]\n\n', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      }),
+  )
+  const res = await fetchTransport({ fetch: f.fetch }).requestStream({
+    ...req({ method: 'POST' }),
+    responseStreamEncoding: 'sse',
+    responseStreamTerminator: '[DONE]',
+  })
+  assert.equal((f.calls[0]!.init.headers as Record<string, string>)['accept'], 'text/event-stream')
+  const got: unknown[] = []
+  for await (const element of res.stream!) got.push(element)
+  assert.deepEqual(got, [{ item: 1 }])
+})
+
+test('a streamed request sends sse, its terminator and its content-type', async () => {
+  const f = fakeFetch(() => json(200, { received: 2 }))
+  const outgoing = (async function* () {
+    yield { a: 1 }
+    yield { a: 2 }
+  })()
+  await fetchTransport({ fetch: f.fetch }).requestStream({
+    ...req({ method: 'POST' }),
+    requestStreamEncoding: 'sse',
+    requestStreamTerminator: '[DONE]',
+    stream: outgoing,
+  })
+  const init = f.calls[0]!.init
+  assert.equal((init.headers as Record<string, string>)['content-type'], 'text/event-stream')
+  const sent = await new Response(init.body as BodyInit).text()
+  assert.equal(sent, 'data: {"a":1}\n\ndata: {"a":2}\n\ndata: [DONE]\n\n')
+})
+
 test('a failure before the stream starts returns status and body, with no stream', async () => {
   const f = fakeFetch(() => json(409, { message: 'conflict' }))
   const res = await fetchTransport({ fetch: f.fetch }).requestStream({

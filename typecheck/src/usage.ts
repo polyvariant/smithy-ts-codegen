@@ -9,6 +9,8 @@
 
 import {
   type FeedEvent,
+  type Notification,
+  type ReportEntry,
   type MockRequest,
   type Person,
   type StreamTransport,
@@ -37,7 +39,8 @@ const transport: Transport = {
 const streamTransport: StreamTransport = {
   requestStream: async (req: StreamTransportRequest): Promise<StreamTransportResponse> => {
     // The framing the generator asked for is available to the transport.
-    const encoding: 'ndjson' | 'binary' | undefined = req.responseStreamEncoding
+    const encoding: 'ndjson' | 'sse' | 'binary' | undefined = req.responseStreamEncoding
+    const terminator: string | undefined = req.responseStreamTerminator
     if (req.requestStreamEncoding !== undefined && req.stream !== undefined) {
       for await (const _element of req.stream) {
         // ...frame and write it
@@ -98,7 +101,17 @@ export const produceStream = async (): Promise<number> => {
   for await (const _event of echoed.outgoing) {
     // typed as FeedEvent
   }
-  return stored
+
+  // server-sent events: the same typed union either way
+  const entries = async function* (): AsyncGenerator<ReportEntry> {
+    yield { line: { text: 'hello' } }
+  }
+  const { received } = await feed.report({ entries: entries() })
+  const { notifications } = await feed.notify({ topic: 'people' })
+  for await (const notification of notifications) {
+    if ('item' in notification) void notification.item.name
+  }
+  return stored + received
 }
 
 // --- Declared errors are catchable as their generated classes ---
@@ -129,6 +142,11 @@ export const mock = mockService(FeedMock, {
     for await (const chunk of input.body) stored += chunk.length
     return { stored }
   },
+  notify: () => ({
+    notifications: (async function* (): AsyncGenerator<Notification> {
+      yield { completed: {} }
+    })(),
+  }),
   plain: () => ({ message: 'hi' }),
 })
 

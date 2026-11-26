@@ -20,6 +20,7 @@ import alloy.DiscriminatedUnionTrait
 import alloy.JsonUnknownTrait
 import alloy.NullableTrait
 import alloy.OpenEnumTrait
+import org.polyvariant.ndjson.ServerSentEventsTrait
 import org.polyvariant.smithy.ts.api.PathSegment
 import org.polyvariant.smithy.ts.api.TsCodegenExtension
 import software.amazon.smithy.build.PluginContext
@@ -782,13 +783,16 @@ object TsCodegenPlugin {
   //
   // Smithy restricts `@streaming` to `:is(blob, union)` and the ndjson protocol
   // requires such a member to carry `@httpPayload`, so a structure has at most
-  // one streaming member and it always *is* the body. That gives exactly two
-  // framings, applied identically to input and output:
+  // one streaming member and it always *is* the body. That gives three framings,
+  // applied identically to input and output:
   //
   //   - `@streaming blob`  -> the body verbatim (`application/octet-stream`),
   //     surfaced as `AsyncIterable<Uint8Array>`;
   //   - `@streaming union` -> one JSON value per line (`application/x-ndjson`),
-  //     surfaced as `AsyncIterable<TheUnion>`.
+  //     surfaced as `AsyncIterable<TheUnion>`;
+  //   - `@streaming union` marked `@serverSentEvents` -> one server-sent event
+  //     per JSON value (`text/event-stream`), optionally closed by a terminator
+  //     event, surfaced as `AsyncIterable<TheUnion>` too.
   //
   // Framing itself is the transport's job (see `StreamTransport`): it hands us
   // already-split values and takes values back. What the generated code adds on
@@ -803,6 +807,9 @@ object TsCodegenPlugin {
     /** TS type of one element of the stream. */
     def elementType: String
 
+    /** The data of the event that closes an `sse` stream, if the union declares one. */
+    def terminator: Option[String] = None
+
   }
 
   private object StreamFraming {
@@ -813,11 +820,21 @@ object TsCodegenPlugin {
       val elementType = "Uint8Array"
     }
 
-    /** `@streaming union`: newline-delimited JSON, one union value per line. */
-    final case class Ndjson(shapeName: String) extends StreamFraming {
-      val encoding = "ndjson"
+    /** A `@streaming union`: JSON values of the union, validated per element. */
+    sealed trait Json extends StreamFraming {
+      def shapeName: String
       def elementType: String = shapeName
       def schemaExpr: String = s"${shapeName}Schema"
+    }
+
+    /** `@streaming union`: newline-delimited JSON, one union value per line. */
+    final case class Ndjson(shapeName: String) extends Json {
+      val encoding = "ndjson"
+    }
+
+    /** `@streaming @serverSentEvents union`: one server-sent event per union value. */
+    final case class Sse(shapeName: String, override val terminator: Option[String]) extends Json {
+      val encoding = "sse"
     }
 
   }
@@ -855,8 +872,12 @@ object TsCodegenPlugin {
       val framing =
         target match {
           case _: BlobShape  => StreamFraming.Binary
-          case u: UnionShape => StreamFraming.Ndjson(w.tsName(u))
-          case other         =>
+          case u: UnionShape =>
+            u.getTrait(classOf[ServerSentEventsTrait]).toScala match {
+              case Some(sse) => StreamFraming.Sse(w.tsName(u), sse.getTerminator.toScala)
+              case None      => StreamFraming.Ndjson(w.tsName(u))
+            }
+          case other =>
             sys.error(
               s"@streaming member ${shape.getId}$$$memberName targets ${other.getId} (${other.getType}); only blob and union are supported"
             )
@@ -903,8 +924,8 @@ object TsCodegenPlugin {
     */
   private def streamDecodeExpr(info: StreamInfo, expr: String, opLabel: String): String =
     info.framing match {
-      case StreamFraming.Binary    => s"$expr as AsyncIterable<Uint8Array>"
-      case n: StreamFraming.Ndjson => s"decodeStream($expr, ${n.schemaExpr}, $opLabel)"
+      case StreamFraming.Binary  => s"$expr as AsyncIterable<Uint8Array>"
+      case j: StreamFraming.Json => s"decodeStream($expr, ${j.schemaExpr}, $opLabel)"
     }
 
   // --------------------------------------------------------------------------
@@ -1049,11 +1070,17 @@ object TsCodegenPlugin {
     w.line(" *     newline. Incoming: split on newlines, skip blank lines, and")
     w.line(" *     `JSON.parse` each one. The generated client applies the element")
     w.line(" *     schema on top of whatever is yielded here.")
+    w.line(" *   - `'sse'` — one server-sent event per JSON value")
+    w.line(" *     (`text/event-stream`), for a union marked `@serverSentEvents`.")
+    w.line(" *     Outgoing: each element's JSON as an event's `data`, then the")
+    w.line(" *     terminator event if `requestStreamTerminator` is set. Incoming:")
+    w.line(" *     `JSON.parse` each event's `data`, skipping comments, other fields,")
+    w.line(" *     keep-alives and the `responseStreamTerminator` event.")
     w.line(" *   - `'binary'` — the body verbatim")
     w.line(" *     (`application/octet-stream`), as `Uint8Array` chunks. Chunk")
     w.line(" *     boundaries carry no meaning in either direction.")
     w.line(" */")
-    w.line("export type StreamEncoding = 'ndjson' | 'binary'")
+    w.line("export type StreamEncoding = 'ndjson' | 'sse' | 'binary'")
     w.line("")
     w.block("export interface StreamTransportRequest extends TransportRequest {", "}") {
       w.line("/** Framing for the request body, when it streams. `undefined` means the")
@@ -1064,8 +1091,16 @@ object TsCodegenPlugin {
       w.line(" * `undefined` means an ordinary JSON response body.")
       w.line(" */")
       w.line("responseStreamEncoding?: StreamEncoding")
+      w.line("/** For an `'sse'` request: the data of one more event to send after")
+      w.line(" * the last value (the union's `@serverSentEvents(terminator:)`).")
+      w.line(" */")
+      w.line("requestStreamTerminator?: string")
+      w.line("/** For an `'sse'` response: the data of the event the server sends")
+      w.line(" * after the last value, which is not itself a value and is skipped.")
+      w.line(" */")
+      w.line("responseStreamTerminator?: string")
       w.line("/** The outgoing stream, present exactly when `requestStreamEncoding` is.")
-      w.line(" * For `'ndjson'` these are the values to serialise, one per line; for")
+      w.line(" * For `'ndjson'` and `'sse'` these are the values to serialise; for")
       w.line(" * `'binary'`, `Uint8Array` chunks. Overrides `body`.")
       w.line(" */")
       w.line("stream?: AsyncIterable<unknown>")
@@ -1078,8 +1113,9 @@ object TsCodegenPlugin {
       w.line("/** The deframed response body, present exactly when the operation")
       w.line(" * streams its output and the status was 2xx. Elements are the values")
       w.line(" * `responseStreamEncoding` describes — already `JSON.parse`d for")
-      w.line(" * `'ndjson'`, raw `Uint8Array` chunks for `'binary'`. The generated")
-      w.line(" * client validates ndjson elements against the operation's schema.")
+      w.line(" * `'ndjson'` and `'sse'`, raw `Uint8Array` chunks for `'binary'`. The")
+      w.line(" * generated client validates those elements against the operation's")
+      w.line(" * schema.")
       w.line(" */")
       w.line("stream?: AsyncIterable<unknown>")
       w.line("/** The fully-read body, for a non-2xx response (so declared errors can")
@@ -1373,10 +1409,15 @@ object TsCodegenPlugin {
         w.lit(s"body: $bodyExpr,")
         streams.input.foreach { in =>
           w.line(s"requestStreamEncoding: ${jsString(in.framing.encoding)},")
+          in.framing.terminator.foreach(t => w.line(s"requestStreamTerminator: ${jsString(t)},"))
           w.line(s"stream: ${streamEncodeExpr(in, s"input.${in.memberName}")},")
         }
         streams.output.foreach { out =>
           w.line(s"responseStreamEncoding: ${jsString(out.framing.encoding)},")
+          out
+            .framing
+            .terminator
+            .foreach(t => w.line(s"responseStreamTerminator: ${jsString(t)},"))
         }
         w.line("options: opts,")
       }
@@ -1523,6 +1564,7 @@ object TsCodegenPlugin {
     info.framing match {
       case StreamFraming.Binary    => "raw bytes"
       case n: StreamFraming.Ndjson => s"newline-delimited `${n.shapeName}` values"
+      case e: StreamFraming.Sse    => s"`${e.shapeName}` values as server-sent events"
     }
 
   /** Emits the `return ...` for a successful streamed response: the non-streaming members are
@@ -1591,7 +1633,7 @@ object TsCodegenPlugin {
       w.line("body: unknown")
       if (streaming) {
         w.line("/** The deframed request body, for an operation that streams its input.")
-        w.line(" * Elements are `JSON.parse`d values for an ndjson stream and")
+        w.line(" * Elements are `JSON.parse`d values for an ndjson or sse stream and")
         w.line(" * `Uint8Array` chunks for a binary one — the same shape the streaming")
         w.line(" * transport yields, so a mock and a real server see the same thing. */")
         w.line("stream?: AsyncIterable<unknown>")
@@ -1607,7 +1649,10 @@ object TsCodegenPlugin {
         w.line(" * adapter frames these elements per `streamEncoding`. */")
         w.line("stream?: AsyncIterable<unknown>")
         w.line("/** Framing for `stream`, mirroring `StreamEncoding` on the transport. */")
-        w.line("streamEncoding?: 'ndjson' | 'binary'")
+        w.line("streamEncoding?: 'ndjson' | 'sse' | 'binary'")
+        w.line("/** For an `'sse'` stream: the data of the event to send after the last")
+        w.line(" * element, if the union declares one. */")
+        w.line("streamTerminator?: string")
       }
     }
     w.line("")
@@ -1629,7 +1674,9 @@ object TsCodegenPlugin {
       if (streaming) {
         w.line("/** Framing of this operation's streamed output, when it streams one.")
         w.line(" * `undefined` for an ordinary unary operation. */")
-        w.line("readonly responseStreamEncoding?: 'ndjson' | 'binary'")
+        w.line("readonly responseStreamEncoding?: 'ndjson' | 'sse' | 'binary'")
+        w.line("/** The terminator event's data, for an `'sse'` output that declares one. */")
+        w.line("readonly responseStreamTerminator?: string")
         w.line("/** Pulls the streamed member out of a handler's returned output, for")
         w.line(" * an operation that streams its output. */")
         w.line("readonly encodeStream?: (output: unknown) => AsyncIterable<unknown>")
@@ -1727,6 +1774,9 @@ object TsCodegenPlugin {
                       w.line("headers: {},")
                       w.line("stream: op.encodeStream(output),")
                       w.line("streamEncoding: op.responseStreamEncoding,")
+                      w.line(
+                        "...(op.responseStreamTerminator !== undefined ? { streamTerminator: op.responseStreamTerminator } : {}),"
+                      )
                     }
                   }
                 w.line("return { status: 200, body: op.encodeBody(output), headers: {} }")
@@ -1878,6 +1928,10 @@ object TsCodegenPlugin {
       writeMockEncodeBody(w, model, output, streams.output)
       streams.output.foreach { out =>
         w.line(s"responseStreamEncoding: ${jsString(out.framing.encoding)},")
+        out
+          .framing
+          .terminator
+          .foreach(t => w.line(s"responseStreamTerminator: ${jsString(t)},"))
         w.line(
           s"encodeStream: (output) => ${streamEncodeExpr(out, s"(output as Record<string, unknown>)[${jsString(out.memberName)}] as AsyncIterable<unknown>")},"
         )
