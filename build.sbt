@@ -1,6 +1,4 @@
-import com.typesafe.tools.mima.core._
-
-ThisBuild / tlBaseVersion := "0.5"
+ThisBuild / tlBaseVersion := "0.6"
 ThisBuild / organization := "org.polyvariant"
 ThisBuild / organizationName := "Polyvariant"
 ThisBuild / startYear := Some(2026)
@@ -123,12 +121,6 @@ lazy val core = project
       // smithy4s-ndjson is needed here.
       "org.polyvariant" % "smithy4s-ndjson-protocol" % smithy4sNdjsonVersion,
       "org.scalameta" %% "munit" % "1.3.6" % Test,
-    ),
-    mimaBinaryIssueFilters ++= Seq(
-      // `TsWriter` is private to the generator; Scala's `private` just isn't visible to MiMa.
-      ProblemFilters.exclude[DirectMissingMethodProblem](
-        "org.polyvariant.smithy.ts.TsCodegenPlugin#TsWriter.this"
-      )
     ),
   )
 
