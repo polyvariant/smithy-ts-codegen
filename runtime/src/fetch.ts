@@ -56,17 +56,28 @@ const joinUrl = (baseUrl: string, url: string): string => {
   return url.startsWith('/') ? base + url : base + '/' + url
 }
 
-/** `?a=1&b=2` for the defined entries, or `''`. Booleans and numbers are
- * stringified; `undefined` members are dropped rather than sent as the string
- * `"undefined"`. */
-const queryString = (query: TransportRequest['query']): string => {
-  if (query === undefined) return ''
-  const params = new URLSearchParams()
+/** Percent-encodes everything outside RFC 3986's unreserved set, as the protocol
+ * requires — `URLSearchParams` would write a space as `+` and leave `*` bare. */
+const encodeQueryPart = (value: string): string =>
+  encodeURIComponent(value).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+
+/** `url` with the defined query entries appended. Booleans and numbers are
+ * stringified; a list repeats the parameter once per element; `undefined`
+ * members are dropped rather than sent as the string `"undefined"`. The
+ * generated `url` may already carry a query — the constant parameters of an
+ * `@http(uri: "/path?flag")` — so this appends to it rather than starting one. */
+const withQuery = (url: string, query: TransportRequest['query']): string => {
+  if (query === undefined) return url
+  const parts: string[] = []
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined) params.append(key, String(value))
+    if (value === undefined) continue
+    const values: readonly (string | number | boolean)[] = Array.isArray(value)
+      ? value
+      : [value as string | number | boolean]
+    for (const v of values) parts.push(encodeQueryPart(key) + '=' + encodeQueryPart(String(v)))
   }
-  const qs = params.toString()
-  return qs === '' ? '' : '?' + qs
+  if (parts.length === 0) return url
+  return url + (url.includes('?') ? '&' : '?') + parts.join('&')
 }
 
 /** Lowercase the header names, as `TransportResponse.headers` promises — the
@@ -135,7 +146,7 @@ export const fetchTransport = (options: FetchTransportOptions = {}): FullTranspo
     (options.fetch ?? globalThis.fetch)(input, requestInit)
 
   const request = async (req: TransportRequest): Promise<TransportResponse> => {
-    const res = await doFetch(joinUrl(baseUrl, req.url) + queryString(req.query), {
+    const res = await doFetch(withQuery(joinUrl(baseUrl, req.url), req.query), {
       ...init,
       method: req.method,
       credentials,
@@ -158,7 +169,7 @@ export const fetchTransport = (options: FetchTransportOptions = {}): FullTranspo
   const requestStream = async (req: StreamTransportRequest): Promise<StreamTransportResponse> => {
     const outgoing = await streamBody(req)
 
-    const res = await doFetch(joinUrl(baseUrl, req.url) + queryString(req.query), {
+    const res = await doFetch(withQuery(joinUrl(baseUrl, req.url), req.query), {
       ...init,
       method: req.method,
       credentials,

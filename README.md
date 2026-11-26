@@ -21,8 +21,10 @@ From one model, into a single `generated.ts`:
    `StreamTransport` (see [Streaming](#streaming)).
 4. **Service clients** — one `XxxClient` class per service, one `async` method per operation.
    Each method walks the operation's `@http` trait to build the request (URI labels, query,
-   headers, body) and parses the response with the generated output schema, dispatching declared
-   errors by status (and `X-Error-Type` when several errors share a status).
+   headers, body) and decodes the response — body, headers and status — before validating it
+   with the generated output schema, dispatching declared errors by status (and `X-Error-Type`
+   when several errors share a status). The wire encoding (see [Wire format](#wire-format)) is
+   checked against smithy's protocol compliance tests.
 5. **Storybook mock stubs** — a typed `XxxHandlers` interface + `XxxMock` descriptor per
    service, plus a shared `mockService` runtime, so a story can implement just the operations it
    exercises.
@@ -454,15 +456,40 @@ Note this changes only the *TypeScript* representation — the wire format is st
 so a client sending such a member is responsible for serializing it back as an unquoted numeric
 literal.
 
+## Wire format
+
+The TS types describe values as you use them; the wire encoding of `simpleRestJson` differs from
+them in places, so every structure, union, and any list or map that needs it, gets a pair of
+generated functions, `encodeX(value)` and `decodeX(json)`, which the clients and mocks apply.
+Where the protocol leaves a choice, the generated code does what smithy4s does:
+
+- **Timestamps** are `Date`s in TS. On the wire, a JSON body carries epoch seconds, a header an
+  HTTP date and a query parameter or label an RFC 3339 date-time, unless `@timestampFormat` says
+  otherwise. Decoding accepts any of the three.
+- **`@jsonName`** renames a structure member's key, or a union variant's tag, in JSON; the TS
+  value keeps the member name.
+- **`null`** in a JSON body means absent, except for an `alloy#nullable` member. A member with a
+  `@default` decodes to the default when absent. `@sparse` collections keep their `null`s.
+- **Lists** in a header are comma-separated (strings quoted when they need it); in a query
+  string they repeat the parameter.
+- **`@httpQueryParams`** and **`@httpPrefixHeaders`** maps spread into the query string and the
+  headers; constant query parameters in an `@http` URI are part of the generated URL.
+- **Labels and query values** are percent-encoded per RFC 3986; a greedy label (`{key+}`) keeps
+  its slashes.
+- An output with an `@httpResponseCode` member succeeds on any status below 400.
+- **`@idempotencyToken`** members are not filled in for you, as in smithy4s.
+
 ## Conventions & limits
 
 - Only `alloy#simpleRestJson` services get clients; every operation needs an `@http` trait.
 - Shapes in `smithy.api`, `smithy4s.*`, and `alloy.*` namespaces, mixins, and trait definitions
   are not emitted as data types.
-- **Recursive shapes are not supported** — the generator topologically sorts shapes into one
-  file and fails on cycles.
-- Timestamps become `z.coerce.date()`; blobs become `z.string()` (a `@streaming` blob instead
-  becomes `AsyncIterable<Uint8Array>`, with no zod schema — there is nothing to validate).
+- Recursive shapes are supported: a member that closes a cycle is declared as a getter
+  (`get next() { return NodeSchema.optional() }`), which zod resolves lazily and TypeScript
+  infers through.
+- Timestamps become `z.coerce.date()`; blobs become `z.string()` holding the base64 text (a
+  `@streaming` blob instead becomes `AsyncIterable<Uint8Array>`, with no zod schema — there is
+  nothing to validate).
 - A `@streaming` member is left out of its structure's zod schema (validating it would mean
   consuming the stream); the generated *type* still carries it, as an `AsyncIterable`.
 
@@ -472,11 +499,12 @@ literal.
 sbt test                  # unit tests
 sbt sbtPlugin/scripted    # the sbt plugin, end to end
 sbt tsCodegenSample       # regenerate typecheck/src/generated.ts
+sbt complianceCodegen     # regenerate compliance/generated
 nix flake check           # type-check + test the TypeScript side
 pnpm check                # the same, without nix (needs `pnpm install` first)
 ```
 
-The TypeScript lives in a pnpm workspace of two packages:
+The TypeScript lives in a pnpm workspace of three packages:
 
 - `runtime/` — the published transport library. `pnpm --filter @polyvariant/smithy-ts-runtime
   run check` builds it, type-checks it and runs its `node:test` suite (framing round-trips,
@@ -487,15 +515,25 @@ The TypeScript lives in a pnpm workspace of two packages:
   clients with the *library's* transport. That last file is what pins the library's structural
   transport types to the ones the codegen emits — change one without the other and it stops
   compiling.
+- `compliance/` — smithy's HTTP protocol compliance tests, run against the generated clients
+  over the runtime's `fetchTransport` (client side only: request serialization and response
+  decoding). Two suites: alloy's own `simpleRestJson` tests, and the smithy `restJson1` tests
+  alloy lists as applying to `simpleRestJson`, selected by alloy's allow and disallow rules
+  exactly as smithy4s selects them — so the same set smithy4s runs. `generated/` holds the
+  TypeScript for each suite's services and its cases, written by `sbt complianceCodegen` (from
+  `compliance-codegen/`). The only cases allowed to fail are listed in `known-failures.txt`,
+  where we deliberately behave like smithy4s instead; a listed case that starts passing fails
+  the run.
 
 `nix flake check` runs both under `strict` + `erasableSyntaxOnly`.
 
 This matters because the Scala tests assert on substrings of the emitted file, which cannot
 catch a type error — a generator declared as `AsyncIterable`, an intersection with an empty
 `z.object`, a `Date` cast to a query value. After changing the generator, run
-`sbt tsCodegenSample` and commit the result; CI fails if it drifts.
+`sbt tsCodegenSample` and `sbt complianceCodegen` and commit the result; CI fails if either
+drifts.
 
-Changing anything under `runtime/` or `typecheck/` that moves the lockfile means updating
+Changing anything under `runtime/`, `typecheck/` or `compliance/` that moves the lockfile means updating
 `pnpmDeps.hash` in `nix/typecheck.nix` — build once, and nix prints the hash it wanted.
 Note that `nix build` only sees git-tracked files, so `git add` new files before running it.
 

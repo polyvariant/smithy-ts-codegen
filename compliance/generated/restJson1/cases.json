@@ -1,0 +1,3479 @@
+[
+    {
+        "id": "RestJsonAllQueryStringTypes",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "AllQueryStringTypes",
+        "error": null,
+        "case": {
+            "id": "RestJsonAllQueryStringTypes",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes query string parameters with all supported types",
+            "body": "",
+            "params": {
+                "queryString": "Hello there",
+                "queryStringList": [
+                    "a",
+                    "b",
+                    "c"
+                ],
+                "queryStringSet": [
+                    "a",
+                    "b",
+                    "c"
+                ],
+                "queryByte": 1,
+                "queryShort": 2,
+                "queryInteger": 3,
+                "queryIntegerList": [
+                    1,
+                    2,
+                    3
+                ],
+                "queryIntegerSet": [
+                    1,
+                    2,
+                    3
+                ],
+                "queryLong": 4,
+                "queryFloat": 1.1,
+                "queryDouble": 1.1,
+                "queryDoubleList": [
+                    1.1,
+                    2.1,
+                    3.1
+                ],
+                "queryBoolean": true,
+                "queryBooleanList": [
+                    true,
+                    false,
+                    true
+                ],
+                "queryTimestamp": {
+                    "$date": 1
+                },
+                "queryTimestampList": [
+                    {
+                        "$date": 1
+                    },
+                    {
+                        "$date": 2
+                    },
+                    {
+                        "$date": 3
+                    }
+                ],
+                "queryEnum": "Foo",
+                "queryEnumList": [
+                    "Foo",
+                    "Baz",
+                    "Bar"
+                ],
+                "queryIntegerEnum": 1,
+                "queryIntegerEnumList": [
+                    1,
+                    2,
+                    3
+                ],
+                "queryParamsMapOfStringList": {
+                    "String": [
+                        "Hello there"
+                    ],
+                    "StringList": [
+                        "a",
+                        "b",
+                        "c"
+                    ],
+                    "StringSet": [
+                        "a",
+                        "b",
+                        "c"
+                    ],
+                    "Byte": [
+                        "1"
+                    ],
+                    "Short": [
+                        "2"
+                    ],
+                    "Integer": [
+                        "3"
+                    ],
+                    "IntegerList": [
+                        "1",
+                        "2",
+                        "3"
+                    ],
+                    "IntegerSet": [
+                        "1",
+                        "2",
+                        "3"
+                    ],
+                    "Long": [
+                        "4"
+                    ],
+                    "Float": [
+                        "1.1"
+                    ],
+                    "Double": [
+                        "1.1"
+                    ],
+                    "DoubleList": [
+                        "1.1",
+                        "2.1",
+                        "3.1"
+                    ],
+                    "Boolean": [
+                        "true"
+                    ],
+                    "BooleanList": [
+                        "true",
+                        "false",
+                        "true"
+                    ],
+                    "Timestamp": [
+                        "1970-01-01T00:00:01Z"
+                    ],
+                    "TimestampList": [
+                        "1970-01-01T00:00:01Z",
+                        "1970-01-01T00:00:02Z",
+                        "1970-01-01T00:00:03Z"
+                    ],
+                    "Enum": [
+                        "Foo"
+                    ],
+                    "EnumList": [
+                        "Foo",
+                        "Baz",
+                        "Bar"
+                    ],
+                    "IntegerEnum": [
+                        "1"
+                    ],
+                    "IntegerEnumList": [
+                        "1",
+                        "2",
+                        "3"
+                    ]
+                }
+            },
+            "method": "GET",
+            "uri": "/AllQueryStringTypesInput",
+            "queryParams": [
+                "String=Hello%20there",
+                "StringList=a",
+                "StringList=b",
+                "StringList=c",
+                "StringSet=a",
+                "StringSet=b",
+                "StringSet=c",
+                "Byte=1",
+                "Short=2",
+                "Integer=3",
+                "IntegerList=1",
+                "IntegerList=2",
+                "IntegerList=3",
+                "IntegerSet=1",
+                "IntegerSet=2",
+                "IntegerSet=3",
+                "Long=4",
+                "Float=1.1",
+                "Double=1.1",
+                "DoubleList=1.1",
+                "DoubleList=2.1",
+                "DoubleList=3.1",
+                "Boolean=true",
+                "BooleanList=true",
+                "BooleanList=false",
+                "BooleanList=true",
+                "Timestamp=1970-01-01T00%3A00%3A01Z",
+                "TimestampList=1970-01-01T00%3A00%3A01Z",
+                "TimestampList=1970-01-01T00%3A00%3A02Z",
+                "TimestampList=1970-01-01T00%3A00%3A03Z",
+                "Enum=Foo",
+                "EnumList=Foo",
+                "EnumList=Baz",
+                "EnumList=Bar",
+                "IntegerEnum=1",
+                "IntegerEnumList=1",
+                "IntegerEnumList=2",
+                "IntegerEnumList=3"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonQueryStringMap",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "AllQueryStringTypes",
+        "error": null,
+        "case": {
+            "id": "RestJsonQueryStringMap",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Handles query string maps",
+            "body": "",
+            "params": {
+                "queryParamsMapOfStringList": {
+                    "QueryParamsStringKeyA": [
+                        "Foo"
+                    ],
+                    "QueryParamsStringKeyB": [
+                        "Bar"
+                    ]
+                }
+            },
+            "method": "GET",
+            "uri": "/AllQueryStringTypesInput",
+            "queryParams": [
+                "QueryParamsStringKeyA=Foo",
+                "QueryParamsStringKeyB=Bar"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonQueryStringEscaping",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "AllQueryStringTypes",
+        "error": null,
+        "case": {
+            "id": "RestJsonQueryStringEscaping",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Handles escaping all required characters in the query string.",
+            "body": "",
+            "params": {
+                "queryString": " %:/?#[]@!$&'()*+,;=😹",
+                "queryParamsMapOfStringList": {
+                    "String": [
+                        " %:/?#[]@!$&'()*+,;=😹"
+                    ]
+                }
+            },
+            "method": "GET",
+            "uri": "/AllQueryStringTypesInput",
+            "queryParams": [
+                "String=%20%25%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D%F0%9F%98%B9"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonConstantAndVariableQueryStringMissingOneValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "ConstantAndVariableQueryString",
+        "error": null,
+        "case": {
+            "id": "RestJsonConstantAndVariableQueryStringMissingOneValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Mixes constant and variable query string parameters",
+            "body": "",
+            "params": {
+                "baz": "bam"
+            },
+            "method": "GET",
+            "uri": "/ConstantAndVariableQueryString",
+            "queryParams": [
+                "foo=bar",
+                "baz=bam"
+            ],
+            "forbidQueryParams": [
+                "maybeSet"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonConstantAndVariableQueryStringAllValues",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "ConstantAndVariableQueryString",
+        "error": null,
+        "case": {
+            "id": "RestJsonConstantAndVariableQueryStringAllValues",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Mixes constant and variable query string parameters",
+            "body": "",
+            "params": {
+                "baz": "bam",
+                "maybeSet": "yes"
+            },
+            "method": "GET",
+            "uri": "/ConstantAndVariableQueryString",
+            "queryParams": [
+                "foo=bar",
+                "baz=bam",
+                "maybeSet=yes"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonConstantQueryString",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "ConstantQueryString",
+        "error": null,
+        "case": {
+            "id": "RestJsonConstantQueryString",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Includes constant query string parameters",
+            "body": "",
+            "params": {
+                "hello": "hi"
+            },
+            "method": "GET",
+            "uri": "/ConstantQueryString/hi",
+            "queryParams": [
+                "foo=bar",
+                "hello"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonDateTimeWithNegativeOffset",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DatetimeOffsets",
+        "error": null,
+        "case": {
+            "id": "RestJsonDateTimeWithNegativeOffset",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that clients can correctly parse datetime (timestamps) with offsets",
+            "body": "      {\n          \"datetime\": \"2019-12-16T22:48:18-01:00\"\n      }\n",
+            "bodyMediaType": "application/json",
+            "appliesTo": "client",
+            "params": {
+                "datetime": {
+                    "$date": 1576540098
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDateTimeWithPositiveOffset",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DatetimeOffsets",
+        "error": null,
+        "case": {
+            "id": "RestJsonDateTimeWithPositiveOffset",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that clients can correctly parse datetime (timestamps) with offsets",
+            "body": "      {\n          \"datetime\": \"2019-12-17T00:48:18+01:00\"\n      }\n",
+            "bodyMediaType": "application/json",
+            "appliesTo": "client",
+            "params": {
+                "datetime": {
+                    "$date": 1576540098
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "DocumentTypeInputWithObject",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentTypeInputWithObject",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes document types as part of the JSON request payload with no escaping.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": {\n        \"foo\": \"bar\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": {
+                    "foo": "bar"
+                }
+            },
+            "method": "PUT",
+            "uri": "/DocumentType"
+        }
+    },
+    {
+        "id": "DocumentInputWithString",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentInputWithString",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes document types using a string.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": \"hello\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": "hello"
+            },
+            "method": "PUT",
+            "uri": "/DocumentType"
+        }
+    },
+    {
+        "id": "DocumentInputWithNumber",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentInputWithNumber",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes document types using a number.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": 10\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": 10
+            },
+            "method": "PUT",
+            "uri": "/DocumentType"
+        }
+    },
+    {
+        "id": "DocumentInputWithBoolean",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentInputWithBoolean",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes document types using a boolean.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": true\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": true
+            },
+            "method": "PUT",
+            "uri": "/DocumentType"
+        }
+    },
+    {
+        "id": "DocumentInputWithList",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentInputWithList",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes document types using a list.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": [\n        true,\n        \"hi\",\n        [\n            1,\n            2\n        ],\n        {\n            \"foo\": {\n                \"baz\": [\n                    3,\n                    4\n                ]\n            }\n        }\n    ]\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": [
+                    true,
+                    "hi",
+                    [
+                        1,
+                        2
+                    ],
+                    {
+                        "foo": {
+                            "baz": [
+                                3,
+                                4
+                            ]
+                        }
+                    }
+                ]
+            },
+            "method": "PUT",
+            "uri": "/DocumentType"
+        }
+    },
+    {
+        "id": "DocumentOutput",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes documents as part of the JSON response payload with no escaping.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": {\n        \"foo\": \"bar\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": {
+                    "foo": "bar"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "DocumentOutputString",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentOutputString",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Document types can be JSON scalars too.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": \"hello\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": "hello"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "DocumentOutputNumber",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentOutputNumber",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Document types can be JSON scalars too.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": 10\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": 10
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "DocumentOutputBoolean",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentOutputBoolean",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Document types can be JSON scalars too.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": false\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": false
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "DocumentOutputArray",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DocumentType",
+        "error": null,
+        "case": {
+            "id": "DocumentOutputArray",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Document types can be JSON arrays.",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"documentValue\": [\n        true,\n        false\n    ]\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": "string",
+                "documentValue": [
+                    true,
+                    false
+                ]
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "DocumentTypeAsPayloadInput",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "DocumentTypeAsPayload",
+        "error": null,
+        "case": {
+            "id": "DocumentTypeAsPayloadInput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a document as the target of the httpPayload trait.",
+            "body": "{\n    \"foo\": \"bar\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "documentValue": {
+                    "foo": "bar"
+                }
+            },
+            "method": "PUT",
+            "uri": "/DocumentTypeAsPayload"
+        }
+    },
+    {
+        "id": "DocumentTypeAsPayloadInputString",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "DocumentTypeAsPayload",
+        "error": null,
+        "case": {
+            "id": "DocumentTypeAsPayloadInputString",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a document as the target of the httpPayload trait using a string.",
+            "body": "\"hello\"",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "documentValue": "hello"
+            },
+            "method": "PUT",
+            "uri": "/DocumentTypeAsPayload"
+        }
+    },
+    {
+        "id": "DocumentTypeAsPayloadOutput",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DocumentTypeAsPayload",
+        "error": null,
+        "case": {
+            "id": "DocumentTypeAsPayloadOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a document as the target of the httpPayload trait.",
+            "body": "{\n    \"foo\": \"bar\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "documentValue": {
+                    "foo": "bar"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "DocumentTypeAsPayloadOutputString",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "DocumentTypeAsPayload",
+        "error": null,
+        "case": {
+            "id": "DocumentTypeAsPayloadOutputString",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a document as a payload string.",
+            "body": "\"hello\"",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "documentValue": "hello"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonEmptyInputAndEmptyOutput",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "EmptyInputAndEmptyOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonEmptyInputAndEmptyOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Clients should not serialize a JSON payload when no parameters\nare given that are sent in the body. A service will tolerate\nclients that omit a payload or that send a JSON object.",
+            "body": "",
+            "method": "POST",
+            "uri": "/EmptyInputAndEmptyOutput"
+        }
+    },
+    {
+        "id": "RestJsonEmptyInputAndEmptyOutput",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "EmptyInputAndEmptyOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonEmptyInputAndEmptyOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "As of January 2021, server implementations are expected to\nrespond with a JSON object regardless of if the output\nparameters are empty.",
+            "body": "{}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonEmptyInputAndEmptyOutputJsonObjectOutput",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "EmptyInputAndEmptyOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonEmptyInputAndEmptyOutputJsonObjectOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "This test ensures that clients can gracefully handle\nsituations where a service omits a JSON payload entirely.",
+            "body": "",
+            "appliesTo": "client",
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonEndpointTrait",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "EndpointOperation",
+        "error": null,
+        "case": {
+            "id": "RestJsonEndpointTrait",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Operations can prepend to the given host if they define the\nendpoint trait.",
+            "body": "",
+            "method": "POST",
+            "uri": "/EndpointOperation",
+            "host": "example.com",
+            "resolvedHost": "foo.example.com"
+        }
+    },
+    {
+        "id": "RestJsonEndpointTraitWithHostLabel",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "EndpointWithHostLabelOperation",
+        "error": null,
+        "case": {
+            "id": "RestJsonEndpointTraitWithHostLabel",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Operations can prepend to the given host if they define the\nendpoint trait, and can use the host label trait to define\nfurther customization based on user input.",
+            "body": "{\"label\": \"bar\"}",
+            "bodyMediaType": "application/json",
+            "params": {
+                "label": "bar"
+            },
+            "method": "POST",
+            "uri": "/EndpointWithHostLabelOperation",
+            "host": "example.com",
+            "resolvedHost": "foo.bar.example.com"
+        }
+    },
+    {
+        "id": "RestJsonDateTimeWithFractionalSeconds",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "FractionalSeconds",
+        "error": null,
+        "case": {
+            "id": "RestJsonDateTimeWithFractionalSeconds",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that clients can correctly parse datetime timestamps with fractional seconds",
+            "body": "      {\n          \"datetime\": \"2000-01-02T20:34:56.123Z\"\n      }\n",
+            "bodyMediaType": "application/json",
+            "appliesTo": "client",
+            "params": {
+                "datetime": {
+                    "$date": 9.46845296123E8
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonGreetingWithErrors",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "GreetingWithErrors",
+        "error": null,
+        "case": {
+            "id": "RestJsonGreetingWithErrors",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that operations with errors successfully know how\nto deserialize a successful response. As of January 2021,\nserver implementations are expected to respond with a\nJSON object regardless of if the output parameters are\nempty.",
+            "body": "{}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "X-Greeting": "Hello"
+            },
+            "params": {
+                "greeting": "Hello"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonGreetingWithErrorsNoPayload",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "GreetingWithErrors",
+        "error": null,
+        "case": {
+            "id": "RestJsonGreetingWithErrorsNoPayload",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "This test is similar to RestJsonGreetingWithErrors, but it\nensures that clients can gracefully deal with a server\nomitting a response payload.",
+            "body": "",
+            "appliesTo": "client",
+            "headers": {
+                "X-Greeting": "Hello"
+            },
+            "params": {
+                "greeting": "Hello"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonComplexErrorWithNoMessage",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "GreetingWithErrors",
+        "error": "ComplexError",
+        "case": {
+            "id": "RestJsonComplexErrorWithNoMessage",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a complex error with no message member",
+            "body": "{\n    \"TopLevel\": \"Top level\",\n    \"Nested\": {\n        \"Fooooo\": \"bar\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Amzn-Errortype": "ComplexError",
+                "X-Header": "Header"
+            },
+            "params": {
+                "Header": "Header",
+                "TopLevel": "Top level",
+                "Nested": {
+                    "Foo": "bar"
+                }
+            },
+            "code": 403
+        }
+    },
+    {
+        "id": "RestJsonEmptyComplexErrorWithNoMessage",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "GreetingWithErrors",
+        "error": "ComplexError",
+        "case": {
+            "id": "RestJsonEmptyComplexErrorWithNoMessage",
+            "protocol": "aws.protocols#restJson1",
+            "body": "{}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Amzn-Errortype": "ComplexError"
+            },
+            "code": 403
+        }
+    },
+    {
+        "id": "RestJsonInvalidGreetingError",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "GreetingWithErrors",
+        "error": "InvalidGreeting",
+        "case": {
+            "id": "RestJsonInvalidGreetingError",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Parses simple JSON errors",
+            "body": "{\n    \"Message\": \"Hi\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Amzn-Errortype": "InvalidGreeting"
+            },
+            "params": {
+                "Message": "Hi"
+            },
+            "code": 400
+        }
+    },
+    {
+        "id": "RestJsonHostWithPath",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HostWithPathOperation",
+        "error": null,
+        "case": {
+            "id": "RestJsonHostWithPath",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Custom endpoints supplied by users can have paths",
+            "body": "",
+            "appliesTo": "client",
+            "method": "GET",
+            "uri": "/custom/HostWithPathOperation",
+            "host": "example.com/custom"
+        }
+    },
+    {
+        "id": "RestJsonHttpPayloadWithStructure",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpPayloadWithStructure",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpPayloadWithStructure",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a structure in the payload",
+            "body": "{\n    \"greeting\": \"hello\",\n    \"name\": \"Phreddy\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "nested": {
+                    "greeting": "hello",
+                    "name": "Phreddy"
+                }
+            },
+            "method": "PUT",
+            "uri": "/HttpPayloadWithStructure"
+        }
+    },
+    {
+        "id": "RestJsonHttpPayloadWithStructure",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "HttpPayloadWithStructure",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpPayloadWithStructure",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a structure in the payload",
+            "body": "{\n    \"greeting\": \"hello\",\n    \"name\": \"Phreddy\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "nested": {
+                    "greeting": "hello",
+                    "name": "Phreddy"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonHttpPrefixHeadersArePresent",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpPrefixHeaders",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpPrefixHeadersArePresent",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Adds headers by prefix",
+            "body": "",
+            "headers": {
+                "x-foo": "Foo",
+                "x-foo-abc": "Abc value",
+                "x-foo-def": "Def value"
+            },
+            "params": {
+                "foo": "Foo",
+                "fooMap": {
+                    "abc": "Abc value",
+                    "def": "Def value"
+                }
+            },
+            "method": "GET",
+            "uri": "/HttpPrefixHeaders"
+        }
+    },
+    {
+        "id": "RestJsonHttpPrefixHeadersAreNotPresent",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpPrefixHeaders",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpPrefixHeadersAreNotPresent",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "No prefix headers are serialized because the value is not present",
+            "body": "",
+            "appliesTo": "client",
+            "headers": {
+                "x-foo": "Foo"
+            },
+            "params": {
+                "foo": "Foo",
+                "fooMap": {}
+            },
+            "method": "GET",
+            "uri": "/HttpPrefixHeaders"
+        }
+    },
+    {
+        "id": "RestJsonHttpPrefixHeadersArePresent",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "HttpPrefixHeaders",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpPrefixHeadersArePresent",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Adds headers by prefix",
+            "headers": {
+                "x-foo": "Foo",
+                "x-foo-abc": "Abc value",
+                "x-foo-def": "Def value"
+            },
+            "params": {
+                "foo": "Foo",
+                "fooMap": {
+                    "abc": "Abc value",
+                    "def": "Def value"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "HttpPrefixHeadersResponse",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "HttpPrefixHeadersInResponse",
+        "error": null,
+        "case": {
+            "id": "HttpPrefixHeadersResponse",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "(de)serializes all response headers",
+            "headers": {
+                "hello": "Hello",
+                "x-foo": "Foo"
+            },
+            "params": {
+                "prefixHeaders": {
+                    "x-foo": "Foo",
+                    "hello": "Hello"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonHttpRequestWithGreedyLabelInPath",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpRequestWithGreedyLabelInPath",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpRequestWithGreedyLabelInPath",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes greedy labels and normal labels",
+            "body": "",
+            "params": {
+                "foo": "hello/escape",
+                "baz": "there/guy"
+            },
+            "method": "GET",
+            "uri": "/HttpRequestWithGreedyLabelInPath/foo/hello%2Fescape/baz/there/guy"
+        }
+    },
+    {
+        "id": "RestJsonInputWithHeadersAndAllParams",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpRequestWithLabels",
+        "error": null,
+        "case": {
+            "id": "RestJsonInputWithHeadersAndAllParams",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Sends a GET request that uses URI label bindings",
+            "body": "",
+            "params": {
+                "string": "string",
+                "short": 1,
+                "integer": 2,
+                "long": 3,
+                "float": 4.1,
+                "double": 5.1,
+                "boolean": true,
+                "timestamp": {
+                    "$date": 1576540098
+                }
+            },
+            "method": "GET",
+            "uri": "/HttpRequestWithLabels/string/1/2/3/4.1/5.1/true/2019-12-16T23%3A48%3A18Z"
+        }
+    },
+    {
+        "id": "RestJsonHttpRequestLabelEscaping",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpRequestWithLabels",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpRequestLabelEscaping",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Sends a GET request that uses URI label bindings",
+            "body": "",
+            "params": {
+                "string": " %:/?#[]@!$&'()*+,;=😹",
+                "short": 1,
+                "integer": 2,
+                "long": 3,
+                "float": 4.1,
+                "double": 5.1,
+                "boolean": true,
+                "timestamp": {
+                    "$date": 1576540098
+                }
+            },
+            "method": "GET",
+            "uri": "/HttpRequestWithLabels/%20%25%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D%F0%9F%98%B9/1/2/3/4.1/5.1/true/2019-12-16T23%3A48%3A18Z"
+        }
+    },
+    {
+        "id": "RestJsonHttpRequestWithLabelsAndTimestampFormat",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpRequestWithLabelsAndTimestampFormat",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpRequestWithLabelsAndTimestampFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes different timestamp formats in URI labels",
+            "body": "",
+            "params": {
+                "memberEpochSeconds": {
+                    "$date": 1576540098
+                },
+                "memberHttpDate": {
+                    "$date": 1576540098
+                },
+                "memberDateTime": {
+                    "$date": 1576540098
+                },
+                "defaultFormat": {
+                    "$date": 1576540098
+                },
+                "targetEpochSeconds": {
+                    "$date": 1576540098
+                },
+                "targetHttpDate": {
+                    "$date": 1576540098
+                },
+                "targetDateTime": {
+                    "$date": 1576540098
+                }
+            },
+            "method": "GET",
+            "uri": "/HttpRequestWithLabelsAndTimestampFormat/1576540098/Mon%2C%2016%20Dec%202019%2023%3A48%3A18%20GMT/2019-12-16T23%3A48%3A18Z/2019-12-16T23%3A48%3A18Z/1576540098/Mon%2C%2016%20Dec%202019%2023%3A48%3A18%20GMT/2019-12-16T23%3A48%3A18Z"
+        }
+    },
+    {
+        "id": "RestJsonToleratesRegexCharsInSegments",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "HttpRequestWithRegexLiteral",
+        "error": null,
+        "case": {
+            "id": "RestJsonToleratesRegexCharsInSegments",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Path matching is not broken by regex expressions in literal segments",
+            "body": "",
+            "params": {
+                "str": "abc"
+            },
+            "method": "GET",
+            "uri": "/ReDosLiteral/abc/(a+)+"
+        }
+    },
+    {
+        "id": "RestJsonHttpResponseCode",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "HttpResponseCode",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpResponseCode",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Binds the http response code to an output structure. Note that\neven though all members are bound outside of the payload, an\nempty JSON object is serialized in the response. However,\nclients should be able to handle an empty JSON object or an\nempty payload without failing to deserialize a response.",
+            "body": "{}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "Status": 201
+            },
+            "code": 201
+        }
+    },
+    {
+        "id": "RestJsonHttpResponseCodeWithNoPayload",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "HttpResponseCode",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpResponseCodeWithNoPayload",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "This test ensures that clients gracefully handle cases where\nthe service responds with no payload rather than an empty JSON\nobject.",
+            "body": "",
+            "appliesTo": "client",
+            "params": {
+                "Status": 201
+            },
+            "code": 201
+        }
+    },
+    {
+        "id": "RestJsonIgnoreQueryParamsInResponse",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "IgnoreQueryParamsInResponse",
+        "error": null,
+        "case": {
+            "id": "RestJsonIgnoreQueryParamsInResponse",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Query parameters must be ignored when serializing the output\nof an operation. As of January 2021, server implementations\nare expected to respond with a JSON object regardless of\nif the output parameters are empty.",
+            "body": "{\"baz\":\"bam\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "baz": "bam"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonBlobs",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonBlobs",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonBlobs",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Blobs are base64 encoded",
+            "body": "{\n    \"data\": \"dmFsdWU=\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "data": "dmFsdWU="
+            },
+            "method": "POST",
+            "uri": "/JsonBlobs"
+        }
+    },
+    {
+        "id": "RestJsonJsonBlobs",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonBlobs",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonBlobs",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Blobs are base64 encoded",
+            "body": "{\n    \"data\": \"dmFsdWU=\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "data": "dmFsdWU="
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonEnums",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonEnums",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonEnums",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes simple scalar properties",
+            "body": "{\n    \"fooEnum1\": \"Foo\",\n    \"fooEnum2\": \"0\",\n    \"fooEnum3\": \"1\",\n    \"fooEnumList\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumSet\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumMap\": {\n        \"hi\": \"Foo\",\n        \"zero\": \"0\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "fooEnum1": "Foo",
+                "fooEnum2": "0",
+                "fooEnum3": "1",
+                "fooEnumList": [
+                    "Foo",
+                    "0"
+                ],
+                "fooEnumSet": [
+                    "Foo",
+                    "0"
+                ],
+                "fooEnumMap": {
+                    "hi": "Foo",
+                    "zero": "0"
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonEnums"
+        }
+    },
+    {
+        "id": "RestJsonJsonEnums",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonEnums",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonEnums",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes simple scalar properties",
+            "body": "{\n    \"fooEnum1\": \"Foo\",\n    \"fooEnum2\": \"0\",\n    \"fooEnum3\": \"1\",\n    \"fooEnumList\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumSet\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumMap\": {\n        \"hi\": \"Foo\",\n        \"zero\": \"0\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "fooEnum1": "Foo",
+                "fooEnum2": "0",
+                "fooEnum3": "1",
+                "fooEnumList": [
+                    "Foo",
+                    "0"
+                ],
+                "fooEnumSet": [
+                    "Foo",
+                    "0"
+                ],
+                "fooEnumMap": {
+                    "hi": "Foo",
+                    "zero": "0"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonIntEnums",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonIntEnums",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonIntEnums",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes intEnums as integers",
+            "body": "{\n    \"integerEnum1\": 1,\n    \"integerEnum2\": 2,\n    \"integerEnum3\": 3,\n    \"integerEnumList\": [\n        1,\n        2,\n        3\n    ],\n    \"integerEnumSet\": [\n        1,\n        2\n    ],\n    \"integerEnumMap\": {\n        \"abc\": 1,\n        \"def\": 2\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "integerEnum1": 1,
+                "integerEnum2": 2,
+                "integerEnum3": 3,
+                "integerEnumList": [
+                    1,
+                    2,
+                    3
+                ],
+                "integerEnumSet": [
+                    1,
+                    2
+                ],
+                "integerEnumMap": {
+                    "abc": 1,
+                    "def": 2
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonIntEnums"
+        }
+    },
+    {
+        "id": "RestJsonJsonIntEnums",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonIntEnums",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonIntEnums",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes intEnums as integers",
+            "body": "{\n    \"integerEnum1\": 1,\n    \"integerEnum2\": 2,\n    \"integerEnum3\": 3,\n    \"integerEnumList\": [\n        1,\n        2,\n        3\n    ],\n    \"integerEnumSet\": [\n        1,\n        2\n    ],\n    \"integerEnumMap\": {\n        \"abc\": 1,\n        \"def\": 2\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "integerEnum1": 1,
+                "integerEnum2": 2,
+                "integerEnum3": 3,
+                "integerEnumList": [
+                    1,
+                    2,
+                    3
+                ],
+                "integerEnumSet": [
+                    1,
+                    2
+                ],
+                "integerEnumMap": {
+                    "abc": 1,
+                    "def": 2
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonLists",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonLists",
+        "error": null,
+        "case": {
+            "id": "RestJsonLists",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes JSON lists",
+            "body": "{\n    \"stringList\": [\n        \"foo\",\n        \"bar\"\n    ],\n    \"stringSet\": [\n        \"foo\",\n        \"bar\"\n    ],\n    \"integerList\": [\n        1,\n        2\n    ],\n    \"booleanList\": [\n        true,\n        false\n    ],\n    \"timestampList\": [\n        1398796238,\n        1398796238\n    ],\n    \"enumList\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"intEnumList\": [\n        1,\n        2\n    ],\n    \"nestedStringList\": [\n        [\n            \"foo\",\n            \"bar\"\n        ],\n        [\n            \"baz\",\n            \"qux\"\n        ]\n    ],\n    \"myStructureList\": [\n        {\n            \"value\": \"1\",\n            \"other\": \"2\"\n        },\n        {\n            \"value\": \"3\",\n            \"other\": \"4\"\n        }\n    ]\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringList": [
+                    "foo",
+                    "bar"
+                ],
+                "stringSet": [
+                    "foo",
+                    "bar"
+                ],
+                "integerList": [
+                    1,
+                    2
+                ],
+                "booleanList": [
+                    true,
+                    false
+                ],
+                "timestampList": [
+                    {
+                        "$date": 1398796238
+                    },
+                    {
+                        "$date": 1398796238
+                    }
+                ],
+                "enumList": [
+                    "Foo",
+                    "0"
+                ],
+                "intEnumList": [
+                    1,
+                    2
+                ],
+                "nestedStringList": [
+                    [
+                        "foo",
+                        "bar"
+                    ],
+                    [
+                        "baz",
+                        "qux"
+                    ]
+                ],
+                "structureList": [
+                    {
+                        "a": "1",
+                        "b": "2"
+                    },
+                    {
+                        "a": "3",
+                        "b": "4"
+                    }
+                ]
+            },
+            "method": "PUT",
+            "uri": "/JsonLists"
+        }
+    },
+    {
+        "id": "RestJsonListsEmpty",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonLists",
+        "error": null,
+        "case": {
+            "id": "RestJsonListsEmpty",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes empty JSON lists",
+            "body": "{\n    \"stringList\": []\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringList": []
+            },
+            "method": "PUT",
+            "uri": "/JsonLists"
+        }
+    },
+    {
+        "id": "RestJsonLists",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonLists",
+        "error": null,
+        "case": {
+            "id": "RestJsonLists",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes JSON lists",
+            "body": "{\n    \"stringList\": [\n        \"foo\",\n        \"bar\"\n    ],\n    \"stringSet\": [\n        \"foo\",\n        \"bar\"\n    ],\n    \"integerList\": [\n        1,\n        2\n    ],\n    \"booleanList\": [\n        true,\n        false\n    ],\n    \"timestampList\": [\n        1398796238,\n        1398796238\n    ],\n    \"enumList\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"intEnumList\": [\n        1,\n        2\n    ],\n    \"nestedStringList\": [\n        [\n            \"foo\",\n            \"bar\"\n        ],\n        [\n            \"baz\",\n            \"qux\"\n        ]\n    ],\n    \"myStructureList\": [\n        {\n            \"value\": \"1\",\n            \"other\": \"2\"\n        },\n        {\n            \"value\": \"3\",\n            \"other\": \"4\"\n        }\n    ]\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringList": [
+                    "foo",
+                    "bar"
+                ],
+                "stringSet": [
+                    "foo",
+                    "bar"
+                ],
+                "integerList": [
+                    1,
+                    2
+                ],
+                "booleanList": [
+                    true,
+                    false
+                ],
+                "timestampList": [
+                    {
+                        "$date": 1398796238
+                    },
+                    {
+                        "$date": 1398796238
+                    }
+                ],
+                "enumList": [
+                    "Foo",
+                    "0"
+                ],
+                "intEnumList": [
+                    1,
+                    2
+                ],
+                "nestedStringList": [
+                    [
+                        "foo",
+                        "bar"
+                    ],
+                    [
+                        "baz",
+                        "qux"
+                    ]
+                ],
+                "structureList": [
+                    {
+                        "a": "1",
+                        "b": "2"
+                    },
+                    {
+                        "a": "3",
+                        "b": "4"
+                    }
+                ]
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonListsEmpty",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonLists",
+        "error": null,
+        "case": {
+            "id": "RestJsonListsEmpty",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes empty JSON lists",
+            "body": "{\n    \"stringList\": []\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringList": []
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonMaps",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonMaps",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes JSON maps",
+            "body": "{\n    \"denseStructMap\": {\n        \"foo\": {\n            \"hi\": \"there\"\n        },\n        \"baz\": {\n            \"hi\": \"bye\"\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "denseStructMap": {
+                    "foo": {
+                        "hi": "there"
+                    },
+                    "baz": {
+                        "hi": "bye"
+                    }
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonMaps"
+        }
+    },
+    {
+        "id": "RestJsonSerializesZeroValuesInMaps",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializesZeroValuesInMaps",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensure that 0 and false are sent over the wire in all maps and lists",
+            "body": "{\n    \"denseNumberMap\": {\n        \"x\": 0\n    },\n    \"denseBooleanMap\": {\n        \"x\": false\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "denseNumberMap": {
+                    "x": 0
+                },
+                "denseBooleanMap": {
+                    "x": false
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonMaps"
+        }
+    },
+    {
+        "id": "RestJsonSerializesDenseSetMap",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializesDenseSetMap",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "A request that contains a dense map of sets.",
+            "body": "{\n    \"denseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"]\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "denseSetMap": {
+                    "x": [],
+                    "y": [
+                        "a",
+                        "b"
+                    ]
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonMaps"
+        }
+    },
+    {
+        "id": "RestJsonJsonMaps",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonMaps",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes JSON maps",
+            "body": "{\n    \"denseStructMap\": {\n        \"foo\": {\n            \"hi\": \"there\"\n        },\n        \"baz\": {\n            \"hi\": \"bye\"\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "denseStructMap": {
+                    "foo": {
+                        "hi": "there"
+                    },
+                    "baz": {
+                        "hi": "bye"
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializesZeroValuesInMaps",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializesZeroValuesInMaps",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensure that 0 and false are sent over the wire in all maps and lists",
+            "body": "{\n    \"denseNumberMap\": {\n        \"x\": 0\n    },\n    \"denseBooleanMap\": {\n        \"x\": false\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "denseNumberMap": {
+                    "x": 0
+                },
+                "denseBooleanMap": {
+                    "x": false
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializesDenseSetMap",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializesDenseSetMap",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "A response that contains a dense map of sets.",
+            "body": "{\n    \"denseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"]\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "denseSetMap": {
+                    "x": [],
+                    "y": [
+                        "a",
+                        "b"
+                    ]
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestamps",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestamps",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests how normal timestamps are serialized",
+            "body": "{\n    \"normal\": 1398796238\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "normal": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonTimestamps"
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithDateTimeFormat",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithDateTimeFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of date-time works like normal timestamps",
+            "body": "{\n    \"dateTime\": \"2014-04-29T18:30:38Z\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "dateTime": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonTimestamps"
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithDateTimeOnTargetFormat",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithDateTimeOnTargetFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of date-time on the target shape works like normal timestamps",
+            "body": "{\n    \"dateTimeOnTarget\": \"2014-04-29T18:30:38Z\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "dateTimeOnTarget": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonTimestamps"
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithEpochSecondsFormat",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithEpochSecondsFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of epoch-seconds works",
+            "body": "{\n    \"epochSeconds\": 1398796238\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "epochSeconds": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonTimestamps"
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithEpochSecondsOnTargetFormat",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithEpochSecondsOnTargetFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of epoch-seconds on the target shape works",
+            "body": "{\n    \"epochSecondsOnTarget\": 1398796238\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "epochSecondsOnTarget": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonTimestamps"
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithHttpDateFormat",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithHttpDateFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of http-date works",
+            "body": "{\n    \"httpDate\": \"Tue, 29 Apr 2014 18:30:38 GMT\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "httpDate": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonTimestamps"
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithHttpDateOnTargetFormat",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithHttpDateOnTargetFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of http-date on the target shape works",
+            "body": "{\n    \"httpDateOnTarget\": \"Tue, 29 Apr 2014 18:30:38 GMT\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "httpDateOnTarget": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/JsonTimestamps"
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestamps",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestamps",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests how normal timestamps are serialized",
+            "body": "{\n    \"normal\": 1398796238\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "normal": {
+                    "$date": 1398796238
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithDateTimeFormat",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithDateTimeFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of date-time works like normal timestamps",
+            "body": "{\n    \"dateTime\": \"2014-04-29T18:30:38Z\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "dateTime": {
+                    "$date": 1398796238
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithDateTimeOnTargetFormat",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithDateTimeOnTargetFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of date-time on the target shape works like normal timestamps",
+            "body": "{\n    \"dateTimeOnTarget\": \"2014-04-29T18:30:38Z\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "dateTimeOnTarget": {
+                    "$date": 1398796238
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithEpochSecondsFormat",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithEpochSecondsFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of epoch-seconds works",
+            "body": "{\n    \"epochSeconds\": 1398796238\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "epochSeconds": {
+                    "$date": 1398796238
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithEpochSecondsOnTargetFormat",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithEpochSecondsOnTargetFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of epoch-seconds on the target shape works",
+            "body": "{\n    \"epochSecondsOnTarget\": 1398796238\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "epochSecondsOnTarget": {
+                    "$date": 1398796238
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithHttpDateFormat",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithHttpDateFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of http-date works",
+            "body": "{\n    \"httpDate\": \"Tue, 29 Apr 2014 18:30:38 GMT\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "httpDate": {
+                    "$date": 1398796238
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonJsonTimestampsWithHttpDateOnTargetFormat",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonTimestamps",
+        "error": null,
+        "case": {
+            "id": "RestJsonJsonTimestampsWithHttpDateOnTargetFormat",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Ensures that the timestampFormat of http-date on the target shape works",
+            "body": "{\n    \"httpDateOnTarget\": \"Tue, 29 Apr 2014 18:30:38 GMT\"\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "httpDateOnTarget": {
+                    "$date": 1398796238
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonSerializeStringUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeStringUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a string union value",
+            "body": "{\n    \"contents\": {\n        \"stringValue\": \"foo\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "stringValue": "foo"
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeBooleanUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeBooleanUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a boolean union value",
+            "body": "{\n    \"contents\": {\n        \"booleanValue\": true\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "booleanValue": true
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeNumberUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeNumberUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a number union value",
+            "body": "{\n    \"contents\": {\n        \"numberValue\": 1\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "numberValue": 1
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeBlobUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeBlobUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a blob union value",
+            "body": "{\n    \"contents\": {\n        \"blobValue\": \"Zm9v\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "blobValue": "Zm9v"
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeTimestampUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeTimestampUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a timestamp union value",
+            "body": "{\n    \"contents\": {\n        \"timestampValue\": 1398796238\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "timestampValue": {
+                        "$date": 1398796238
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeEnumUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeEnumUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes an enum union value",
+            "body": "{\n    \"contents\": {\n        \"enumValue\": \"Foo\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "enumValue": "Foo"
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeListUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeListUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a list union value",
+            "body": "{\n    \"contents\": {\n        \"listValue\": [\"foo\", \"bar\"]\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "listValue": [
+                        "foo",
+                        "bar"
+                    ]
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeMapUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeMapUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a map union value",
+            "body": "{\n    \"contents\": {\n        \"mapValue\": {\n            \"foo\": \"bar\",\n            \"spam\": \"eggs\"\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "mapValue": {
+                        "foo": "bar",
+                        "spam": "eggs"
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeStructureUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeStructureUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a structure union value",
+            "body": "{\n    \"contents\": {\n        \"structureValue\": {\n            \"hi\": \"hello\"\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "structureValue": {
+                        "hi": "hello"
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonSerializeRenamedStructureUnionValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializeRenamedStructureUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a renamed structure union value",
+            "body": "{\n    \"contents\": {\n        \"renamedStructureValue\": {\n            \"salutation\": \"hello!\"\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "renamedStructureValue": {
+                        "salutation": "hello!"
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/JsonUnions"
+        }
+    },
+    {
+        "id": "RestJsonDeserializeStringUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeStringUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a string union value",
+            "body": "{\n    \"contents\": {\n        \"stringValue\": \"foo\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "stringValue": "foo"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeBooleanUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeBooleanUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a boolean union value",
+            "body": "{\n    \"contents\": {\n        \"booleanValue\": true\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "booleanValue": true
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeNumberUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeNumberUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a number union value",
+            "body": "{\n    \"contents\": {\n        \"numberValue\": 1\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "numberValue": 1
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeBlobUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeBlobUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a blob union value",
+            "body": "{\n    \"contents\": {\n        \"blobValue\": \"Zm9v\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "blobValue": "Zm9v"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeTimestampUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeTimestampUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a timestamp union value",
+            "body": "{\n    \"contents\": {\n        \"timestampValue\": 1398796238\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "timestampValue": {
+                        "$date": 1398796238
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeEnumUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeEnumUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes an enum union value",
+            "body": "{\n    \"contents\": {\n        \"enumValue\": \"Foo\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "enumValue": "Foo"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeListUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeListUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a list union value",
+            "body": "{\n    \"contents\": {\n        \"listValue\": [\"foo\", \"bar\"]\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "listValue": [
+                        "foo",
+                        "bar"
+                    ]
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeMapUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeMapUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a map union value",
+            "body": "{\n    \"contents\": {\n        \"mapValue\": {\n            \"foo\": \"bar\",\n            \"spam\": \"eggs\"\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "mapValue": {
+                        "foo": "bar",
+                        "spam": "eggs"
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializeStructureUnionValue",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "JsonUnions",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializeStructureUnionValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Deserializes a structure union value",
+            "body": "{\n    \"contents\": {\n        \"structureValue\": {\n            \"hi\": \"hello\"\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "contents": {
+                    "structureValue": {
+                        "hi": "hello"
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonNoInputAndNoOutput",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "NoInputAndNoOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonNoInputAndNoOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "No input serializes no payload. When clients do not need to\nserialize any data in the payload, they should omit a payload\naltogether.",
+            "body": "",
+            "method": "POST",
+            "uri": "/NoInputAndNoOutput"
+        }
+    },
+    {
+        "id": "RestJsonNoInputAndNoOutput",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "NoInputAndNoOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonNoInputAndNoOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "When an operation does not define output, the service will respond\nwith an empty payload, and may optionally include the content-type\nheader.",
+            "body": "",
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonNoInputAndOutput",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "NoInputAndOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonNoInputAndOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "No input serializes no payload. When clients do not need to\nserialize any data in the payload, they should omit a payload\naltogether.",
+            "body": "",
+            "method": "POST",
+            "uri": "/NoInputAndOutputOutput"
+        }
+    },
+    {
+        "id": "RestJsonNoInputAndOutputWithJson",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "NoInputAndOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonNoInputAndOutputWithJson",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Operations that define output and do not bind anything to\nthe payload return a JSON object in the response.",
+            "body": "{}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonNoInputAndOutputNoPayload",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "NoInputAndOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonNoInputAndOutputNoPayload",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "This test is similar to RestJsonNoInputAndOutputWithJson, but\nit ensures that clients can gracefully handle responses that\nomit a JSON payload.",
+            "body": "",
+            "appliesTo": "client",
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonOmitsNullQuery",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "OmitsNullSerializesEmptyString",
+        "error": null,
+        "case": {
+            "id": "RestJsonOmitsNullQuery",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Omits null query values",
+            "body": "",
+            "appliesTo": "client",
+            "params": {
+                "nullValue": null
+            },
+            "method": "GET",
+            "uri": "/OmitsNullSerializesEmptyString"
+        }
+    },
+    {
+        "id": "RestJsonSerializesEmptyQueryValue",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "OmitsNullSerializesEmptyString",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializesEmptyQueryValue",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes empty query strings",
+            "body": "",
+            "params": {
+                "emptyString": ""
+            },
+            "method": "GET",
+            "uri": "/OmitsNullSerializesEmptyString",
+            "queryParams": [
+                "Empty="
+            ]
+        }
+    },
+    {
+        "id": "RestJsonOmitsEmptyListQueryValues",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "OmitsSerializingEmptyLists",
+        "error": null,
+        "case": {
+            "id": "RestJsonOmitsEmptyListQueryValues",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Supports omitting empty lists.",
+            "body": "",
+            "params": {
+                "queryStringList": [],
+                "queryIntegerList": [],
+                "queryDoubleList": [],
+                "queryBooleanList": [],
+                "queryTimestampList": [],
+                "queryEnumList": [],
+                "queryIntegerEnumList": []
+            },
+            "method": "POST",
+            "uri": "/OmitsSerializingEmptyLists"
+        }
+    },
+    {
+        "id": "RestJsonInputUnionWithUnitMember",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "PostPlayerAction",
+        "error": null,
+        "case": {
+            "id": "RestJsonInputUnionWithUnitMember",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Unit types in unions are serialized like normal structures in requests.",
+            "body": "{\n    \"action\": {\n        \"quit\": {}\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "action": {
+                    "quit": {}
+                }
+            },
+            "method": "POST",
+            "uri": "/PostPlayerAction"
+        }
+    },
+    {
+        "id": "RestJsonOutputUnionWithUnitMember",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "PostPlayerAction",
+        "error": null,
+        "case": {
+            "id": "RestJsonOutputUnionWithUnitMember",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Unit types in unions are serialized like normal structures in responses.",
+            "body": "{\n    \"action\": {\n        \"quit\": {}\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "action": {
+                    "quit": {}
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "PostUnionWithJsonNameRequest1",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "PostUnionWithJsonName",
+        "error": null,
+        "case": {
+            "id": "PostUnionWithJsonNameRequest1",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests that jsonName works with union members.",
+            "body": "{\n    \"value\": {\n        \"FOO\": \"hi\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "value": {
+                    "foo": "hi"
+                }
+            },
+            "method": "POST",
+            "uri": "/PostUnionWithJsonName"
+        }
+    },
+    {
+        "id": "PostUnionWithJsonNameRequest2",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "PostUnionWithJsonName",
+        "error": null,
+        "case": {
+            "id": "PostUnionWithJsonNameRequest2",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests that jsonName works with union members.",
+            "body": "{\n    \"value\": {\n        \"_baz\": \"hi\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "value": {
+                    "baz": "hi"
+                }
+            },
+            "method": "POST",
+            "uri": "/PostUnionWithJsonName"
+        }
+    },
+    {
+        "id": "PostUnionWithJsonNameRequest3",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "PostUnionWithJsonName",
+        "error": null,
+        "case": {
+            "id": "PostUnionWithJsonNameRequest3",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests that jsonName works with union members.",
+            "body": "{\n    \"value\": {\n        \"bar\": \"hi\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "value": {
+                    "bar": "hi"
+                }
+            },
+            "method": "POST",
+            "uri": "/PostUnionWithJsonName"
+        }
+    },
+    {
+        "id": "PostUnionWithJsonNameResponse1",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "PostUnionWithJsonName",
+        "error": null,
+        "case": {
+            "id": "PostUnionWithJsonNameResponse1",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests that jsonName works with union members.",
+            "body": "{\n    \"value\": {\n        \"FOO\": \"hi\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "value": {
+                    "foo": "hi"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "PostUnionWithJsonNameResponse2",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "PostUnionWithJsonName",
+        "error": null,
+        "case": {
+            "id": "PostUnionWithJsonNameResponse2",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests that jsonName works with union members.",
+            "body": "{\n    \"value\": {\n        \"_baz\": \"hi\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "value": {
+                    "baz": "hi"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "PostUnionWithJsonNameResponse3",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "PostUnionWithJsonName",
+        "error": null,
+        "case": {
+            "id": "PostUnionWithJsonNameResponse3",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests that jsonName works with union members.",
+            "body": "{\n    \"value\": {\n        \"bar\": \"hi\"\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "value": {
+                    "bar": "hi"
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonQueryIdempotencyTokenAutoFill",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "QueryIdempotencyTokenAutoFill",
+        "error": null,
+        "case": {
+            "id": "RestJsonQueryIdempotencyTokenAutoFill",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Automatically adds idempotency token when not set",
+            "body": "",
+            "appliesTo": "client",
+            "method": "POST",
+            "uri": "/QueryIdempotencyTokenAutoFill",
+            "queryParams": [
+                "token=00000000-0000-4000-8000-000000000000"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonQueryIdempotencyTokenAutoFillIsSet",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "QueryIdempotencyTokenAutoFill",
+        "error": null,
+        "case": {
+            "id": "RestJsonQueryIdempotencyTokenAutoFillIsSet",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Uses the given idempotency token as-is",
+            "body": "",
+            "appliesTo": "client",
+            "params": {
+                "token": "00000000-0000-4000-8000-000000000000"
+            },
+            "method": "POST",
+            "uri": "/QueryIdempotencyTokenAutoFill",
+            "queryParams": [
+                "token=00000000-0000-4000-8000-000000000000"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonQueryParamsStringListMap",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "QueryParamsAsStringListMap",
+        "error": null,
+        "case": {
+            "id": "RestJsonQueryParamsStringListMap",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serialize query params from map of list strings",
+            "body": "",
+            "appliesTo": "client",
+            "params": {
+                "qux": "named",
+                "foo": {
+                    "baz": [
+                        "bar",
+                        "qux"
+                    ]
+                }
+            },
+            "method": "POST",
+            "uri": "/StringListMap",
+            "queryParams": [
+                "corge=named",
+                "baz=bar",
+                "baz=qux"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonQueryPrecedence",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "QueryPrecedence",
+        "error": null,
+        "case": {
+            "id": "RestJsonQueryPrecedence",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Prefer named query parameters when serializing",
+            "body": "",
+            "appliesTo": "client",
+            "params": {
+                "foo": "named",
+                "baz": {
+                    "bar": "fromMap",
+                    "qux": "alsoFromMap"
+                }
+            },
+            "method": "POST",
+            "uri": "/Precedence",
+            "queryParams": [
+                "bar=named",
+                "qux=alsoFromMap"
+            ]
+        }
+    },
+    {
+        "id": "RestJsonRecursiveShapes",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "RecursiveShapes",
+        "error": null,
+        "case": {
+            "id": "RestJsonRecursiveShapes",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes recursive structures",
+            "body": "{\n    \"nested\": {\n        \"foo\": \"Foo1\",\n        \"nested\": {\n            \"bar\": \"Bar1\",\n            \"recursiveMember\": {\n                \"foo\": \"Foo2\",\n                \"nested\": {\n                    \"bar\": \"Bar2\"\n                }\n            }\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "nested": {
+                    "foo": "Foo1",
+                    "nested": {
+                        "bar": "Bar1",
+                        "recursiveMember": {
+                            "foo": "Foo2",
+                            "nested": {
+                                "bar": "Bar2"
+                            }
+                        }
+                    }
+                }
+            },
+            "method": "PUT",
+            "uri": "/RecursiveShapes"
+        }
+    },
+    {
+        "id": "RestJsonRecursiveShapes",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "RecursiveShapes",
+        "error": null,
+        "case": {
+            "id": "RestJsonRecursiveShapes",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes recursive structures",
+            "body": "{\n    \"nested\": {\n        \"foo\": \"Foo1\",\n        \"nested\": {\n            \"bar\": \"Bar1\",\n            \"recursiveMember\": {\n                \"foo\": \"Foo2\",\n                \"nested\": {\n                    \"bar\": \"Bar2\"\n                }\n            }\n        }\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "nested": {
+                    "foo": "Foo1",
+                    "nested": {
+                        "bar": "Bar1",
+                        "recursiveMember": {
+                            "foo": "Foo2",
+                            "nested": {
+                                "bar": "Bar2"
+                            }
+                        }
+                    }
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonSimpleScalarProperties",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "SimpleScalarProperties",
+        "error": null,
+        "case": {
+            "id": "RestJsonSimpleScalarProperties",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes simple scalar properties",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"trueBooleanValue\": true,\n    \"falseBooleanValue\": false,\n    \"byteValue\": 1,\n    \"shortValue\": 2,\n    \"integerValue\": 3,\n    \"longValue\": 4,\n    \"floatValue\": 5.5,\n    \"DoubleDribble\": 6.5\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Foo": "Foo"
+            },
+            "params": {
+                "foo": "Foo",
+                "stringValue": "string",
+                "trueBooleanValue": true,
+                "falseBooleanValue": false,
+                "byteValue": 1,
+                "shortValue": 2,
+                "integerValue": 3,
+                "longValue": 4,
+                "floatValue": 5.5,
+                "doubleValue": 6.5
+            },
+            "method": "PUT",
+            "uri": "/SimpleScalarProperties"
+        }
+    },
+    {
+        "id": "RestJsonDoesntSerializeNullStructureValues",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "SimpleScalarProperties",
+        "error": null,
+        "case": {
+            "id": "RestJsonDoesntSerializeNullStructureValues",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Rest Json should not serialize null structure values",
+            "body": "{}",
+            "bodyMediaType": "application/json",
+            "appliesTo": "client",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "stringValue": null
+            },
+            "method": "PUT",
+            "uri": "/SimpleScalarProperties"
+        }
+    },
+    {
+        "id": "RestJsonSimpleScalarProperties",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "SimpleScalarProperties",
+        "error": null,
+        "case": {
+            "id": "RestJsonSimpleScalarProperties",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes simple scalar properties",
+            "body": "{\n    \"stringValue\": \"string\",\n    \"trueBooleanValue\": true,\n    \"falseBooleanValue\": false,\n    \"byteValue\": 1,\n    \"shortValue\": 2,\n    \"integerValue\": 3,\n    \"longValue\": 4,\n    \"floatValue\": 5.5,\n    \"DoubleDribble\": 6.5\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Foo": "Foo"
+            },
+            "params": {
+                "foo": "Foo",
+                "stringValue": "string",
+                "trueBooleanValue": true,
+                "falseBooleanValue": false,
+                "byteValue": 1,
+                "shortValue": 2,
+                "integerValue": 3,
+                "longValue": 4,
+                "floatValue": 5.5,
+                "doubleValue": 6.5
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDoesntDeserializeNullStructureValues",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "SimpleScalarProperties",
+        "error": null,
+        "case": {
+            "id": "RestJsonDoesntDeserializeNullStructureValues",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Rest Json should not deserialize null structure values",
+            "body": "{\n    \"stringValue\": null\n}",
+            "bodyMediaType": "application/json",
+            "appliesTo": "client",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonSerializesSparseSetMap",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "SparseJsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializesSparseSetMap",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "A request that contains a sparse map of sets",
+            "body": "{\n    \"sparseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"]\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "sparseSetMap": {
+                    "x": [],
+                    "y": [
+                        "a",
+                        "b"
+                    ]
+                }
+            },
+            "method": "POST",
+            "uri": "/SparseJsonMaps"
+        }
+    },
+    {
+        "id": "RestJsonSerializesSparseSetMapAndRetainsNull",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "SparseJsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonSerializesSparseSetMapAndRetainsNull",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "A request that contains a sparse map of sets.",
+            "body": "{\n    \"sparseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"],\n        \"z\": null\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "sparseSetMap": {
+                    "x": [],
+                    "y": [
+                        "a",
+                        "b"
+                    ],
+                    "z": null
+                }
+            },
+            "method": "POST",
+            "uri": "/SparseJsonMaps"
+        }
+    },
+    {
+        "id": "RestJsonDeserializesSparseSetMap",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "SparseJsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializesSparseSetMap",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "A response that contains a sparse map of sets",
+            "body": "{\n    \"sparseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"]\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "sparseSetMap": {
+                    "x": [],
+                    "y": [
+                        "a",
+                        "b"
+                    ]
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonDeserializesSparseSetMapAndRetainsNull",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "SparseJsonMaps",
+        "error": null,
+        "case": {
+            "id": "RestJsonDeserializesSparseSetMapAndRetainsNull",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "A response that contains a sparse map of sets.",
+            "body": "{\n    \"sparseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"],\n        \"z\": null\n    }\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "sparseSetMap": {
+                    "x": [],
+                    "y": [
+                        "a",
+                        "b"
+                    ],
+                    "z": null
+                }
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "RestJsonTestBodyStructure",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "TestBodyStructure",
+        "error": null,
+        "case": {
+            "id": "RestJsonTestBodyStructure",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a structure",
+            "body": "{\"testConfig\":\n    {\"timeout\": 10}\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "testConfig": {
+                    "timeout": 10
+                }
+            },
+            "method": "POST",
+            "uri": "/body"
+        }
+    },
+    {
+        "id": "RestJsonHttpWithEmptyBody",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "TestBodyStructure",
+        "error": null,
+        "case": {
+            "id": "RestJsonHttpWithEmptyBody",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes an empty structure in the body",
+            "body": "{}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "method": "POST",
+            "uri": "/body"
+        }
+    },
+    {
+        "id": "RestJsonTestPayloadStructure",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "TestPayloadStructure",
+        "error": null,
+        "case": {
+            "id": "RestJsonTestPayloadStructure",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Serializes a payload targeting a structure",
+            "body": "{\"data\": 25\n}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "requireHeaders": [
+                "Content-Length"
+            ],
+            "params": {
+                "payloadConfig": {
+                    "data": 25
+                }
+            },
+            "method": "POST",
+            "uri": "/payload"
+        }
+    },
+    {
+        "id": "RestJsonTimestampFormatHeaders",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "TimestampFormatHeaders",
+        "error": null,
+        "case": {
+            "id": "RestJsonTimestampFormatHeaders",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "Tests how timestamp request headers are serialized",
+            "body": "",
+            "headers": {
+                "X-defaultFormat": "Mon, 16 Dec 2019 23:48:18 GMT",
+                "X-memberDateTime": "2019-12-16T23:48:18Z",
+                "X-memberEpochSeconds": "1576540098",
+                "X-memberHttpDate": "Mon, 16 Dec 2019 23:48:18 GMT",
+                "X-targetDateTime": "2019-12-16T23:48:18Z",
+                "X-targetEpochSeconds": "1576540098",
+                "X-targetHttpDate": "Mon, 16 Dec 2019 23:48:18 GMT"
+            },
+            "params": {
+                "memberEpochSeconds": {
+                    "$date": 1576540098
+                },
+                "memberHttpDate": {
+                    "$date": 1576540098
+                },
+                "memberDateTime": {
+                    "$date": 1576540098
+                },
+                "defaultFormat": {
+                    "$date": 1576540098
+                },
+                "targetEpochSeconds": {
+                    "$date": 1576540098
+                },
+                "targetHttpDate": {
+                    "$date": 1576540098
+                },
+                "targetDateTime": {
+                    "$date": 1576540098
+                }
+            },
+            "method": "POST",
+            "uri": "/TimestampFormatHeaders"
+        }
+    },
+    {
+        "id": "RestJsonUnitInputAndOutput",
+        "kind": "request",
+        "service": "RestJson",
+        "operation": "UnitInputAndOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonUnitInputAndOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "A unit type input serializes no payload. When clients do not\nneed to serialize any data in the payload, they should omit\na payload altogether.",
+            "body": "",
+            "method": "POST",
+            "uri": "/UnitInputAndOutput"
+        }
+    },
+    {
+        "id": "RestJsonUnitInputAndOutputNoOutput",
+        "kind": "response",
+        "service": "RestJson",
+        "operation": "UnitInputAndOutput",
+        "error": null,
+        "case": {
+            "id": "RestJsonUnitInputAndOutputNoOutput",
+            "protocol": "aws.protocols#restJson1",
+            "documentation": "When an operation defines Unit output, the service will respond\nwith an empty payload, and may optionally include the content-type\nheader.",
+            "body": "",
+            "code": 200
+        }
+    }
+]

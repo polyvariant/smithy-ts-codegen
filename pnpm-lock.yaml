@@ -8,6 +8,22 @@ importers:
 
   .: {}
 
+  compliance:
+    dependencies:
+      '@polyvariant/smithy-ts-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   runtime:
     dependencies:
       lossless-json:

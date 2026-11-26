@@ -26,7 +26,8 @@ export interface TransportRequest {
   operation: string
   method: HttpMethod
   url: string
-  query?: Record<string, string | number | boolean | undefined>
+  /** A list value is sent as the parameter repeated, once per element. */
+  query?: Record<string, string | number | boolean | readonly string[] | undefined>
   headers?: Record<string, string>
   body?: unknown
   options?: TransportOptions

@@ -1,4 +1,4 @@
-ThisBuild / tlBaseVersion := "0.5"
+ThisBuild / tlBaseVersion := "0.6"
 ThisBuild / organization := "org.polyvariant"
 ThisBuild / organizationName := "Polyvariant"
 ThisBuild / startYear := Some(2026)
@@ -34,8 +34,8 @@ ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
 // `project /` first: these tasks live on the root build, not on the rootJVM
 // aggregate the surrounding steps have selected.
 ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
-  List("project /", "tsCodegenSampleCheck"),
-  name = Some("Committed sample TypeScript is up to date"),
+  List("project /", "tsCodegenSampleCheck", "complianceCodegenCheck"),
+  name = Some("Committed generated TypeScript is up to date"),
   cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
 )
 
@@ -135,6 +135,25 @@ lazy val cli = project
     commonSettings,
   )
 
+// Renders the HTTP protocol compliance suites (alloy's own, plus the smithy
+// restJson1 tests alloy borrows for simpleRestJson) into compliance/generated:
+// the TypeScript for each suite's services and its test cases as JSON. The
+// `compliance/` pnpm package runs them against the generated clients. Not
+// published — it only exists to drive `complianceCodegen`.
+lazy val complianceCodegenProject = project
+  .in(file("compliance-codegen"))
+  .dependsOn(core)
+  .enablePlugins(NoPublishPlugin)
+  .settings(
+    name := "smithy-ts-codegen-compliance-codegen",
+    commonSettings,
+    libraryDependencies ++= Seq(
+      "com.disneystreaming.alloy" % "alloy-protocol-tests" % alloyVersion,
+      "software.amazon.smithy" % "smithy-aws-protocol-tests" % smithyVersion,
+      "software.amazon.smithy" % "smithy-protocol-test-traits" % smithyVersion,
+    ),
+  )
+
 // An sbt AutoPlugin that exposes a `tsCodegen` task. It resolves the published
 // `smithy-ts-codegen-cli` artifact (at this plugin's own version, baked in via
 // BuildInfo) with coursier — an isolated resolver, so the consuming project's
@@ -216,4 +235,52 @@ tsCodegenSampleCheck := Def.taskDyn {
   }
 }.value
 
-lazy val root = tlCrossRootProject.aggregate(traits, api, core, cli, sbtPlugin)
+// The protocol compliance suites, committed under compliance/generated for the
+// same reason as the sample above: `nix flake check` runs them without a JVM.
+//
+//   sbt complianceCodegen      regenerate them
+//   sbt complianceCodegenCheck fail if they differ from what is committed (CI)
+lazy val complianceCodegenDir =
+  settingKey[File]("Where the committed compliance suites live")
+lazy val complianceCodegen = taskKey[Unit]("Regenerate the committed compliance suites")
+lazy val complianceCodegenCheck =
+  taskKey[Unit]("Check the committed compliance suites are up to date")
+
+ThisBuild / complianceCodegenDir := (ThisBuild / baseDirectory).value / "compliance" / "generated"
+
+def complianceCodegenRunTo(out: File) = Def.taskDyn {
+  (complianceCodegenProject / Compile / runMain).toTask(
+    s" org.polyvariant.smithy.ts.compliance.ComplianceCodegen $out"
+  )
+}
+
+complianceCodegen := Def.taskDyn {
+  val out = complianceCodegenDir.value
+  val log = streams.value.log
+  IO.delete(out)
+  complianceCodegenRunTo(out).map { _ =>
+    log.info(s"wrote $out")
+  }
+}.value
+
+complianceCodegenCheck := Def.taskDyn {
+  val out = complianceCodegenDir.value
+  val tmp = IO.createTemporaryDirectory
+  complianceCodegenRunTo(tmp).map { _ =>
+    def contents(dir: File): Map[String, String] =
+      (dir ** "*").get.filter(_.isFile).map(f => IO.relativize(dir, f).get -> IO.read(f)).toMap
+    if (contents(out) != contents(tmp))
+      sys.error(
+        s"$out is out of date — run `sbt complianceCodegen` and commit the result"
+      )
+  }
+}.value
+
+lazy val root = tlCrossRootProject.aggregate(
+  traits,
+  api,
+  core,
+  cli,
+  sbtPlugin,
+  complianceCodegenProject,
+)

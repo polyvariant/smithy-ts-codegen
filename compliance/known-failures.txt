@@ -1,0 +1,13 @@
+# Compliance cases the generated client is known to fail, as <suite>/<kind>/<id>.
+#
+# The suites are the cases smithy4s runs, and smithy4s is the reference for
+# how simpleRestJson behaves: a case belongs here only when we deliberately
+# match smithy4s rather than the test. Anything else failing is a bug to fix,
+# not to list. The test run fails on any listed case that passes, so delete
+# its line in the same change. `pnpm --filter smithy-ts-codegen-compliance run
+# test` prints what each listed case currently gets wrong.
+
+# --- Intentional: idempotency tokens are not filled in ---
+# smithy4s leaves @idempotencyToken members to the caller, so that setting one
+# is a conscious decision made outside of any retry loop.
+restJson1/request/RestJsonQueryIdempotencyTokenAutoFill
