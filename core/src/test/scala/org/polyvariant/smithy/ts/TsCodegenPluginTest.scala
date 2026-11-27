@@ -1295,6 +1295,110 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(out.contains("theirs: com_example_b_ProfileIdSchema,"))
   }
 
+  test("a shape named after a global the output uses is qualified, so it can't shadow it") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |union Record {
+         |  a: String
+         |}
+         |
+         |structure Holder {
+         |  record: Record
+         |}
+         |""".stripMargin
+    )
+    // A bare `Record` would shadow `Record<string, unknown>`, which the wire codecs use.
+    assert(clue(out).contains("export const com_example_RecordSchema = z.union(["))
+    assert(out.contains("record: com_example_RecordSchema.optional(),"))
+    assert(!out.contains("export type Record ="))
+    assert(out.contains("Record<string, unknown>"))
+  }
+
+  test("a shape whose names the generator already declares is qualified") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |union Stream {
+         |  a: String
+         |}
+         |
+         |@error("client")
+         |structure MockHttp {
+         |  message: String
+         |}
+         |
+         |structure Holder {
+         |  s: Stream
+         |  e: MockHttp
+         |}
+         |""".stripMargin
+    )
+    // `decodeStream` is the runtime's own stream decoder; `MockHttpError` is the mock's class.
+    assert(clue(out).contains("export function decodecom_example_Stream("))
+    assert(out.contains("export class com_example_MockHttpError"))
+  }
+
+  test("a value and a type may share a name: Foo beside FooSchema, or a type Set, stay bare") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |structure Foo {
+         |  a: String
+         |}
+         |
+         |structure FooSchema {
+         |  foo: Foo
+         |}
+         |
+         |string Set
+         |""".stripMargin
+    )
+    assert(clue(out).contains("export const FooSchema = z.object({"))
+    // The output only uses `Set` as a value (`new Set(...)`), so a type of that name is no clash.
+    assert(out.contains("export const SetSchema = z.string().brand<'Set'>()"))
+    assert(out.contains("export const FooSchemaSchema = z.object({"))
+    assert(!out.contains("com_example_"))
+  }
+
+  test("two shapes wanting one identifier between them is an error naming both") {
+    val e = intercept[Exception](
+      generate(
+        """|$version: "2"
+         |namespace com.example
+         |
+         |use alloy#simpleRestJson
+         |
+         |@simpleRestJson
+         |service Svc {
+         |  operations: [GetFoo]
+         |}
+         |
+         |@http(method: "GET", uri: "/foo")
+         |operation GetFoo {
+         |  output: Foo
+         |}
+         |
+         |structure Foo {
+         |  a: String
+         |  extra: FooResponse
+         |}
+         |
+         |structure FooResponse {
+         |  b: String
+         |}
+         |""".stripMargin
+      )
+    )
+    // `Foo` as an output gets `decodeFooResponse`, which is also `FooResponse`'s codec, and no
+    // namespace prefix can tell them apart.
+    assert(clue(e.getMessage).contains("com.example#Foo and com.example#FooResponse"))
+    assert(e.getMessage.contains("would both declare `decodeFooResponse`"))
+  }
+
   test("colliding aliases get distinct brands, so they are not mutually assignable") {
     val out = generateAll(
       """|$version: "2"

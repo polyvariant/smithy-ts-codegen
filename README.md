@@ -501,6 +501,12 @@ Where the protocol leaves a choice, the generated code does what smithy4s does:
   nothing to validate).
 - A `@streaming` member is left out of its structure's zod schema (validating it would mean
   consuming the stream); the generated *type* still carries it, as an `AsyncIterable`.
+- A shape is named by its bare Smithy name, unless that clashes. It is then prefixed with its
+  namespace, dots as underscores (`com_example_Record`): when two namespaces both have the name, or
+  when one of the shape's names is taken by a TypeScript global the output uses as a type (`Record`,
+  `Date`, `Promise`, …) or by the generator's own declarations (`Transport`, `decodeStream`, …). Two shapes
+  of one namespace that still want the same identifier — an `@error` `Foo` declares `FooError`, so
+  does a shape `FooError` — are a codegen error naming both.
 
 ## Development
 

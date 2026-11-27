@@ -60,6 +60,18 @@ string PersonId
 union Shape {
     person: Person
     label: String
+    record: Record
+    stream: Stream
+}
+
+// Named after a TS global the output uses (`Record<K, V>`) and after the stream decoder's own
+// name (`decodeStream`): both come out namespace-qualified, and the file still type-checks.
+union Record {
+    text: String
+}
+
+structure Stream {
+    count: Integer
 }
 
 // --- Errors: one status with a single error, one status shared by two ---
