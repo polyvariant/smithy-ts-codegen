@@ -180,6 +180,8 @@ lazy val complianceRoundTripProject = project
     libraryDependencies ++= Seq(
       "com.disneystreaming.smithy4s" %% "smithy4s-dynamic" % smithy4sVersion,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % smithy4sVersion,
+      // The ndjsonRestJson suite's server: the interpreter the generated client is meant for.
+      "org.polyvariant" %% "smithy4s-ndjson-http4s" % smithy4sNdjsonVersion,
       // CanonicalSmithyDecoder / EqSchemaVisitor: how smithy4s itself reads and compares a
       // compliance case's `params`.
       "com.disneystreaming.smithy4s" %% "smithy4s-compliance-tests" % smithy4sVersion,
