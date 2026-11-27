@@ -185,8 +185,8 @@ lazy val complianceRoundTripProject = project
       // CanonicalSmithyDecoder / EqSchemaVisitor: how smithy4s itself reads and compares a
       // compliance case's `params`.
       "com.disneystreaming.smithy4s" %% "smithy4s-compliance-tests" % smithy4sVersion,
-      "org.http4s" %% "http4s-ember-server" % "0.23.34",
-      "org.http4s" %% "http4s-dsl" % "0.23.34",
+      "org.http4s" %% "http4s-ember-server" % "0.23.39",
+      "org.http4s" %% "http4s-dsl" % "0.23.39",
     ),
     run / fork := true,
   )
