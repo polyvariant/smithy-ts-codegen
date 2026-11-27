@@ -1,0 +1,2686 @@
+[
+    {
+        "id": "NdjsonRestJsonEchoCsvRequest",
+        "kind": "request",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoCsv",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "rows",
+                "encoding": "binary"
+            },
+            "output": {
+                "member": "rows",
+                "encoding": "binary"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonEchoCsvRequest",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "A blob with a @mediaType is sent verbatim, as that media type.",
+            "body": "a,b\n1,2\n",
+            "headers": {
+                "Content-Type": "text/csv"
+            },
+            "params": {
+                "rows": "a,b\n1,2\n"
+            },
+            "method": "POST",
+            "uri": "/csv"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonEchoCsvResponse",
+        "kind": "response",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoCsv",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "rows",
+                "encoding": "binary"
+            },
+            "output": {
+                "member": "rows",
+                "encoding": "binary"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonEchoCsvResponse",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "A blob with a @mediaType is returned verbatim, as that media type.",
+            "body": "a,b\n1,2\n",
+            "headers": {
+                "Content-Type": "text/csv"
+            },
+            "params": {
+                "rows": "a,b\n1,2\n"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "NdjsonRestJsonGetBlobResponse",
+        "kind": "response",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "GetBlob",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "content",
+                "encoding": "binary"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonGetBlobResponse",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "The response body is the blob, verbatim, as application/octet-stream.",
+            "body": "hello\nworld",
+            "headers": {
+                "Content-Type": "application/octet-stream",
+                "X-Name": "notes.txt"
+            },
+            "params": {
+                "name": "notes.txt",
+                "content": "hello\nworld"
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "NdjsonRestJsonGetBlobEmptyResponse",
+        "kind": "response",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "GetBlob",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "content",
+                "encoding": "binary"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonGetBlobEmptyResponse",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "An empty blob is an empty body, still labelled application/octet-stream.",
+            "body": "",
+            "headers": {
+                "Content-Type": "application/octet-stream"
+            },
+            "params": {
+                "content": ""
+            },
+            "code": 200
+        }
+    },
+    {
+        "id": "NdjsonRestJsonPutBlobRequest",
+        "kind": "request",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "PutBlob",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "content",
+                "encoding": "binary"
+            },
+            "output": null
+        },
+        "case": {
+            "id": "NdjsonRestJsonPutBlobRequest",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "The request body is the blob, verbatim, as application/octet-stream.",
+            "body": "hello\nworld",
+            "headers": {
+                "Content-Type": "application/octet-stream",
+                "X-Checksum": "abc"
+            },
+            "params": {
+                "name": "notes.txt",
+                "checksum": "abc",
+                "content": "hello\nworld"
+            },
+            "method": "POST",
+            "uri": "/blob/notes.txt"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonPutBlobEmptyRequest",
+        "kind": "request",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "PutBlob",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "content",
+                "encoding": "binary"
+            },
+            "output": null
+        },
+        "case": {
+            "id": "NdjsonRestJsonPutBlobEmptyRequest",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "An empty blob is an empty body.",
+            "body": "",
+            "headers": {
+                "Content-Type": "application/octet-stream"
+            },
+            "params": {
+                "name": "empty",
+                "content": ""
+            },
+            "method": "POST",
+            "uri": "/blob/empty"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonTopicNotFoundError",
+        "kind": "response",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": "TopicNotFound",
+        "case": {
+            "id": "NdjsonRestJsonTopicNotFoundError",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "A declared error raised before a stream starts is an ordinary error response.",
+            "body": "{\"message\":\"no such topic\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Error-Type": "TopicNotFound"
+            },
+            "params": {
+                "message": "no such topic"
+            },
+            "code": 404
+        }
+    },
+    {
+        "id": "NdjsonRestJsonUnaryBindingsRequest",
+        "kind": "request",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "UnaryBindings",
+        "error": null,
+        "case": {
+            "id": "NdjsonRestJsonUnaryBindingsRequest",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "Label, query, header and prefix-header bindings are read alongside a JSON body.",
+            "body": "{\"renamed\":\"payload\",\"at\":\"2014-04-29T18:30:38Z\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Header": "h",
+                "X-Stamp": "Tue, 29 Apr 2014 18:30:38 GMT",
+                "x-meta-one": "1"
+            },
+            "params": {
+                "label": "hello world",
+                "query": "search",
+                "queryList": [
+                    "a",
+                    "b"
+                ],
+                "header": "h",
+                "stamp": {
+                    "$date": 1398796238
+                },
+                "meta": {
+                    "one": "1"
+                },
+                "body": "payload",
+                "at": {
+                    "$date": 1398796238
+                }
+            },
+            "method": "POST",
+            "uri": "/unary/hello%20world",
+            "queryParams": [
+                "q=search",
+                "list=a",
+                "list=b"
+            ]
+        }
+    },
+    {
+        "id": "NdjsonRestJsonUnaryBindingsResponse",
+        "kind": "response",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "UnaryBindings",
+        "error": null,
+        "case": {
+            "id": "NdjsonRestJsonUnaryBindingsResponse",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "Header, prefix-header and response-code bindings are written alongside a JSON body.",
+            "body": "{\"renamed\":\"payload\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Header": "h",
+                "x-meta-one": "1"
+            },
+            "params": {
+                "header": "h",
+                "meta": {
+                    "one": "1"
+                },
+                "code": 201,
+                "body": "payload"
+            },
+            "code": 201
+        }
+    },
+    {
+        "id": "NdjsonRestJsonNotFoundError",
+        "kind": "response",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "UnaryBindings",
+        "error": "NotFound",
+        "case": {
+            "id": "NdjsonRestJsonNotFoundError",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "A declared error gets its @httpError status, its header bindings and the error type header.",
+            "body": "{\"message\":\"no such thing\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Error-Type": "NotFound",
+                "X-Reason": "gone"
+            },
+            "params": {
+                "message": "no such thing",
+                "reason": "gone"
+            },
+            "code": 404
+        }
+    },
+    {
+        "id": "NdjsonRestJsonUnaryPayloadRequest",
+        "kind": "request",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "UnaryPayload",
+        "error": null,
+        "case": {
+            "id": "NdjsonRestJsonUnaryPayloadRequest",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "An @httpPayload structure is the whole request body.",
+            "body": "{\"message\":\"hi\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "greeting": {
+                    "message": "hi"
+                }
+            },
+            "method": "PUT",
+            "uri": "/unary-payload"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonUnaryPayloadResponse",
+        "kind": "response",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "UnaryPayload",
+        "error": null,
+        "case": {
+            "id": "NdjsonRestJsonUnaryPayloadResponse",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "An @httpPayload structure is the whole response body, under the operation's @http code.",
+            "body": "{\"message\":\"hi\"}",
+            "bodyMediaType": "application/json",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "params": {
+                "greeting": {
+                    "message": "hi"
+                }
+            },
+            "code": 201
+        }
+    },
+    {
+        "id": "NdjsonRestJsonUnaryQueryParamsRequest",
+        "kind": "request",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "UnaryQueryParams",
+        "error": null,
+        "case": {
+            "id": "NdjsonRestJsonUnaryQueryParamsRequest",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "documentation": "Query parameters bound by @httpQueryParams.",
+            "params": {
+                "filters": {
+                    "a": "1",
+                    "b": "2"
+                }
+            },
+            "method": "GET",
+            "uri": "/unary-query",
+            "queryParams": [
+                "a=1",
+                "b=2"
+            ]
+        }
+    },
+    {
+        "id": "NdjsonRestJsonCollectSse",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Collect",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            },
+            "output": null
+        },
+        "case": {
+            "id": "NdjsonRestJsonCollectSse",
+            "documentation": "Each value is the data of one event, under text/event-stream, and the terminator's event follows the last.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/collect",
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "received": 2
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"received\":2}",
+                "bodyMediaType": "application/json"
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "request",
+                    "params": {
+                        "completed": {
+                            "total": 1
+                        }
+                    },
+                    "body": "{\"completed\":{\"total\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "request",
+                    "body": "[DONE]"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonCollectEmptyStream",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Collect",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            },
+            "output": null
+        },
+        "case": {
+            "id": "NdjsonRestJsonCollectEmptyStream",
+            "documentation": "A stream with no values is the terminator's event alone.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/collect",
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "received": 0
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"received\":0}",
+                "bodyMediaType": "application/json"
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "body": "[DONE]"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsJsonName",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsJsonName",
+            "documentation": "@jsonName renames a union's tag and a structure's member.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "renamed": {
+                            "name": "x"
+                        }
+                    },
+                    "body": "{\"renamed_tag\":{\"display_name\":\"x\"}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "renamed": {
+                            "name": "x"
+                        }
+                    },
+                    "body": "{\"renamed_tag\":{\"display_name\":\"x\"}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsTimestampFormat",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsTimestampFormat",
+            "documentation": "A timestamp is epoch seconds by default, and @timestampFormat picks another format.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "timestamps": {
+                            "epoch": {
+                                "$date": 1398796238
+                            },
+                            "dateTime": {
+                                "$date": 1398796238
+                            },
+                            "httpDate": {
+                                "$date": 1398796238
+                            }
+                        }
+                    },
+                    "body": "{\"timestamps\":{\"epoch\":1398796238,\"dateTime\":\"2014-04-29T18:30:38Z\",\"httpDate\":\"Tue, 29 Apr 2014 18:30:38 GMT\"}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "timestamps": {
+                            "epoch": {
+                                "$date": 1398796238
+                            },
+                            "dateTime": {
+                                "$date": 1398796238
+                            },
+                            "httpDate": {
+                                "$date": 1398796238
+                            }
+                        }
+                    },
+                    "body": "{\"timestamps\":{\"epoch\":1398796238,\"dateTime\":\"2014-04-29T18:30:38Z\",\"httpDate\":\"Tue, 29 Apr 2014 18:30:38 GMT\"}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsDefaultsOnClient",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsDefaultsOnClient",
+            "documentation": "A member left out takes its @default when read.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "defaults": {
+                            "count": 1,
+                            "label": "none"
+                        }
+                    },
+                    "body": "{\"defaults\":{}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsNullable",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsNullable",
+            "documentation": "An explicit null in a @nullable member is kept, and written back.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "nullables": {
+                            "note": null
+                        }
+                    },
+                    "body": "{\"nullables\":{\"note\":null}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "nullables": {
+                            "note": null
+                        }
+                    },
+                    "body": "{\"nullables\":{\"note\":null}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsDiscriminated",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsDiscriminated",
+            "documentation": "A @discriminated union puts its tag in the named field, beside the member's own.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "discriminated": {
+                            "shape": {
+                                "radius": 2,
+                                "kind": "circle"
+                            }
+                        }
+                    },
+                    "body": "{\"discriminated\":{\"shape\":{\"kind\":\"circle\",\"radius\":2}}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "discriminated": {
+                            "shape": {
+                                "radius": 2,
+                                "kind": "circle"
+                            }
+                        }
+                    },
+                    "body": "{\"discriminated\":{\"shape\":{\"kind\":\"circle\",\"radius\":2}}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsUntagged",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsUntagged",
+            "documentation": "An @untagged union is the member's value alone.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "untagged": {
+                            "amount": {
+                                "number": 5
+                            }
+                        }
+                    },
+                    "body": "{\"untagged\":{\"amount\":5}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "request",
+                    "params": {
+                        "untagged": {
+                            "amount": {
+                                "text": "five"
+                            }
+                        }
+                    },
+                    "body": "{\"untagged\":{\"amount\":\"five\"}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "untagged": {
+                            "amount": {
+                                "number": 5
+                            }
+                        }
+                    },
+                    "body": "{\"untagged\":{\"amount\":5}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "untagged": {
+                            "amount": {
+                                "text": "five"
+                            }
+                        }
+                    },
+                    "body": "{\"untagged\":{\"amount\":\"five\"}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsJsonUnknownUnionMember",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsJsonUnknownUnionMember",
+            "documentation": "A union's @jsonUnknown member holds a tag the union doesn't declare, and writes it back as it was.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "open": {
+                            "choice": {
+                                "future": {
+                                    "x": 1
+                                }
+                            }
+                        }
+                    },
+                    "body": "{\"open\":{\"choice\":{\"future\":{\"x\":1}}}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "open": {
+                            "choice": {
+                                "future": {
+                                    "x": 1
+                                }
+                            }
+                        }
+                    },
+                    "body": "{\"open\":{\"choice\":{\"future\":{\"x\":1}}}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsJsonUnknownStructureMembers",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsJsonUnknownStructureMembers",
+            "documentation": "A structure's @jsonUnknown map holds the members the structure doesn't declare, and writes them back beside the rest.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "extensible": {
+                            "name": "n",
+                            "rest": {
+                                "color": "red"
+                            }
+                        }
+                    },
+                    "body": "{\"extensible\":{\"name\":\"n\",\"color\":\"red\"}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "extensible": {
+                            "name": "n",
+                            "rest": {
+                                "color": "red"
+                            }
+                        }
+                    },
+                    "body": "{\"extensible\":{\"name\":\"n\",\"color\":\"red\"}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsOpenEnum",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsOpenEnum",
+            "documentation": "An @openEnum, string and int. Only declared values: Smithy's node validation doesn't know @openEnum and rejects any other value in params, so reading an undeclared one can't be written as a case.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "enums": {
+                            "color": "RED",
+                            "level": 1
+                        }
+                    },
+                    "body": "{\"enums\":{\"color\":\"RED\",\"level\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "enums": {
+                            "color": "RED",
+                            "level": 1
+                        }
+                    },
+                    "body": "{\"enums\":{\"color\":\"RED\",\"level\":1}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsAlloyFormats",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsAlloyFormats",
+            "documentation": "@uuidFormat, @dateFormat, @localTimeFormat, @durationSecondsFormat and @offsetDateTimeFormat.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "formats": {
+                            "id": "51216269-c0c8-454a-871e-329513e54e23",
+                            "day": "2025-08-15",
+                            "time": "13:26:51.123456789",
+                            "duration": 86400.000000001,
+                            "at": {
+                                "$date": 1755289611
+                            }
+                        }
+                    },
+                    "body": "{\"formats\":{\"id\":\"51216269-c0c8-454a-871e-329513e54e23\",\"day\":\"2025-08-15\",\"time\":\"13:26:51.123456789\",\"duration\":86400.000000001,\"at\":\"2025-08-15T20:26:51Z\"}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "formats": {
+                            "id": "51216269-c0c8-454a-871e-329513e54e23",
+                            "day": "2025-08-15",
+                            "time": "13:26:51.123456789",
+                            "duration": 86400.000000001,
+                            "at": {
+                                "$date": 1755289611
+                            }
+                        }
+                    },
+                    "body": "{\"formats\":{\"id\":\"51216269-c0c8-454a-871e-329513e54e23\",\"day\":\"2025-08-15\",\"time\":\"13:26:51.123456789\",\"duration\":86400.000000001,\"at\":\"2025-08-15T20:26:51Z\"}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsPreserveKeyOrder",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsPreserveKeyOrder",
+            "documentation": "A @preserveKeyOrder document. Bodies are compared as JSON, where key order doesn't count, so this only checks such a document is read and written at all.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "ordered": {
+                            "entries": {
+                                "b": 1,
+                                "a": 2
+                            }
+                        }
+                    },
+                    "body": "{\"ordered\":{\"entries\":{\"b\":1,\"a\":2}}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "ordered": {
+                            "entries": {
+                                "b": 1,
+                                "a": 2
+                            }
+                        }
+                    },
+                    "body": "{\"ordered\":{\"entries\":{\"b\":1,\"a\":2}}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonRecordsRejectsInvalidUuidOnClient",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "EchoRecords",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "records",
+                "encoding": "ndjson"
+            },
+            "output": {
+                "member": "records",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonRecordsRejectsInvalidUuidOnClient",
+            "documentation": "A @uuidFormat string that isn't a UUID fails the stream: {\"formats\":{\"id\":\"nope\",...}}\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/records",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "bytes": "eyJmb3JtYXRzIjp7ImlkIjoibm9wZSIsImRheSI6IjIwMjUtMDgtMTUiLCJ0aW1lIjoiMTM6MjY6NTEiLCJkdXJhdGlvbiI6MSwiYXQiOiIyMDI1LTA4LTE1VDIwOjI2OjUxWiJ9fQo="
+                }
+            ],
+            "expectation": "failure",
+            "appliesTo": "client"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonEmitSseWithoutTerminator",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Emit",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "signals",
+                "encoding": "sse"
+            },
+            "output": null
+        },
+        "case": {
+            "id": "NdjsonRestJsonEmitSseWithoutTerminator",
+            "documentation": "Without a terminator, the stream ends with the last value's event.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/emit",
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "received": 2
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"received\":2}",
+                "bodyMediaType": "application/json"
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "ping": {
+                            "seq": 1
+                        }
+                    },
+                    "body": "{\"ping\":{\"seq\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "request",
+                    "params": {
+                        "ping": {
+                            "seq": 2
+                        }
+                    },
+                    "body": "{\"ping\":{\"seq\":2}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonListenSseWithoutTerminator",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Listen",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "signals",
+                "encoding": "sse"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonListenSseWithoutTerminator",
+            "documentation": "Without a terminator, the stream ends with the last value's event.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "pings"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/listen",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"pings\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "ping": {
+                            "seq": 1
+                        }
+                    },
+                    "body": "{\"ping\":{\"seq\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "ping": {
+                            "seq": 2
+                        }
+                    },
+                    "body": "{\"ping\":{\"seq\":2}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonPublishNdjson",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Publish",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "commands",
+                "encoding": "ndjson"
+            },
+            "output": null
+        },
+        "case": {
+            "id": "NdjsonRestJsonPublishNdjson",
+            "documentation": "Each value is one line of JSON, newline-terminated, under application/x-ndjson, with the envelope's bindings on the request.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "channel": "inventory",
+                "batch": "b1"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/publish/inventory",
+                "headers": {
+                    "Content-Type": "application/x-ndjson",
+                    "X-Batch": "b1"
+                }
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "accepted": 2
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"accepted\":2}",
+                "bodyMediaType": "application/json"
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "request",
+                    "params": {
+                        "add": {
+                            "key": "apple",
+                            "weight": 3
+                        }
+                    },
+                    "body": "{\"add\":{\"key\":\"apple\",\"weight\":3}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "request",
+                    "params": {
+                        "remove": {
+                            "key": "pear"
+                        }
+                    },
+                    "body": "{\"remove\":{\"key\":\"pear\"}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonPublishEmptyStream",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Publish",
+        "error": null,
+        "streams": {
+            "input": {
+                "member": "commands",
+                "encoding": "ndjson"
+            },
+            "output": null
+        },
+        "case": {
+            "id": "NdjsonRestJsonPublishEmptyStream",
+            "documentation": "A stream with no values is an empty body.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "channel": "inventory"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/publish/inventory",
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                },
+                "body": ""
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "accepted": 0
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"accepted\":0}",
+                "bodyMediaType": "application/json"
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeNdjson",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeNdjson",
+            "documentation": "Each value is one line of JSON, newline-terminated, under application/x-ndjson, with the envelope's bindings on the response.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 2
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":2}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "subscription": "sub-1",
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson",
+                    "X-Subscription": "sub-1"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 2
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":2}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "completed": {
+                            "total": 2
+                        }
+                    },
+                    "body": "{\"completed\":{\"total\":2}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeEmptyStream",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeEmptyStream",
+            "documentation": "A stream with no values is an empty body.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "quiet",
+                "limit": 0
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/quiet",
+                "body": "{\"limit\":0}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                },
+                "body": ""
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeResponseCode",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeResponseCode",
+            "documentation": "@httpResponseCode on the envelope sets the status of a streamed response.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 1
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":1}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 206
+            },
+            "initialResponse": {
+                "code": 206,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeSkipsBlankLines",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeSkipsBlankLines",
+            "documentation": "A blank line between two values (here: {\"progress\":{\"soFar\":1}}\\n\\n{\"progress\":{\"soFar\":2}}\\n) is skipped.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 2
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":2}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "bytes": "Cg=="
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 2
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":2}}",
+                    "bodyMediaType": "application/json"
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeAcceptsCrlf",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeAcceptsCrlf",
+            "documentation": "A line may end in \\r\\n: {\"progress\":{\"soFar\":1}}\\r\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 1
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":1}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "eyJwcm9ncmVzcyI6eyJzb0ZhciI6MX19DQo="
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeAcceptsUnterminatedLastLine",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeAcceptsUnterminatedLastLine",
+            "documentation": "The last line may lack its newline: {\"progress\":{\"soFar\":1}}",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 1
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":1}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "eyJwcm9ncmVzcyI6eyJzb0ZhciI6MX19"
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeRejectsMalformedLine",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeRejectsMalformedLine",
+            "documentation": "A line that is not JSON fails the stream: not json\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 1
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":1}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "bytes": "bm90IGpzb24K"
+                }
+            ],
+            "expectation": "failure",
+            "appliesTo": "client"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeRejectsUnknownMember",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeRejectsUnknownMember",
+            "documentation": "A line naming a member the union doesn't have fails the stream: {\"mystery\":{}}\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 1
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":1}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "bytes": "eyJteXN0ZXJ5Ijp7fX0K"
+                }
+            ],
+            "expectation": "failure",
+            "appliesTo": "client"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeRejectsMissingRequired",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeRejectsMissingRequired",
+            "documentation": "A value missing a @required member fails the stream: {\"progress\":{}}\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 1
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":1}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "bytes": "eyJwcm9ncmVzcyI6e319Cg=="
+                }
+            ],
+            "expectation": "failure",
+            "appliesTo": "client"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonSubscribeRejectsOutOfRange",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Subscribe",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "updates",
+                "encoding": "ndjson"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonSubscribeRejectsOutOfRange",
+            "documentation": "A value outside its @range fails the stream: {\"progress\":{\"soFar\":-1}}\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news",
+                "limit": 1
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/subscribe/news",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"limit\":1}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponseParams": {
+                "code": 200
+            },
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "application/x-ndjson"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "bytes": "eyJwcm9ncmVzcyI6eyJzb0ZhciI6LTF9fQo="
+                }
+            ],
+            "expectation": "failure",
+            "appliesTo": "client"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchSse",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchSse",
+            "documentation": "Each value is the data of one event, under text/event-stream, and the terminator's event follows the last.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "completed": {
+                            "total": 1
+                        }
+                    },
+                    "body": "{\"completed\":{\"total\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "body": "[DONE]"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchEmptyStream",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchEmptyStream",
+            "documentation": "A stream with no values is the terminator's event alone.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "quiet"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"quiet\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "body": "[DONE]"
+                }
+            ],
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchSkipsCommentsAndEventsWithoutData",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchSkipsCommentsAndEventsWithoutData",
+            "documentation": "A comment and an event without data deliver nothing: :keep-alive\\n\\nid: 1\\n\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "bytes": "OmtlZXAtYWxpdmUKCg=="
+                },
+                {
+                    "type": "response",
+                    "bytes": "aWQ6IDEKCg=="
+                },
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "body": "[DONE]"
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchIgnoresOtherFields",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchIgnoresOtherFields",
+            "documentation": "The event, id and retry fields are skipped: event: progress\\nid: 7\\nretry: 1000\\ndata: {\"progress\":{\"soFar\":1}}\\n\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "ZXZlbnQ6IHByb2dyZXNzCmlkOiA3CnJldHJ5OiAxMDAwCmRhdGE6IHsicHJvZ3Jlc3MiOnsic29GYXIiOjF9fQoK"
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchJoinsDataLines",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchJoinsDataLines",
+            "documentation": "An event's data fields are joined with newlines: data: {\"progress\":\\ndata: {\"soFar\":1}}\\n\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "ZGF0YTogeyJwcm9ncmVzcyI6CmRhdGE6IHsic29GYXIiOjF9fQoK"
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchAcceptsCrlf",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchAcceptsCrlf",
+            "documentation": "Lines may end in \\r\\n: data: {\"progress\":{\"soFar\":1}}\\r\\n\\r\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "ZGF0YTogeyJwcm9ncmVzcyI6eyJzb0ZhciI6MX19DQoNCg=="
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchAcceptsCr",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchAcceptsCr",
+            "documentation": "Lines may end in \\r: data: {\"progress\":{\"soFar\":1}}\\r\\r",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "ZGF0YTogeyJwcm9ncmVzcyI6eyJzb0ZhciI6MX19DQ0="
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchAcceptsDataWithoutSpace",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchAcceptsDataWithoutSpace",
+            "documentation": "The space after a field's colon is optional: data:{\"progress\":{\"soFar\":1}}\\n\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "ZGF0YTp7InByb2dyZXNzIjp7InNvRmFyIjoxfX0KCg=="
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchIgnoresByteOrderMark",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchIgnoresByteOrderMark",
+            "documentation": "A byte order mark at the start of the stream is skipped: \\uFEFFdata: {\"progress\":{\"soFar\":1}}\\n\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json",
+                    "bytes": "77u/ZGF0YTogeyJwcm9ncmVzcyI6eyJzb0ZhciI6MX19Cgo="
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchDropsUnterminatedEvent",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchDropsUnterminatedEvent",
+            "documentation": "An event cut off before its blank line is not delivered: data: {\"progress\":{\"soFar\":2}}\\n at the end of the stream.",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "params": {
+                        "progress": {
+                            "soFar": 1
+                        }
+                    },
+                    "body": "{\"progress\":{\"soFar\":1}}",
+                    "bodyMediaType": "application/json"
+                },
+                {
+                    "type": "response",
+                    "bytes": "ZGF0YTogeyJwcm9ncmVzcyI6eyJzb0ZhciI6Mn19Cg=="
+                }
+            ],
+            "appliesTo": "client",
+            "expectation": "success"
+        }
+    },
+    {
+        "id": "NdjsonRestJsonWatchRejectsMalformedData",
+        "kind": "events",
+        "service": "NdjsonRestJsonCompliance",
+        "operation": "Watch",
+        "error": null,
+        "streams": {
+            "input": null,
+            "output": {
+                "member": "notifications",
+                "encoding": "sse",
+                "terminator": "[DONE]"
+            }
+        },
+        "case": {
+            "id": "NdjsonRestJsonWatchRejectsMalformedData",
+            "documentation": "Data that is not JSON fails the stream: data: not json\\n\\n",
+            "protocol": "org.polyvariant.ndjson#ndjsonRestJson",
+            "initialRequestParams": {
+                "topic": "news"
+            },
+            "initialRequest": {
+                "method": "POST",
+                "uri": "/watch",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"topic\":\"news\"}",
+                "bodyMediaType": "application/json"
+            },
+            "initialRequestShape": "smithy.test#InitialHttpRequest",
+            "initialResponse": {
+                "code": 200,
+                "headers": {
+                    "Content-Type": "text/event-stream"
+                }
+            },
+            "initialResponseShape": "smithy.test#InitialHttpResponse",
+            "events": [
+                {
+                    "type": "response",
+                    "bytes": "ZGF0YTogbm90IGpzb24KCg=="
+                }
+            ],
+            "expectation": "failure",
+            "appliesTo": "client"
+        }
+    }
+]

@@ -31,6 +31,8 @@ From one model, into a single `generated.ts`:
 
 ## Usage
 
+The generator, the sbt plugin and the CLI all need Java 17 or newer.
+
 ### As a smithy-build plugin
 
 Add the artifact to your smithy-build classpath and reference the plugin by name (`ts-codegen`):

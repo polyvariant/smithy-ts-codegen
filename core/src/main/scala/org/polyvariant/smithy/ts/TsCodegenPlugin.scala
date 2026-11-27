@@ -20,6 +20,7 @@ import alloy.DiscriminatedUnionTrait
 import alloy.JsonUnknownTrait
 import alloy.NullableTrait
 import alloy.OpenEnumTrait
+import alloy.UuidFormatTrait
 import org.polyvariant.ndjson.ServerSentEventsTrait
 import org.polyvariant.smithy.ts.api.PathSegment
 import org.polyvariant.smithy.ts.api.TsCodegenExtension
@@ -42,9 +43,13 @@ import software.amazon.smithy.model.traits.HttpQueryParamsTrait
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpResponseCodeTrait
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.MixinTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.SparseTrait
+import software.amazon.smithy.model.traits.MediaTypeTrait
+import software.amazon.smithy.model.traits.PatternTrait
+import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.TraitDefinition
@@ -697,7 +702,7 @@ object TsCodegenPlugin {
     val name = w.tsName(shape)
     val target = model.expectShape(shape.getMember.getTarget)
     val elem = inlineSchemaExpr(w, target, shape.getMember) + sparseSuffix(shape)
-    w.line(s"export const ${name}Schema = z.array($elem)")
+    w.line(s"export const ${name}Schema = z.array($elem)${constraintChecks(shape, shape)}")
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
@@ -705,7 +710,9 @@ object TsCodegenPlugin {
     val name = w.tsName(shape)
     val value = model.expectShape(shape.getValue.getTarget)
     val valueExpr = inlineSchemaExpr(w, value, shape.getValue) + sparseSuffix(shape)
-    w.line(s"export const ${name}Schema = z.record(z.string(), $valueExpr)")
+    w.line(
+      s"export const ${name}Schema = z.record(z.string(), $valueExpr)${constraintChecks(shape, shape)}"
+    )
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
 
@@ -719,7 +726,7 @@ object TsCodegenPlugin {
   private def writeAlias(w: TsWriter, shape: Shape): Unit = {
     val name = w.tsName(shape)
     val base = primitiveSchema(shape)
-    val branded = s"$base.brand<'$name'>()"
+    val branded = s"$base${constraintChecks(shape, shape)}.brand<'$name'>()"
     w.line(s"export const ${name}Schema = $branded")
     w.line(s"export type $name = z.infer<typeof ${name}Schema>")
   }
@@ -748,11 +755,68 @@ object TsCodegenPlugin {
     * member-scoped, so it can only be honored where the member is in scope — hence this overload
     * alongside the shape-only one above.
     */
-  private def inlineSchemaExpr(w: TsWriter, target: Shape, member: MemberShape): String =
-    if (isLossless(member))
-      "z.union([z.number(), z.string()])"
-    else
-      inlineSchemaExpr(w, target)
+  private[ts] def inlineSchemaExpr(w: TsWriter, target: Shape, member: MemberShape): String = {
+    val base =
+      if (isLossless(member))
+        "z.union([z.number(), z.string()])"
+      else
+        inlineSchemaExpr(w, target)
+    base + constraintChecks(member, target)
+  }
+
+  /** The constraint traits `carrier` itself holds (`@range`, `@length`, `@pattern`, and alloy's
+    * `@uuidFormat`), as zod refinements on a value of `target`. A shape's own constraints are
+    * checked in its schema, a member's where the member uses it, so each is checked once.
+    *
+    * They are `refine`s rather than zod's own `.min`/`.regex`, which exist only on some schema
+    * kinds: `refine` keeps the inferred type and applies to a branded alias, a `@lossless` union or
+    * a record alike. As in smithy4s, which the client follows: a string's length is its UTF-16
+    * length, and a pattern matches anywhere unless it is anchored.
+    */
+  /** A regex as a JS string literal for `new RegExp`, with `$` spelled `\x24`: the same string at
+    * runtime, but none of the writer's `$` format markers, so it can go through `w.line` like any
+    * other schema expression.
+    */
+  private def regexSource(pattern: String): String = jsString(pattern).replace("$", "\\x24")
+
+  private def constraintChecks(carrier: Shape, target: Shape): String = {
+    val range = carrier.getTrait(classOf[RangeTrait]).toScala.toList.flatMap { t =>
+      t.getMin.toScala.map(min => s".refine((v) => Number(v) >= $min, 'must be at least $min')") ++
+        t.getMax.toScala.map(max => s".refine((v) => Number(v) <= $max, 'must be at most $max')")
+    }
+    val size =
+      target match {
+        case _: StringShape => "v.length"
+        case _: ListShape   => "v.length"
+        case _: MapShape    => "Object.keys(v).length"
+        case _              => ""
+      }
+    val length =
+      if (size.isEmpty)
+        Nil
+      else
+        carrier.getTrait(classOf[LengthTrait]).toScala.toList.flatMap { t =>
+          t.getMin
+            .toScala
+            .map(min => s".refine((v) => $size >= $min, 'length must be at least $min')") ++
+            t.getMax
+              .toScala
+              .map(max => s".refine((v) => $size <= $max, 'length must be at most $max')")
+        }
+    val pattern = carrier.getTrait(classOf[PatternTrait]).toScala.toList.map { t =>
+      val p = regexSource(t.getValue)
+      s".refine((v) => new RegExp($p).test(v), 'must match ' + $p)"
+    }
+    val uuid =
+      if (carrier.hasTrait(classOf[UuidFormatTrait])) {
+        val p = regexSource(
+          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        )
+        List(s".refine((v) => new RegExp($p).test(v), 'must be a UUID')")
+      } else
+        Nil
+    (range ++ length ++ pattern ++ uuid).mkString
+  }
 
   private def isLossless(member: MemberShape): Boolean =
     member.hasTrait(LosslessTraitId)
@@ -814,8 +878,10 @@ object TsCodegenPlugin {
 
   private object StreamFraming {
 
-    /** `@streaming blob`: raw bytes, no per-element schema. */
-    case object Binary extends StreamFraming {
+    /** `@streaming blob`: raw bytes, no per-element schema, labelled with the blob's `@mediaType`
+      * if it has one.
+      */
+    final case class Binary(mediaType: Option[String]) extends StreamFraming {
       val encoding = "binary"
       val elementType = "Uint8Array"
     }
@@ -871,7 +937,8 @@ object TsCodegenPlugin {
       val target = model.expectShape(member.getTarget)
       val framing =
         target match {
-          case _: BlobShape  => StreamFraming.Binary
+          case b: BlobShape =>
+            StreamFraming.Binary(b.getTrait(classOf[MediaTypeTrait]).toScala.map(_.getValue))
           case u: UnionShape =>
             u.getTrait(classOf[ServerSentEventsTrait]).toScala match {
               case Some(sse) => StreamFraming.Sse(w.tsName(u), sse.getTerminator.toScala)
@@ -914,8 +981,8 @@ object TsCodegenPlugin {
     */
   private def streamEncodeExpr(info: StreamInfo, expr: String): String =
     info.framing match {
-      case StreamFraming.Binary  => expr
-      case j: StreamFraming.Json => s"wireMapStream($expr, encode${j.shapeName})"
+      case _: StreamFraming.Binary => expr
+      case j: StreamFraming.Json   => s"wireMapStream($expr, encode${j.shapeName})"
     }
 
   /** Emits the expression that decodes and validates the transport's stream of already-framed
@@ -925,8 +992,8 @@ object TsCodegenPlugin {
     */
   private def streamDecodeExpr(info: StreamInfo, expr: String, opLabel: String): String =
     info.framing match {
-      case StreamFraming.Binary  => s"$expr as AsyncIterable<Uint8Array>"
-      case j: StreamFraming.Json =>
+      case _: StreamFraming.Binary => s"$expr as AsyncIterable<Uint8Array>"
+      case j: StreamFraming.Json   =>
         s"decodeStream($expr, { parse: (value: unknown) => ${j.schemaExpr}.parse(decode${j.shapeName}(value)) }, $opLabel)"
     }
 
@@ -1416,8 +1483,17 @@ object TsCodegenPlugin {
         w.line("url,")
         if (hasQuery)
           w.line("query,")
-        if (hasHeaders)
-          w.line("headers,")
+        // A blob's `@mediaType` labels the bytes. Lowercase, so it replaces the transport's default
+        // `content-type` for a binary stream rather than joining it.
+        val mediaType = streams.input.map(_.framing).collect {
+          case StreamFraming.Binary(Some(mt)) => s"'content-type': ${jsString(mt)}"
+        }
+        (hasHeaders, mediaType) match {
+          case (true, Some(mt))  => w.line(s"headers: { ...headers, $mt },")
+          case (false, Some(mt)) => w.line(s"headers: { $mt },")
+          case (true, None)      => w.line("headers,")
+          case (false, None)     => ()
+        }
         w.lit(s"body: $bodyExpr,")
         streams.input.foreach { in =>
           w.line(s"requestStreamEncoding: ${jsString(in.framing.encoding)},")
@@ -1574,7 +1650,7 @@ object TsCodegenPlugin {
   /** Human-readable framing, for the generated doc comments. */
   private def framingLabel(info: StreamInfo): String =
     info.framing match {
-      case StreamFraming.Binary    => "raw bytes"
+      case _: StreamFraming.Binary => "raw bytes"
       case n: StreamFraming.Ndjson => s"newline-delimited `${n.shapeName}` values"
       case e: StreamFraming.Sse    => s"`${e.shapeName}` values as server-sent events"
     }

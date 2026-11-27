@@ -38,12 +38,18 @@ import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
+import software.amazon.smithy.protocoltests.traits.eventstream.EventStreamTestCase
+import software.amazon.smithy.protocoltests.traits.eventstream.EventStreamTestsTrait
+import software.amazon.smithy.model.traits.StreamingTrait
+import software.amazon.smithy.model.traits.TimestampFormatTrait
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Base64
 import java.util.regex.Pattern
 import scala.collection.immutable.ListMap
@@ -54,13 +60,15 @@ import scala.jdk.OptionConverters.*
   * TypeScript the codegen emits for the suite's services (`generated.ts`) and every client-side
   * `@httpRequestTests` / `@httpResponseTests` case that applies to them (`cases.json`).
   *
-  * Two suites, both loaded from the classpath:
+  * Three suites, all loaded from the classpath:
   *
   *   - `alloy` — `alloy-protocol-tests`, written for `alloy#simpleRestJson` itself.
   *   - `restJson1` — smithy's own `aws.protocols#restJson1` tests, restricted to the ones alloy
   *     declares as applying to `simpleRestJson` (the `alloySimpleRestJsonBorrowedTests` rules
   *     shipped in `alloy-protocol-tests`), interpreted exactly as smithy4s interprets them — see
   *     [[AllowRule]]. So this is the set smithy4s runs, no more and no less.
+  *   - `ndjsonRestJson` — `smithy4s-ndjson-protocol-tests`, for `@ndjsonRestJson`: the streaming
+  *     protocol, including its `@eventStreamTests` (see [[eventCases]]).
   *
   * A case's `params` are written in Smithy's node form, which is not always how the TypeScript API
   * spells a value. They are rewritten here, with the model at hand, so the runner can stay
@@ -116,6 +124,9 @@ object ComplianceCodegen {
   private val RestJsonService = ShapeId.from("aws.protocoltests.restjson#RestJson")
   private val Discriminated = ShapeId.from("alloy#discriminated")
   private val JsonUnknown = ShapeId.from("alloy#jsonUnknown")
+  private val NdjsonRestJson = ShapeId.from("org.polyvariant.ndjson#ndjsonRestJson")
+  private val ServerSentEvents = ShapeId.from("org.polyvariant.ndjson#serverSentEvents")
+  private val NdjsonComplianceNamespace = "org.polyvariant.ndjson.compliance"
 
   def suites(model: Model): List[Suite] = {
     val borrowed = borrowedRestJson1Tests(model)
@@ -149,6 +160,16 @@ object ComplianceCodegen {
             )
           },
         includeCase = borrowed,
+      ),
+      Suite(
+        name = "ndjsonRestJson",
+        protocol = NdjsonRestJson,
+        select =
+          _.getServiceShapes
+            .asScala
+            .toList
+            .filter(_.getId.getNamespace == NdjsonComplianceNamespace),
+        includeCase = _ => true,
       ),
     )
   }
@@ -254,18 +275,164 @@ object ComplianceCodegen {
       model.expectShape(id)
     }
     val raw = c.testCase.toNode.expectObjectNode
+    // A streamed blob stays its text: the TS API takes and returns it as a stream of bytes, which
+    // the runner makes from (and reads back into) that text.
+    val streamedBlob = c
+      .error
+      .fold(streamOf(model, paramsShape.getId))(_ => None)
+      .filter(_.encoding == "binary")
     val converted =
       raw
         .getMember("params")
         .toScala
-        .fold(raw)(p => raw.withMember("params", toTsValue(model, p, paramsShape)))
-    Node
+        .fold(raw) { p =>
+          val ts = toTsValue(model, p, paramsShape).expectObjectNode
+          val kept =
+            streamedBlob.fold(ts) { s =>
+              p.expectObjectNode.getMember(s.member).toScala.fold(ts)(ts.withMember(s.member, _))
+            }
+          raw.withMember("params", kept)
+        }
+    val builder = Node
       .objectNodeBuilder()
       .withMember("id", c.testCase.getId)
       .withMember("kind", c.kind)
       .withMember("service", c.service.getId.getName)
       .withMember("operation", c.operation.getId.getName)
       .withMember("error", c.error.fold(Node.nullNode())(e => Node.from(e.getId.getName)))
+    streamsNode(model, c.operation)
+      .filter(_ => c.error.isEmpty)
+      .fold(builder)(builder.withMember("streams", _))
+      .withMember("case", converted)
+      .build()
+  }
+
+  /** The member of a structure that is streamed, and how the protocol frames it. */
+  final case class Stream(member: String, encoding: String, terminator: Option[String]) {
+
+    def toNode: Node =
+      Node.objectNode(
+        ListMap
+          .from(
+            List(
+              Node.from("member") -> Node.from(member),
+              Node.from("encoding") -> Node.from(encoding),
+            ) ++
+              terminator.map(t => Node.from("terminator") -> Node.from(t))
+          )
+          .asJava
+      )
+
+  }
+
+  def streamOf(model: Model, structure: ShapeId): Option[Stream] =
+    model.getShape(structure).toScala.toList.flatMap(_.members.asScala).collectFirst {
+      case m if model.expectShape(m.getTarget).hasTrait(classOf[StreamingTrait]) =>
+        val target = model.expectShape(m.getTarget)
+        val sse = target.findTrait(ServerSentEvents).toScala
+        val encoding =
+          if (target.isBlobShape)
+            "binary"
+          else if (sse.isDefined)
+            "sse"
+          else
+            "ndjson"
+        Stream(
+          m.getMemberName,
+          encoding,
+          sse.flatMap(
+            _.toNode.expectObjectNode.getStringMember("terminator").toScala.map(_.getValue)
+          ),
+        )
+    }
+
+  /** `{input, output}`: what an operation streams each way, or nothing if it streams neither. */
+  private def streamsNode(model: Model, op: OperationShape): Option[Node] = {
+    val in = streamOf(model, op.getInputShape)
+    val out = streamOf(model, op.getOutputShape)
+    Option.when(in.isDefined || out.isDefined)(
+      obj(
+        List(
+          Node.from("input") -> in.fold(Node.nullNode())(_.toNode),
+          Node.from("output") -> out.fold(Node.nullNode())(_.toNode),
+        )
+      )
+    )
+  }
+
+  /** Every client-side `@eventStreamTests` case for the suite's protocol, with its operation.
+    *
+    * Rendered like the HTTP cases, as kind `events`: `initialRequestParams`,
+    * `initialResponseParams` and each event's `params` in the TS API's form, `bytes` left as the
+    * model has them (base64).
+    */
+  def eventCases(model: Model, suite: Suite)
+    : List[(ServiceShape, OperationShape, EventStreamTestCase, ObjectNode)] = {
+    val index = TopDownIndex.of(model)
+    model.getServiceShapes.asScala.toList.sortBy(_.getId.toString).flatMap { service =>
+      index.getContainedOperations(service).asScala.toList.sortBy(_.getId.toString).flatMap { op =>
+        // A case has no node form of its own; the trait's is its cases', in order.
+        op.getTrait(classOf[EventStreamTestsTrait])
+          .toScala
+          .toList
+          .flatMap(t => t.getTestCases.asScala.zip(t.toNode.expectArrayNode.getElements.asScala))
+          .filter((tc, _) =>
+            tc.getProtocol == suite.protocol && !tc.getAppliesTo.toScala.contains(AppliesTo.SERVER)
+          )
+          .map((tc, node) => (service, op, tc, node.expectObjectNode))
+      }
+    }
+  }
+
+  def eventCaseToNode(
+    model: Model,
+    service: ServiceShape,
+    op: OperationShape,
+    tc: EventStreamTestCase,
+    raw: ObjectNode,
+  ): Node = {
+    val input = model.expectShape(op.getInputShape)
+    val output = model.expectShape(op.getOutputShape)
+    def union(structure: Shape): Option[Shape] =
+      streamOf(model, structure.getId).map(s =>
+        model.expectShape(structure.getMember(s.member).get.getTarget)
+      )
+    val eventNodes = raw.getArrayMember("events").toScala.toList.flatMap(_.getElements.asScala)
+    val events = tc.getEvents.asScala.toList.zip(eventNodes).map { (event, node) =>
+      val shape = union(
+        if (event.getType.toString == "request")
+          input
+        else
+          output
+      )
+      val eventNode = node.expectObjectNode
+      eventNode
+        .getMember("params")
+        .toScala
+        .flatMap(p => shape.map(s => eventNode.withMember("params", toTsValue(model, p, s))))
+        .getOrElse(eventNode)
+    }
+    val converted = List[(String, Shape)](
+      "initialRequestParams" -> input,
+      "initialResponseParams" -> output,
+    ).foldLeft(raw) { case (acc, (name, shape)) =>
+      acc.getMember(name).toScala.fold(acc)(p => acc.withMember(name, toTsValue(model, p, shape)))
+    }.withMember("events", Node.fromNodes(events.asJava))
+      .withMember(
+        "expectation",
+        if (tc.getExpectation.isFailure)
+          "failure"
+        else
+          "success",
+      )
+    Node
+      .objectNodeBuilder()
+      .withMember("id", tc.getId)
+      .withMember("kind", "events")
+      .withMember("service", service.getId.getName)
+      .withMember("operation", op.getId.getName)
+      .withMember("error", Node.nullNode())
+      .withMember("streams", streamsNode(model, op).getOrElse(Node.nullNode()))
       .withMember("case", converted)
       .build()
   }
@@ -279,13 +446,30 @@ object ComplianceCodegen {
     *   - `@discriminated` union values → flattened, discriminator alongside the member's fields;
     *   - `@jsonUnknown` union members → the raw unknown value, which is how an open union holds it.
     */
-  def toTsValue(model: Model, node: Node, shape: Shape): Node =
+  def toTsValue(model: Model, node: Node, shape: Shape): Node = toTsValue(model, node, shape, None)
+
+  /** `memberFormat` is the `@timestampFormat` of the member being read, which wins over its
+    * target's. `@httpRequestTests` always writes a timestamp as epoch seconds, but
+    * `@eventStreamTests` writes it in its format — Smithy's validators insist on both.
+    */
+  private def toTsValue(model: Model, node: Node, shape: Shape, memberFormat: Option[String])
+    : Node =
     shape match {
-      case m: MemberShape       => toTsValue(model, node, model.expectShape(m.getTarget))
+      case m: MemberShape =>
+        toTsValue(
+          model,
+          node,
+          model.expectShape(m.getTarget),
+          m.getTrait(classOf[TimestampFormatTrait]).toScala.map(_.getValue),
+        )
       case _ if node.isNullNode => node
-      case _: TimestampShape    => obj(List(Node.from("$date") -> epochSeconds(node)))
-      case _: BlobShape         => base64(node)
-      case l: ListShape         =>
+      case t: TimestampShape    =>
+        val format = memberFormat.orElse(
+          t.getTrait(classOf[TimestampFormatTrait]).toScala.map(_.getValue)
+        )
+        obj(List(Node.from("$date") -> epochSeconds(node, format)))
+      case _: BlobShape => base64(node)
+      case l: ListShape =>
         Node.fromNodes(
           node.expectArrayNode.getElements.asScala.map(toTsValue(model, _, l.getMember)).asJava
         )
@@ -318,9 +502,14 @@ object ComplianceCodegen {
       }
     }
 
-  private def epochSeconds(node: Node): Node =
+  private def epochSeconds(node: Node, format: Option[String]): Node =
     node.asStringNode.toScala.fold(node) { s =>
-      Node.from(Instant.parse(s.getValue).getEpochSecond)
+      val instant =
+        if (format.contains(TimestampFormatTrait.HTTP_DATE))
+          ZonedDateTime.parse(s.getValue, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant
+        else
+          Instant.parse(s.getValue)
+      Node.from(instant.getEpochSecond)
     }
 
   private def base64(node: Node): Node =
@@ -353,7 +542,12 @@ object ComplianceCodegen {
         dir.resolve("generated.ts"),
         TsCodegenPlugin.generate(narrowed, Set.empty),
       )
-      val json = Node.fromNodes(cases(narrowed, suite).map(caseToNode(narrowed, _)).asJava)
+      val json = Node.fromNodes(
+        (cases(narrowed, suite).map(caseToNode(narrowed, _)) ++
+          eventCases(narrowed, suite).map((service, op, tc, node) =>
+            eventCaseToNode(narrowed, service, op, tc, node)
+          )).asJava
+      )
       val _ = Files.writeString(dir.resolve("cases.json"), Node.prettyPrintJson(json) + "\n")
     }
   }

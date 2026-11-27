@@ -14,7 +14,8 @@ val scala3 = "3.3.9"
 val scala212 = "2.12.21"
 
 ThisBuild / scalaVersion := scala3
-ThisBuild / tlJdkRelease := Some(11)
+ThisBuild / tlJdkRelease := Some(17)
+ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("17"))
 ThisBuild / tlFatalWarnings := false
 ThisBuild / resolvers += Resolver.sonatypeCentralSnapshots
 
@@ -24,7 +25,7 @@ ThisBuild / mergifyStewardConfig ~= (_.map(_.withMergeMinors(true)))
 ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
   List("sbtPlugin/scripted"),
   name = Some("sbt plugin scripted tests"),
-  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@17'"),
 )
 
 // The generated TypeScript is committed (typecheck/src/generated.ts) and
@@ -36,7 +37,7 @@ ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
 ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Sbt(
   List("project /", "tsCodegenSampleCheck", "complianceCodegenCheck"),
   name = Some("Committed generated TypeScript is up to date"),
-  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@17'"),
 )
 
 // Type-check the generated TypeScript with the real `tsc` (see nix/typecheck.nix).
@@ -46,12 +47,12 @@ ThisBuild / githubWorkflowBuildPostamble ++= Seq(
   WorkflowStep.Use(
     UseRef.Public("cachix", "install-nix-action", "v31"),
     name = Some("Install nix"),
-    cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+    cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@17'"),
   ),
   WorkflowStep.Run(
     List("nix flake check --print-build-logs"),
     name = Some("Typecheck the generated TypeScript"),
-    cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+    cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@17'"),
   ),
 )
 
@@ -63,13 +64,13 @@ ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Run(
     "nix develop --command bash -c 'pnpm install --frozen-lockfile && pnpm --filter @polyvariant/smithy-ts-runtime run build && sbt complianceRoundTrip'"
   ),
   name = Some("Round-trip the compliance suites through smithy4s"),
-  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@17'"),
 )
 
 val smithyVersion = "1.75.0"
 val alloyVersion = "0.3.41"
 val smithy4sVersion = "0.19.13"
-val smithy4sNdjsonVersion = "0.4.0"
+val smithy4sNdjsonVersion = "0.5.0"
 
 val commonSettings = Seq(
   scalacOptions ++= Seq(
@@ -162,6 +163,7 @@ lazy val complianceCodegenProject = project
       "com.disneystreaming.alloy" % "alloy-protocol-tests" % alloyVersion,
       "software.amazon.smithy" % "smithy-aws-protocol-tests" % smithyVersion,
       "software.amazon.smithy" % "smithy-protocol-test-traits" % smithyVersion,
+      "org.polyvariant" % "smithy4s-ndjson-protocol-tests" % smithy4sNdjsonVersion,
     ),
   )
 

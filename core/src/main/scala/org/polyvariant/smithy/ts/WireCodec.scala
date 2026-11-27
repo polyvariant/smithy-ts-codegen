@@ -19,6 +19,7 @@ package org.polyvariant.smithy.ts
 import alloy.DiscriminatedUnionTrait
 import alloy.JsonUnknownTrait
 import alloy.NullableTrait
+import alloy.UntaggedUnionTrait
 import org.polyvariant.smithy.ts.TsCodegenPlugin.TsWriter
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
@@ -295,37 +296,68 @@ private[ts] object WireCodec {
       model.expectShape(m.getTarget).hasTrait(classOf[StreamingTrait])
     }
 
+  /** A structure's `@jsonUnknown` member: a map of every JSON member the structure doesn't declare.
+    * It is not a member on the wire, so it is read from and written beside the others.
+    */
+  private def unknownMember(members: List[MemberShape]): Option[MemberShape] =
+    members.find(_.hasTrait(classOf[JsonUnknownTrait]))
+
   private def writeStructureCodec(w: TsWriter, model: Model, shape: StructureShape): Unit = {
     val name = w.tsName(shape)
-    val members = objectMembers(model, shape)
+    val allMembers = objectMembers(model, shape)
+    val unknown = unknownMember(allMembers)
+    val members = allMembers.filterNot(unknown.contains)
     out(w, s"/** `$name` as it is written in a JSON body. */")
     val param =
       if (members.isEmpty)
         "_value"
       else
         "value"
-    block(w, s"export function encode$name($param: $name): Record<string, unknown> {") {
-      out(
-        w,
-        objectLiteral(
-          members.map(m =>
-            wireName(m) -> encodeMemberExpr(w, model, m, s"value.${m.getMemberName}")
-          )
-        ),
-      )
+    val encodeParam =
+      if (unknown.isDefined)
+        "value"
+      else
+        param
+    block(w, s"export function encode$name($encodeParam: $name): Record<string, unknown> {") {
+      val known =
+        members.map(m => wireName(m) -> encodeMemberExpr(w, model, m, s"value.${m.getMemberName}"))
+      unknown match {
+        case None    => out(w, objectLiteral(known))
+        case Some(m) =>
+          // Spread first, so a declared member wins over an unknown one of the same name.
+          val access = s"value.${m.getMemberName}"
+          val encoded = encodeExpr(w, model, Some(m), model.expectShape(m.getTarget), access)
+          val fields =
+            s"...($access == null ? {} : $encoded)" ::
+              known.map { case (k, v) => s"${jsString(k)}: $v" }
+          out(w, fields.mkString("return { ", ", ", " }"))
+      }
     }
     out(w, "")
     out(w, s"/** `$name` read from a JSON body; validate the result with `${name}Schema`. */")
     block(w, s"export function decode$name(value: unknown): unknown {") {
       out(w, "if (!wireIsRecord(value)) return value")
-      out(
-        w,
-        objectLiteral(
-          members.map(m =>
-            m.getMemberName -> decodeMemberExpr(w, model, m, s"value[${jsString(wireName(m))}]")
-          )
-        ),
+      val known = members.map(m =>
+        m.getMemberName -> decodeMemberExpr(w, model, m, s"value[${jsString(wireName(m))}]")
       )
+      unknown match {
+        case None    => out(w, objectLiteral(known))
+        case Some(m) =>
+          val declared = members.map(m => jsString(wireName(m))).mkString("[", ", ", "]")
+          out(w, s"const declared: string[] = $declared")
+          out(
+            w,
+            "const unknown = Object.fromEntries(Object.entries(value).filter(([k]) => !declared.includes(k)))",
+          )
+          // No unknown members reads as an absent map, as smithy4s reads it.
+          val decoded = decodeExpr(w, model, model.expectShape(m.getTarget), "unknown")
+          out(
+            w,
+            objectLiteral(
+              known :+ (m.getMemberName -> s"Object.keys(unknown).length === 0 ? undefined : $decoded")
+            ),
+          )
+      }
     }
     out(w, "")
   }
@@ -338,7 +370,6 @@ private[ts] object WireCodec {
       entries.map { case (k, v) => s"${jsString(k)}: $v" }.mkString("return { ", ", ", " }")
 
   private def writeUnionCodec(w: TsWriter, model: Model, shape: UnionShape): Unit = {
-    val name = w.tsName(shape)
     val known = shape
       .getAllMembers
       .asScala
@@ -346,6 +377,65 @@ private[ts] object WireCodec {
       .toList
       .filterNot(_.hasTrait(classOf[JsonUnknownTrait]))
     val discriminator = shape.getTrait(classOf[DiscriminatedUnionTrait]).toScala.map(_.getValue)
+    if (shape.hasTrait(classOf[UntaggedUnionTrait]))
+      writeUntaggedUnionCodec(w, model, shape, known)
+    else
+      writeTaggedOrDiscriminatedUnionCodec(w, model, shape, known, discriminator)
+  }
+
+  /** An `alloy#untagged` union is written as the active member's value alone. Read back, the
+    * members are tried in the order the model declares them, and the first whose schema accepts the
+    * value wins, as in smithy4s.
+    */
+  private def writeUntaggedUnionCodec(
+    w: TsWriter,
+    model: Model,
+    shape: UnionShape,
+    known: List[MemberShape],
+  ): Unit = {
+    val name = w.tsName(shape)
+    out(w, s"/** `$name` as it is written in a JSON body: the active member's value alone. */")
+    block(w, s"export function encode$name(value: $name): unknown {") {
+      out(w, "const fields = value as Record<string, unknown>")
+      known.foreach { m =>
+        val target = model.expectShape(m.getTarget)
+        val access = s"fields[${jsString(m.getMemberName)}]"
+        out(w, s"if ($access !== undefined) return ${encodeCast(w, model, m, target, access)}")
+      }
+      out(w, "return value")
+    }
+    out(w, "")
+    out(
+      w,
+      s"/** `$name` read from a JSON body: the first member, in model order, that accepts it. */",
+    )
+    block(w, s"export function decode$name(value: unknown): unknown {") {
+      known.foreach { m =>
+        val target = model.expectShape(m.getTarget)
+        val decoded = decodeExpr(w, model, target, "value")
+        val schema = TsCodegenPlugin.inlineSchemaExpr(w, target, m)
+        block(w, "{") {
+          out(w, s"const candidate = $decoded")
+          out(
+            w,
+            s"if ($schema.safeParse(candidate).success) return { ${jsString(m.getMemberName)}: candidate }",
+          )
+        }
+      }
+      // Nothing accepts it: left for the union's schema to reject.
+      out(w, "return value")
+    }
+    out(w, "")
+  }
+
+  private def writeTaggedOrDiscriminatedUnionCodec(
+    w: TsWriter,
+    model: Model,
+    shape: UnionShape,
+    known: List[MemberShape],
+    discriminator: Option[String],
+  ): Unit = {
+    val name = w.tsName(shape)
     out(w, s"/** `$name` as it is written in a JSON body. */")
     block(w, s"export function encode$name(value: $name): unknown {") {
       out(w, "const fields = value as Record<string, unknown>")

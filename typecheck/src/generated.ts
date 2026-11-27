@@ -36,7 +36,7 @@ export type OffsetDateTime = z.infer<typeof OffsetDateTimeSchema>
 export const OffsetTimeSchema = z.string().brand<'OffsetTime'>()
 export type OffsetTime = z.infer<typeof OffsetTimeSchema>
 
-export const UUIDSchema = z.string().brand<'UUID'>()
+export const UUIDSchema = z.string().refine((v) => new RegExp('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\x24').test(v), 'must be a UUID').brand<'UUID'>()
 export type UUID = z.infer<typeof UUIDSchema>
 
 export const UncheckedExampleSchema = z.object({

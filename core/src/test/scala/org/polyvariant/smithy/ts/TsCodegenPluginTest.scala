@@ -460,6 +460,106 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(!out.contains("StreamTerminator: '"))
   }
 
+  test("streamed union values go through the union's wire codec, both ways") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.ndjson#ndjsonRestJson
+         |
+         |@ndjsonRestJson
+         |service Echo {
+         |  operations: [EchoStamps]
+         |}
+         |
+         |@http(method: "POST", uri: "/echo")
+         |operation EchoStamps {
+         |  input := {
+         |    @httpPayload
+         |    stamps: Stamps
+         |  }
+         |  output := {
+         |    @httpPayload
+         |    stamps: Stamps
+         |  }
+         |}
+         |
+         |@streaming
+         |union Stamps {
+         |  @jsonName("at_time")
+         |  at: At
+         |}
+         |
+         |structure At {
+         |  @required
+         |  @timestampFormat("date-time")
+         |  value: Timestamp
+         |}
+         |""".stripMargin
+    )
+
+    // written with `@jsonName` and the timestamp format applied, per element
+    assert(clue(out).contains("stream: wireMapStream(input.stamps, encodeStamps),"))
+    // and read back through the codec before the schema validates the TS value
+    assert(
+      out.contains(
+        "decodeStream(res.stream, { parse: (value: unknown) => StampsSchema.parse(decodeStamps(value)) }, 'EchoClient.echoStamps')"
+      )
+    )
+  }
+
+  test("a streamed blob's @mediaType is the request's content type") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.ndjson#ndjsonRestJson
+         |
+         |@ndjsonRestJson
+         |service Files {
+         |  operations: [PutCsv, PutBytes]
+         |}
+         |
+         |@http(method: "POST", uri: "/csv")
+         |operation PutCsv {
+         |  input := {
+         |    @httpPayload
+         |    @required
+         |    rows: Csv
+         |  }
+         |}
+         |
+         |@http(method: "POST", uri: "/bytes")
+         |operation PutBytes {
+         |  input := {
+         |    @httpPayload
+         |    @required
+         |    body: Bytes
+         |  }
+         |}
+         |
+         |@streaming
+         |@mediaType("text/csv")
+         |blob Csv
+         |
+         |@streaming
+         |blob Bytes
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("headers: { 'content-type': 'text/csv' },"))
+    // without one, the transport's own application/octet-stream stands
+    assert(
+      out
+        .split("async putBytes")
+        .last
+        .split("async ")
+        .head
+        .linesIterator
+        .forall(!_.contains("content-type"))
+    )
+  }
+
   test("does not emit the streaming transport for a model without streaming") {
     val out = generate(
       """|$version: "2"
@@ -1423,6 +1523,114 @@ class TsCodegenPluginTest extends munit.FunSuite {
     )
     assert(clue(e.getMessage).contains("internal/v1"))
     assert(clue(e.getMessage).contains("GetThing"))
+  }
+
+  test("constraint traits become refinements, on the shape or the member that carries them") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |use alloy#uuidFormat
+         |
+         |@uuidFormat
+         |string Id
+         |
+         |structure Add {
+         |  @required
+         |  @length(min: 1, max: 8)
+         |  @pattern("^[a-z]+$")
+         |  key: String
+         |
+         |  @range(min: 0)
+         |  weight: Integer
+         |
+         |  id: Id
+         |}
+         |""".stripMargin
+    )
+    // The shape's own constraint, in its own schema: a member that uses it gets it from there.
+    assert(
+      clue(out).contains(
+        "export const IdSchema = z.string().refine((v) => new RegExp('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\x24').test(v), 'must be a UUID').brand<'Id'>()"
+      )
+    )
+    assert(clue(out).contains("id: IdSchema.optional(),"))
+    // `$` goes out as `\x24`: the same string, but not a writer format marker.
+    assert(
+      clue(out).contains(
+        "key: z.string().refine((v) => v.length >= 1, 'length must be at least 1').refine((v) => v.length <= 8, 'length must be at most 8').refine((v) => new RegExp('^[a-z]+\\x24').test(v), 'must match ' + '^[a-z]+\\x24'),"
+      )
+    )
+    assert(
+      clue(out).contains(
+        "weight: z.number().int().refine((v) => Number(v) >= 0, 'must be at least 0').optional(),"
+      )
+    )
+  }
+
+  test("an @untagged union is written as the value alone, and read by trying members in order") {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |use alloy#untagged
+         |
+         |@untagged
+         |union Amount {
+         |  number: Integer
+         |  text: String
+         |}
+         |""".stripMargin
+    )
+    // The TS value stays tagged: only the wire drops the envelope.
+    assert(clue(out).contains("z.object({ number: z.number().int() }),"))
+    assert(clue(out).contains("if (fields['number'] !== undefined) return fields['number']"))
+    val numberFirst = out.indexOf(
+      "if (z.number().int().safeParse(candidate).success) return { 'number': candidate }"
+    )
+    val textSecond = out.indexOf(
+      "if (z.string().safeParse(candidate).success) return { 'text': candidate }"
+    )
+    assert(clue(numberFirst) >= 0)
+    assert(clue(textSecond) > numberFirst)
+  }
+
+  test(
+    "a structure's @jsonUnknown map holds the undeclared members, written back beside the rest"
+  ) {
+    val out = generate(
+      """|$version: "2"
+         |namespace com.example
+         |
+         |use alloy#jsonUnknown
+         |
+         |structure Extensible {
+         |  @required
+         |  @jsonName("Name")
+         |  name: String
+         |
+         |  @jsonUnknown
+         |  rest: Rest
+         |}
+         |
+         |map Rest {
+         |  key: String
+         |  value: Document
+         |}
+         |""".stripMargin
+    )
+    assert(
+      clue(out).contains(
+        "return { ...(value.rest == null ? {} : value.rest), 'Name': value.name ?? undefined }"
+      )
+    )
+    // Declared means by wire name, so a renamed member isn't mistaken for an unknown one.
+    assert(clue(out).contains("const declared: string[] = ['Name']"))
+    assert(
+      clue(out).contains(
+        "return { 'name': value['Name'] ?? undefined, 'rest': Object.keys(unknown).length === 0 ? undefined : unknown }"
+      )
+    )
   }
 
 }

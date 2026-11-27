@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import type { ComplianceCase, GeneratedModule } from './harness.ts'
 
-export const suites = ['alloy', 'restJson1'] as const
+export const suites = ['alloy', 'restJson1', 'ndjsonRestJson'] as const
 export type Suite = (typeof suites)[number]
 
 const root = new URL('../', import.meta.url)
@@ -28,12 +28,13 @@ const readKnownFailures = (file: URL): Set<string> =>
 export const registerSuites = async (
   knownFailuresFile: URL,
   run: (gen: GeneratedModule, tc: ComplianceCase, suite: Suite) => Promise<string[]>,
+  only: readonly Suite[] = suites,
 ): Promise<void> => {
   const knownFailures = readKnownFailures(knownFailuresFile)
   const listName = knownFailuresFile.pathname.split('/').slice(-2).join('/')
   const seen = new Set<string>()
 
-  for (const suite of suites) {
+  for (const suite of only) {
     const gen = (await import(new URL(`generated/${suite}/generated.ts`, root).href)) as GeneratedModule
     const cases = JSON.parse(
       readFileSync(new URL(`generated/${suite}/cases.json`, root), 'utf8'),
