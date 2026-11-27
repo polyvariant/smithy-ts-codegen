@@ -29,6 +29,8 @@ export const registerSuites = async (
   knownFailuresFile: URL,
   run: (gen: GeneratedModule, tc: ComplianceCase, suite: Suite) => Promise<string[]>,
   only: readonly Suite[] = suites,
+  /** Why `tc` can't be run here, if it can't: it is registered as skipped, with that reason. */
+  skip: (tc: ComplianceCase) => string | undefined = () => undefined,
 ): Promise<void> => {
   const knownFailures = readKnownFailures(knownFailuresFile)
   const listName = knownFailuresFile.pathname.split('/').slice(-2).join('/')
@@ -43,6 +45,11 @@ export const registerSuites = async (
     for (const tc of cases) {
       const key = `${suite}/${tc.kind}/${tc.id}`
       seen.add(key)
+      const reason = skip(tc)
+      if (reason !== undefined) {
+        test(key, { skip: reason }, () => {})
+        continue
+      }
       test(key, async (t) => {
         const problems = await run(gen, tc, suite)
         if (!knownFailures.has(key)) {

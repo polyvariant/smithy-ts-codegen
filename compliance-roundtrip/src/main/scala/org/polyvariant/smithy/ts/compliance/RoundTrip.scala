@@ -48,6 +48,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
+import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 
 import scala.jdk.CollectionConverters.*
 
@@ -66,6 +68,9 @@ import scala.jdk.CollectionConverters.*
   * fails the request on purpose. For a response case, any request is answered with the case's
   * output or error, encoded by smithy4s — as smithy4s's suite does it, through a single-endpoint
   * service that takes no input, so the answer doesn't depend on decoding the request.
+  *
+  * The ndjsonRestJson suite is served by smithy4s-ndjson's own interpreter instead, through the
+  * same protocol: see [[NdjsonRoundTrip]].
   *
   * Usage: `RoundTrip <repoRoot>` runs the TypeScript side and exits with its status;
   * `RoundTrip --serve` only serves, printing the URLs, for running the tests by hand.
@@ -106,22 +111,12 @@ object RoundTrip extends IOApp {
       .discoverModels(getClass.getClassLoader)
       .assemble()
       .unwrap()
-    // smithy4s serves simpleRestJson only: ndjsonRestJson would need smithy4s-ndjson's builder,
-    // and its event-stream cases a runner of their own (see roundtrip.test.ts).
-    val httpSuites = ComplianceCodegen.suites(model).filterNot(_.name == "ndjsonRestJson")
-    val servers = httpSuites.traverse { suite =>
+    val servers = ComplianceCodegen.suites(model).traverse { suite =>
       val narrowed = ComplianceCodegen.narrow(model, suite.select(model))
-      val cases = ComplianceCodegen.cases(narrowed, suite).map { c =>
-        SuiteCase(
-          c.kind,
-          c.testCase.getId,
-          c.service,
-          toS4(c.operation.getId),
-          c.error.map(_.getId.getName),
-          toDocument(c.testCase.getParams),
-        )
-      }
-      serve(DynamicSchemaIndex.loadModel(asSimpleRestJson(narrowed)), cases).map(suite.name -> _)
+      if (suite.name == "ndjsonRestJson")
+        NdjsonRoundTrip.serve(narrowed, ndjsonCases(narrowed, suite)).map(suite.name -> _)
+      else
+        simpleRestJsonServer(narrowed, suite)
     }
     servers.use { urls =>
       args match {
@@ -131,6 +126,38 @@ object RoundTrip extends IOApp {
         case _ => IO.println("usage: RoundTrip <repoRoot> | RoundTrip --serve").as(ExitCode(2))
       }
     }
+  }
+
+  /** The ndjsonRestJson suite's client cases: its HTTP cases, and its `@eventStreamTests`. */
+  private def ndjsonCases(model: Model, suite: ComplianceCodegen.Suite)
+    : List[NdjsonRoundTrip.Case] =
+    ComplianceCodegen.cases(model, suite).flatMap { c =>
+      c.testCase match {
+        case r: HttpRequestTestCase  => List(NdjsonRoundTrip.RequestCase(c.service, c.operation, r))
+        case r: HttpResponseTestCase =>
+          List(
+            NdjsonRoundTrip.ResponseCase(c.service, c.operation, c.error.map(_.getId.getName), r)
+          )
+        case _ => Nil
+      }
+    } ++ ComplianceCodegen.eventCases(model, suite).map { (service, op, tc, _) =>
+      NdjsonRoundTrip.EventsCase(service, op, tc)
+    }
+
+  /** A `simpleRestJson` suite, served by smithy4s's `SimpleRestJsonBuilder`. */
+  private def simpleRestJsonServer(narrowed: Model, suite: ComplianceCodegen.Suite)
+    : Resource[IO, (String, Uri)] = {
+    val cases = ComplianceCodegen.cases(narrowed, suite).map { c =>
+      SuiteCase(
+        c.kind,
+        c.testCase.getId,
+        c.service,
+        toS4(c.operation.getId),
+        c.error.map(_.getId.getName),
+        toDocument(c.testCase.getParams),
+      )
+    }
+    serve(DynamicSchemaIndex.loadModel(asSimpleRestJson(narrowed)), cases).map(suite.name -> _)
   }
 
   /** smithy4s serves `alloy#simpleRestJson`, so the restJson1 service is declared as one — as
@@ -375,10 +402,10 @@ object RoundTrip extends IOApp {
     }
   }
 
-  private def toS4(id: software.amazon.smithy.model.shapes.ShapeId): S4ShapeId =
+  private[compliance] def toS4(id: software.amazon.smithy.model.shapes.ShapeId): S4ShapeId =
     S4ShapeId(id.getNamespace, id.getName)
 
-  private def toDocument(node: Node): Document =
+  private[compliance] def toDocument(node: Node): Document =
     node match {
       case o: software.amazon.smithy.model.node.ObjectNode =>
         Document.obj(o.getMembers.asScala.toSeq.map { case (k, v) => k.getValue -> toDocument(v) }*)

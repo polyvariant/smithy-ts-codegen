@@ -281,14 +281,14 @@ const once = async function* <A>(values: readonly A[]): AsyncGenerator<A> {
 }
 
 /** `params` with a streamed blob's text turned into the byte stream the client takes. */
-const withByteStream = (params: unknown, stream: StreamInfo | null | undefined): unknown => {
+export const withByteStream = (params: unknown, stream: StreamInfo | null | undefined): unknown => {
   if (stream?.encoding !== 'binary' || params === null || typeof params !== 'object') return params
   const text = (params as Record<string, unknown>)[stream.member]
   return { ...params, [stream.member]: once(typeof text === 'string' ? [encoder.encode(text)] : []) }
 }
 
 /** `out` with a streamed blob read back into its text. */
-const readByteStream = async (out: unknown, stream: StreamInfo | null | undefined): Promise<unknown> => {
+export const readByteStream = async (out: unknown, stream: StreamInfo | null | undefined): Promise<unknown> => {
   if (stream?.encoding !== 'binary' || out === null || typeof out !== 'object') return out
   const chunks = (out as Record<string, unknown>)[stream.member] as AsyncIterable<Uint8Array> | undefined
   if (chunks === undefined) return out
@@ -350,6 +350,73 @@ const checkEvents = (what: string, body: string, events: StreamEvent[], stream: 
   })
 }
 
+/** What came of calling an event case's operation: its output without the stream, the values read
+ * from the stream, and what was thrown along the way, if anything. */
+export interface EventOutcome {
+  envelope: Record<string, unknown>
+  received: unknown[]
+  threw: unknown
+}
+
+/** Calls an `@eventStreamTests` case's operation over `transport`, with `initialRequestParams` and
+ * the `request` events' values as its stream, and reads the stream it returns to the end. */
+export const callEventCase = async (
+  gen: GeneratedModule,
+  tc: CaseBase & { kind: 'events'; case: EventStreamCase },
+  transport: unknown,
+): Promise<EventOutcome | string> => {
+  const c = tc.case
+  const call = operationOf(gen, tc, transport)
+  if (typeof call === 'string') return call
+  const streamIn = tc.streams?.input ?? null
+  const streamOut = tc.streams?.output ?? null
+  const requestEvents = (c.events ?? []).filter((e) => e.type === 'request')
+  const input = {
+    ...(reviveDates(c.initialRequestParams ?? {}) as object),
+    ...(streamIn === null ? {} : { [streamIn.member]: once(eventValues(requestEvents)) }),
+  }
+  let out: Record<string, unknown> = {}
+  const received: unknown[] = []
+  let threw: unknown = undefined
+  try {
+    out = ((await call(input)) ?? {}) as Record<string, unknown>
+    if (streamOut !== null) {
+      for await (const v of out[streamOut.member] as AsyncIterable<unknown>) received.push(v)
+    }
+  } catch (e) {
+    threw = e ?? new Error('threw undefined')
+  }
+  const envelope = Object.fromEntries(Object.entries(out).filter(([k]) => k !== streamOut?.member))
+  return { envelope, received, threw }
+}
+
+/** The modeled events' values, as the TS API takes and returns them. */
+const eventValues = (es: StreamEvent[]): unknown[] =>
+  es.filter((e) => e.params !== undefined).map((e) => reviveDates(e.params))
+
+/** What an event case's call returned, against the case: a failure when one is expected, else
+ * `initialResponseParams` and the `response` events' values. */
+export const checkEventOutcome = (
+  tc: CaseBase & { kind: 'events'; case: EventStreamCase },
+  outcome: EventOutcome,
+): string[] => {
+  const c = tc.case
+  if (c.expectation === 'failure') {
+    return outcome.threw !== undefined ? [] : [`expected a failure, got ${JSON.stringify(asJson(outcome.received))}`]
+  }
+  if (outcome.threw !== undefined) return [`threw ${describe(outcome.threw)}`]
+  const problems: string[] = []
+  const expectedEnvelope = asJson(reviveDates(c.initialResponseParams ?? {}))
+  if (!isDeepStrictEqual(asJson(outcome.envelope) ?? {}, expectedEnvelope)) {
+    problems.push(`output ${JSON.stringify(asJson(outcome.envelope))}, expected ${JSON.stringify(expectedEnvelope)}`)
+  }
+  const expectedValues = asJson(eventValues((c.events ?? []).filter((e) => e.type === 'response')))
+  if (!isDeepStrictEqual(asJson(outcome.received), expectedValues)) {
+    problems.push(`stream ${JSON.stringify(asJson(outcome.received))}, expected ${JSON.stringify(expectedValues)}`)
+  }
+  return problems
+}
+
 /**
  * Runs an `@eventStreamTests` case as the client: calls the operation with
  * `initialRequestParams` and the `request` events' values as its stream,
@@ -364,8 +431,6 @@ const runEventCase = async (
   tc: CaseBase & { kind: 'events'; case: EventStreamCase },
 ): Promise<string[]> => {
   const c = tc.case
-  const Client = gen[`${tc.service}Client`] as ClientClass | undefined
-  if (Client === undefined) return [`no ${tc.service}Client export`]
   const events = c.events ?? []
   const requestEvents = events.filter((e) => e.type === 'request')
   const responseEvents = events.filter((e) => e.type === 'response')
@@ -389,36 +454,9 @@ const runEventCase = async (
       })
     },
   })
-  const client = new Client(transport, transport)
-  const method = client[lowerFirst(tc.operation)]
-  if (typeof method !== 'function') return [`no ${lowerFirst(tc.operation)} method`]
-
-  const values = (es: StreamEvent[]): unknown[] =>
-    es.filter((e) => e.params !== undefined).map((e) => reviveDates(e.params))
-  const input = {
-    ...(reviveDates(c.initialRequestParams ?? {}) as object),
-    ...(streamIn === null ? {} : { [streamIn.member]: once(values(requestEvents)) }),
-  }
-
-  let out: Record<string, unknown> = {}
-  const received: unknown[] = []
-  let threw: unknown = undefined
-  try {
-    out = ((method.length >= 2 ? await method.call(client, input) : await method.call(client)) ?? {}) as Record<
-      string,
-      unknown
-    >
-    if (streamOut !== null) {
-      for await (const v of out[streamOut.member] as AsyncIterable<unknown>) received.push(v)
-    }
-  } catch (e) {
-    threw = e ?? new Error('threw undefined')
-  }
-
-  if (c.expectation === 'failure') {
-    return threw !== undefined ? [] : [`expected a failure, got ${JSON.stringify(asJson(received))}`]
-  }
-  if (threw !== undefined) return [`threw ${describe(threw)}`]
+  const outcome = await callEventCase(gen, tc, transport)
+  if (typeof outcome === 'string') return [outcome]
+  if (c.expectation === 'failure' || outcome.threw !== undefined) return checkEventOutcome(tc, outcome)
   if (sent === undefined) return ['no request was sent']
 
   const problems: string[] = []
@@ -431,15 +469,6 @@ const runEventCase = async (
   )
   if (streamIn !== null) problems.push(...checkEvents('request', sent.body ?? '', requestEvents, streamIn))
   else if (r.body !== undefined) problems.push(...checkRequest({ id: c.id, body: r.body, bodyMediaType: 'application/json' }, sent))
-
-  const envelope = Object.fromEntries(Object.entries(out).filter(([k]) => k !== streamOut?.member))
-  const expectedEnvelope = asJson(reviveDates(c.initialResponseParams ?? {}))
-  if (!isDeepStrictEqual(asJson(envelope) ?? {}, expectedEnvelope)) {
-    problems.push(`output ${JSON.stringify(asJson(envelope))}, expected ${JSON.stringify(expectedEnvelope)}`)
-  }
-  const expectedValues = asJson(values(responseEvents))
-  if (!isDeepStrictEqual(asJson(received), expectedValues)) {
-    problems.push(`stream ${JSON.stringify(asJson(received))}, expected ${JSON.stringify(expectedValues)}`)
-  }
+  problems.push(...checkEventOutcome(tc, outcome))
   return problems
 }

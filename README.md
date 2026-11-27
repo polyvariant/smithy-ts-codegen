@@ -527,9 +527,11 @@ The TypeScript lives in a pnpm workspace of three packages:
   compiling.
 - `compliance/` — smithy's HTTP protocol compliance tests, run against the generated clients
   over the runtime's `fetchTransport` (client side only: request serialization and response
-  decoding). Two suites: alloy's own `simpleRestJson` tests, and the smithy `restJson1` tests
+  decoding). Three suites: alloy's own `simpleRestJson` tests; the smithy `restJson1` tests
   alloy lists as applying to `simpleRestJson`, selected by alloy's allow and disallow rules
-  exactly as smithy4s selects them — so the same set smithy4s runs. `generated/` holds the
+  exactly as smithy4s selects them — so the same set smithy4s runs; and smithy4s-ndjson's
+  `smithy4s-ndjson-protocol-tests`, whose `@eventStreamTests` cover streamed unions, NDJSON and
+  server-sent events alike. `generated/` holds the
   TypeScript for each suite's services and its cases, written by `sbt complianceCodegen` (from
   `compliance-codegen/`). The only cases allowed to fail are listed in `known-failures.txt`,
   where we deliberately behave like smithy4s instead; a listed case that starts passing fails
@@ -537,13 +539,16 @@ The TypeScript lives in a pnpm workspace of three packages:
 
   The same cases also run against smithy4s itself: `sbt complianceRoundTrip` (from
   `compliance-roundtrip/`) serves each suite's services with smithy4s's `simpleRestJson`
-  implementation, built dynamically from the same model, and runs `compliance/roundtrip`
-  against it. A request case is decoded by smithy4s and compared with the case's `params` the way
+  implementation — or smithy4s-ndjson's `NdjsonRestJsonBuilder`, for the ndjson suite — built
+  dynamically from the same model, and runs `compliance/roundtrip` against it. A request case is decoded by smithy4s and compared with the case's `params` the way
   smithy4s's own compliance suite compares them; a response case is encoded by smithy4s and
   decoded by the generated client. So it checks agreement with smithy4s rather than with each
   test's expected bytes — catching, say, a request smithy4s would misread that the offline
-  suite has no assertion for. Its own `roundtrip/known-failures.txt` lists the cases where a
-  client-side expectation can't be compared against a server. It needs a JVM and node together,
+  suite has no assertion for. The ndjson suite's cases are compared against the server's
+  reading of each case's own bytes rather than its `params`, and its event cases check both
+  directions in one exchange. Its own `roundtrip/known-failures.txt` lists the cases where a
+  client-side expectation can't be compared against a server; a case whose client must reject
+  bytes a server never writes is skipped. It needs a JVM and node together,
   so it runs in CI inside `nix develop` rather than in `nix flake check`.
 
 `nix flake check` runs both under `strict` + `erasableSyntaxOnly`.
