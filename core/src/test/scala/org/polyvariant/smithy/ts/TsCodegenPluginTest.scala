@@ -460,6 +460,106 @@ class TsCodegenPluginTest extends munit.FunSuite {
     assert(!out.contains("StreamTerminator: '"))
   }
 
+  test("streamed union values go through the union's wire codec, both ways") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.ndjson#ndjsonRestJson
+         |
+         |@ndjsonRestJson
+         |service Echo {
+         |  operations: [EchoStamps]
+         |}
+         |
+         |@http(method: "POST", uri: "/echo")
+         |operation EchoStamps {
+         |  input := {
+         |    @httpPayload
+         |    stamps: Stamps
+         |  }
+         |  output := {
+         |    @httpPayload
+         |    stamps: Stamps
+         |  }
+         |}
+         |
+         |@streaming
+         |union Stamps {
+         |  @jsonName("at_time")
+         |  at: At
+         |}
+         |
+         |structure At {
+         |  @required
+         |  @timestampFormat("date-time")
+         |  value: Timestamp
+         |}
+         |""".stripMargin
+    )
+
+    // written with `@jsonName` and the timestamp format applied, per element
+    assert(clue(out).contains("stream: wireMapStream(input.stamps, encodeStamps),"))
+    // and read back through the codec before the schema validates the TS value
+    assert(
+      out.contains(
+        "decodeStream(res.stream, { parse: (value: unknown) => StampsSchema.parse(decodeStamps(value)) }, 'EchoClient.echoStamps')"
+      )
+    )
+  }
+
+  test("a streamed blob's @mediaType is the request's content type") {
+    val out = generate(
+      """|$version: "2"
+         |namespace test
+         |
+         |use org.polyvariant.ndjson#ndjsonRestJson
+         |
+         |@ndjsonRestJson
+         |service Files {
+         |  operations: [PutCsv, PutBytes]
+         |}
+         |
+         |@http(method: "POST", uri: "/csv")
+         |operation PutCsv {
+         |  input := {
+         |    @httpPayload
+         |    @required
+         |    rows: Csv
+         |  }
+         |}
+         |
+         |@http(method: "POST", uri: "/bytes")
+         |operation PutBytes {
+         |  input := {
+         |    @httpPayload
+         |    @required
+         |    body: Bytes
+         |  }
+         |}
+         |
+         |@streaming
+         |@mediaType("text/csv")
+         |blob Csv
+         |
+         |@streaming
+         |blob Bytes
+         |""".stripMargin
+    )
+
+    assert(clue(out).contains("headers: { 'content-type': 'text/csv' },"))
+    // without one, the transport's own application/octet-stream stands
+    assert(
+      out
+        .split("async putBytes")
+        .last
+        .split("async ")
+        .head
+        .linesIterator
+        .forall(!_.contains("content-type"))
+    )
+  }
+
   test("does not emit the streaming transport for a model without streaming") {
     val out = generate(
       """|$version: "2"

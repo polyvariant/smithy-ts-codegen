@@ -45,6 +45,7 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MixinTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.SparseTrait
+import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.TraitDefinition
@@ -814,8 +815,10 @@ object TsCodegenPlugin {
 
   private object StreamFraming {
 
-    /** `@streaming blob`: raw bytes, no per-element schema. */
-    case object Binary extends StreamFraming {
+    /** `@streaming blob`: raw bytes, no per-element schema, labelled with the blob's `@mediaType`
+      * if it has one.
+      */
+    final case class Binary(mediaType: Option[String]) extends StreamFraming {
       val encoding = "binary"
       val elementType = "Uint8Array"
     }
@@ -871,7 +874,8 @@ object TsCodegenPlugin {
       val target = model.expectShape(member.getTarget)
       val framing =
         target match {
-          case _: BlobShape  => StreamFraming.Binary
+          case b: BlobShape =>
+            StreamFraming.Binary(b.getTrait(classOf[MediaTypeTrait]).toScala.map(_.getValue))
           case u: UnionShape =>
             u.getTrait(classOf[ServerSentEventsTrait]).toScala match {
               case Some(sse) => StreamFraming.Sse(w.tsName(u), sse.getTerminator.toScala)
@@ -914,8 +918,8 @@ object TsCodegenPlugin {
     */
   private def streamEncodeExpr(info: StreamInfo, expr: String): String =
     info.framing match {
-      case StreamFraming.Binary  => expr
-      case j: StreamFraming.Json => s"wireMapStream($expr, encode${j.shapeName})"
+      case _: StreamFraming.Binary => expr
+      case j: StreamFraming.Json   => s"wireMapStream($expr, encode${j.shapeName})"
     }
 
   /** Emits the expression that decodes and validates the transport's stream of already-framed
@@ -925,8 +929,8 @@ object TsCodegenPlugin {
     */
   private def streamDecodeExpr(info: StreamInfo, expr: String, opLabel: String): String =
     info.framing match {
-      case StreamFraming.Binary  => s"$expr as AsyncIterable<Uint8Array>"
-      case j: StreamFraming.Json =>
+      case _: StreamFraming.Binary => s"$expr as AsyncIterable<Uint8Array>"
+      case j: StreamFraming.Json   =>
         s"decodeStream($expr, { parse: (value: unknown) => ${j.schemaExpr}.parse(decode${j.shapeName}(value)) }, $opLabel)"
     }
 
@@ -1416,8 +1420,17 @@ object TsCodegenPlugin {
         w.line("url,")
         if (hasQuery)
           w.line("query,")
-        if (hasHeaders)
-          w.line("headers,")
+        // A blob's `@mediaType` labels the bytes. Lowercase, so it replaces the transport's default
+        // `content-type` for a binary stream rather than joining it.
+        val mediaType = streams.input.map(_.framing).collect {
+          case StreamFraming.Binary(Some(mt)) => s"'content-type': ${jsString(mt)}"
+        }
+        (hasHeaders, mediaType) match {
+          case (true, Some(mt))  => w.line(s"headers: { ...headers, $mt },")
+          case (false, Some(mt)) => w.line(s"headers: { $mt },")
+          case (true, None)      => w.line("headers,")
+          case (false, None)     => ()
+        }
         w.lit(s"body: $bodyExpr,")
         streams.input.foreach { in =>
           w.line(s"requestStreamEncoding: ${jsString(in.framing.encoding)},")
@@ -1574,7 +1587,7 @@ object TsCodegenPlugin {
   /** Human-readable framing, for the generated doc comments. */
   private def framingLabel(info: StreamInfo): String =
     info.framing match {
-      case StreamFraming.Binary    => "raw bytes"
+      case _: StreamFraming.Binary => "raw bytes"
       case n: StreamFraming.Ndjson => s"newline-delimited `${n.shapeName}` values"
       case e: StreamFraming.Sse    => s"`${e.shapeName}` values as server-sent events"
     }
