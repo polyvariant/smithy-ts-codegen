@@ -224,20 +224,72 @@ object TsCodegenPlugin {
     * change what the bare name refers to and quietly break downstream code that imported it.
     *
     * Namespace dots become underscores, since a TS identifier cannot contain a dot.
+    *
+    * A shape's name is more than one identifier, though: `X` is a type, and `XSchema`, `encodeX`
+    * and `decodeX` are values, plus `XError` for an `@error` shape and `decodeXResponse` for an
+    * operation's output or error. A shape is qualified the same way when one of those is already
+    * taken by something that isn't a shape: a global the output itself uses (a shape `Record` would
+    * shadow `Record<K, V>`), or one of the generator's own declarations (a shape `Stream` would
+    * declare `decodeStream`).
+    *
+    * Two shapes can also want one identifier between them without sharing a name — an `@error`
+    * `Foo` declares `FooError`, which a shape `FooError` declares too. Qualifying can't separate
+    * those when they share a namespace, so that is an error naming both, rather than a file that
+    * doesn't compile. The names a service gets (`XClient`, `XMock`, `XHandlers`) count too. A type
+    * and a value may share a name in TS, so `FooSchema` the type beside `FooSchema` the value of
+    * `Foo` is no clash.
+    *
+    * @param responses
+    *   the shapes that get a `decodeXResponse`: operations' outputs and errors
+    * @param services
+    *   the names of the services emitted, which claim `XClient`, `XMock` and `XHandlers`
     */
-  private[ts] final class TsSymbolProvider(shapes: List[Shape]) extends SymbolProvider {
+  private[ts] final class TsSymbolProvider(
+    shapes: List[Shape],
+    responses: Set[ShapeId] = Set.empty,
+    services: List[String] = Nil,
+  ) extends SymbolProvider {
 
     private val namesById: Map[ShapeId, String] = {
-      val byName = shapes.map(_.getId).groupBy(_.getName)
-      byName
-        .iterator
-        .flatMap { case (name, ids) =>
-          if (ids.sizeIs == 1)
-            ids.map(_ -> name)
+      def claims(shape: Shape, name: String): List[Claim] =
+        List(Claim.tpe(name), Claim.value(s"${name}Schema"), Claim.value(s"encode$name"))
+          ++ List(Claim.value(s"decode$name"))
+          ++ Option
+            .when(shape.hasTrait(classOf[ErrorTrait]))(s"${name}Error")
+            .toList
+            .flatMap(n => List(Claim.tpe(n), Claim.value(n)))
+          ++ Option.when(responses.contains(shape.getId))(Claim.value(s"decode${name}Response"))
+      val sharedNames = shapes.groupBy(_.getId.getName).filter(_._2.sizeIs > 1).keySet
+      val named = shapes.map { shape =>
+        val id = shape.getId
+        val qualify =
+          sharedNames(id.getName) || claims(shape, id.getName).exists(Claim.taken)
+        val name =
+          if (qualify)
+            s"${id.getNamespace.replace('.', '_')}_${id.getName}"
           else
-            ids.map(id => id -> s"${id.getNamespace.replace('.', '_')}_$name")
-        }
-        .toMap
+            id.getName
+        (shape, name)
+      }
+      // What every declaration ends up claiming, by whom: a shape or a service.
+      val owners: List[(Claim, String)] =
+        named.flatMap((shape, name) =>
+          claims(shape, name).distinct.map(_ -> shape.getId.toString)
+        ) ++
+          services.flatMap { s =>
+            List(Claim.tpe(s"${s}Client"), Claim.value(s"${s}Client"), Claim.value(s"${s}Mock"))
+              .map(_ -> s"service $s") ++ List(Claim.tpe(s"${s}Handlers") -> s"service $s")
+          }
+      owners.groupMap(_._1)(_._2).find(_._2.sizeIs > 1).foreach { (claim, who) =>
+        sys.error(
+          s"${who.sorted.mkString(" and ")} would ${if (who.sizeIs == 2)
+              "both"
+            else
+              "all"} declare " +
+            s"`${claim.name}` in the generated TypeScript; rename one of them"
+        )
+      }
+      named.map((shape, name) => shape.getId -> name).toMap
     }
 
     def toSymbol(shape: Shape): Symbol = {
@@ -255,6 +307,86 @@ object TsCodegenPlugin {
         .putProperty("shapeId", id)
         .build()
     }
+
+  }
+
+  /** An identifier a shape's declarations want, in TS's type or value declaration space. */
+  private final case class Claim(name: String, isType: Boolean)
+
+  private object Claim {
+
+    def tpe(name: String): Claim = Claim(name, isType = true)
+    def value(name: String): Claim = Claim(name, isType = false)
+
+    /** Globals the output refers to, each in the declaration space it uses it in. A shape's own
+      * declaration of the same name would shadow it in the generated code itself; in the other
+      * space it is harmless, so a shape named `Set` keeps its name — the output only ever says
+      * `new Set(...)`, a value, while the shape declares a type.
+      */
+    private val globalTypes = Set(
+      "AsyncGenerator",
+      "AsyncIterable",
+      "Date",
+      "Error",
+      "Partial",
+      "Promise",
+      "Record",
+      "Uint8Array",
+    )
+
+    private val globalValues = Set(
+      "Array",
+      "BigInt",
+      "Date",
+      "Error",
+      "JSON",
+      "Number",
+      "Object",
+      "RegExp",
+      "String",
+    )
+
+    /** What the generator declares for itself: the transport and mock types, the error classes and
+      * the wire helpers. A class is both a type and a value, so these are taken in both spaces.
+      */
+    private val generated = Set(
+      "BoundMockService",
+      "MissingStreamError",
+      "MockHttpError",
+      "MockMatch",
+      "MockOperation",
+      "MockRequest",
+      "MockResponse",
+      "MockServiceDescriptor",
+      "MockUriSegment",
+      "StreamDecodeError",
+      "StreamEncoding",
+      "StreamTransport",
+      "StreamTransportRequest",
+      "StreamTransportResponse",
+      "Transport",
+      "TransportOptions",
+      "TransportRequest",
+      "TransportResponse",
+      "TypedMockError",
+      "UnauthenticatedError",
+      "UnexpectedResponseError",
+      "decodeStream",
+      "emptyStream",
+      "isTypedMockError",
+      "matchSegments",
+      "mockService",
+      "mockServices",
+    )
+
+    /** Whether something other than a shape has `claim`'s name. */
+    def taken(claim: Claim): Boolean =
+      // `import { z } from 'zod'` binds the name in both spaces.
+      claim.name == "z" || generated(claim.name) ||
+        (if (claim.isType)
+           globalTypes(claim.name)
+         else
+           globalValues(claim.name) || claim.name.startsWith("wire"))
 
   }
 
@@ -295,7 +427,25 @@ object TsCodegenPlugin {
     val ordered = topoSort(emittables)
     // The provider is built from everything that will be emitted, so it can see the whole set of
     // wanted names at once and decide which of them collide.
-    val w = new TsWriter(new TsSymbolProvider(ordered), lazyRefs(emittables))
+    val servicesToEmit = model
+      .getServiceShapes
+      .asScala
+      .toList
+      .filterNot(s => excludeServices.contains(s.getId.toString))
+      .sortBy(_.getId.toString)
+    // Every operation's output and errors: a superset of the shapes that get a response decoder
+    // (a streamed output gets none), which only matters to a name that would clash.
+    val responses =
+      model
+        .getOperationShapes
+        .asScala
+        .flatMap(op => op.getOutputShape :: op.getErrors.asScala.toList)
+        .toSet ++ servicesToEmit.flatMap(_.getErrors.asScala)
+    val w =
+      new TsWriter(
+        new TsSymbolProvider(ordered, responses, servicesToEmit.map(_.getId.getName)),
+        lazyRefs(emittables),
+      )
 
     w.line("// Generated by smithy-ts-codegen — do not edit.")
     w.line("")
@@ -321,12 +471,6 @@ object TsCodegenPlugin {
     WireCodec.writeHelpers(w)
     ordered.foreach(WireCodec.writeCodec(w, model, _))
 
-    val servicesToEmit = model
-      .getServiceShapes
-      .asScala
-      .toList
-      .filterNot(s => excludeServices.contains(s.getId.toString))
-      .sortBy(_.getId.toString)
     if (servicesToEmit.nonEmpty) {
       w.line("")
       w.line("// --- Transport ---")

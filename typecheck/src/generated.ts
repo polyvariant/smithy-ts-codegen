@@ -170,6 +170,11 @@ export const PlainOutputSchema = z.object({
 })
 export type PlainOutput = z.infer<typeof PlainOutputSchema>
 
+export const test_RecordSchema = z.union([
+  z.object({ text: z.string() }),
+])
+export type test_Record = z.infer<typeof test_RecordSchema>
+
 export const ReportOutputSchema = z.object({
   received: z.number().int(),
 })
@@ -186,6 +191,11 @@ export const SequenceInputSchema = z.object({
   count: z.number().int(),
 })
 export type SequenceInput = z.infer<typeof SequenceInputSchema>
+
+export const test_StreamSchema = z.object({
+  count: z.number().int().optional(),
+})
+export type test_Stream = z.infer<typeof test_StreamSchema>
 
 export const UploadOutputSchema = z.object({
   stored: z.number().int(),
@@ -335,6 +345,8 @@ export type PutPersonInput = z.infer<typeof PutPersonInputSchema>
 export const ShapeSchema = z.union([
   z.object({ person: PersonSchema }),
   z.object({ label: z.string() }),
+  z.object({ record: test_RecordSchema }),
+  z.object({ stream: test_StreamSchema }),
 ])
 export type Shape = z.infer<typeof ShapeSchema>
 
@@ -680,6 +692,20 @@ export function decodePlainOutput(value: unknown): unknown {
   return { 'message': value['message'] ?? undefined }
 }
 
+/** `test_Record` as it is written in a JSON body. */
+export function encodetest_Record(value: test_Record): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['text'] !== undefined) return { 'text': fields['text'] }
+  return value
+}
+
+/** `test_Record` read from a JSON body; validate the result with `test_RecordSchema`. */
+export function decodetest_Record(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['text'] !== undefined && value['text'] !== null) return { 'text': value['text'] }
+  return value
+}
+
 /** `ReportOutput` as it is written in a JSON body. */
 export function encodeReportOutput(value: ReportOutput): Record<string, unknown> {
   return { 'received': value.received ?? undefined }
@@ -711,6 +737,17 @@ export function encodeSequenceInput(value: SequenceInput): Record<string, unknow
 export function decodeSequenceInput(value: unknown): unknown {
   if (!wireIsRecord(value)) return value
   return { 'seed': value['seed'] ?? undefined, 'cursor': value['cursor'] ?? undefined, 'count': value['count'] ?? undefined }
+}
+
+/** `test_Stream` as it is written in a JSON body. */
+export function encodetest_Stream(value: test_Stream): Record<string, unknown> {
+  return { 'count': value.count ?? undefined }
+}
+
+/** `test_Stream` read from a JSON body; validate the result with `test_StreamSchema`. */
+export function decodetest_Stream(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'count': value['count'] ?? undefined }
 }
 
 /** `UploadOutput` as it is written in a JSON body. */
@@ -958,6 +995,8 @@ export function encodeShape(value: Shape): unknown {
   const fields = value as Record<string, unknown>
   if (fields['person'] !== undefined) return { 'person': encodePerson((fields['person'] as Person)) }
   if (fields['label'] !== undefined) return { 'label': fields['label'] }
+  if (fields['record'] !== undefined) return { 'record': encodetest_Record((fields['record'] as test_Record)) }
+  if (fields['stream'] !== undefined) return { 'stream': encodetest_Stream((fields['stream'] as test_Stream)) }
   return value
 }
 
@@ -966,6 +1005,8 @@ export function decodeShape(value: unknown): unknown {
   if (!wireIsRecord(value)) return value
   if (value['person'] !== undefined && value['person'] !== null) return { 'person': decodePerson(value['person']) }
   if (value['label'] !== undefined && value['label'] !== null) return { 'label': value['label'] }
+  if (value['record'] !== undefined && value['record'] !== null) return { 'record': decodetest_Record(value['record']) }
+  if (value['stream'] !== undefined && value['stream'] !== null) return { 'stream': decodetest_Stream(value['stream']) }
   return value
 }
 
