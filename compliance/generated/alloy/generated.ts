@@ -1840,10 +1840,10 @@ export class PizzaAdminServiceClient {
   async headerEndpoint(input: HeaderEndpointData, opts?: TransportOptions): Promise<HeaderEndpointData> {
     const url = `/headers`
     const headers: Record<string, string> = {}
-    if (input.uppercaseHeader !== undefined) headers['X-UPPERCASE-HEADER'] = String(input.uppercaseHeader)
-    if (input.capitalizedHeader !== undefined) headers['X-Capitalized-Header'] = String(input.capitalizedHeader)
-    if (input.lowercaseHeader !== undefined) headers['x-lowercase-header'] = String(input.lowercaseHeader)
-    if (input.mixedHeader !== undefined) headers['x-MiXeD-hEaDEr'] = String(input.mixedHeader)
+    if (input.uppercaseHeader != null) headers['X-UPPERCASE-HEADER'] = String(input.uppercaseHeader)
+    if (input.capitalizedHeader != null) headers['X-Capitalized-Header'] = String(input.capitalizedHeader)
+    if (input.lowercaseHeader != null) headers['x-lowercase-header'] = String(input.lowercaseHeader)
+    if (input.mixedHeader != null) headers['x-MiXeD-hEaDEr'] = String(input.mixedHeader)
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.headerEndpoint',
       method: 'POST',
@@ -1867,7 +1867,7 @@ export class PizzaAdminServiceClient {
   async health(input: HealthRequest, opts?: TransportOptions): Promise<HealthResponse> {
     const url = `/health`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.query !== undefined) query['query'] = String(input.query)
+    if (input.query != null) query['query'] = String(input.query)
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.health',
       method: 'GET',
@@ -1999,9 +1999,9 @@ export class PizzaAdminServiceClient {
   async roundTrip(input: RoundTripData, opts?: TransportOptions): Promise<RoundTripData> {
     const url = `/roundTrip/${wireEncodeLabel(String(input.label))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.query !== undefined) query['query'] = String(input.query)
+    if (input.query != null) query['query'] = String(input.query)
     const headers: Record<string, string> = {}
-    if (input.header !== undefined) headers['HEADER'] = String(input.header)
+    if (input.header != null) headers['HEADER'] = String(input.header)
     const res = await this.transport.request({
       operation: 'PizzaAdminServiceClient.roundTrip',
       method: 'POST',

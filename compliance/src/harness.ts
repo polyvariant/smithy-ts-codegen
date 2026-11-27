@@ -56,7 +56,7 @@ type ClientClass = new (transport: unknown, streamTransport: unknown) => Client
 
 const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1)
 
-const reviveDates = (v: unknown): unknown => {
+export const reviveDates = (v: unknown): unknown => {
   if (Array.isArray(v)) return v.map(reviveDates)
   if (v === null || typeof v !== 'object') return v
   if ('$date' in v && typeof v.$date === 'number') return new Date(v.$date * 1000)
@@ -75,7 +75,7 @@ const isJsonCase = (c: HttpTestCase): boolean =>
     ([k, v]) => k.toLowerCase() === 'content-type' && v.includes('json'),
   )
 
-const describe = (e: unknown): string =>
+export const describe = (e: unknown): string =>
   (e instanceof Error ? `${e.constructor.name}: ${e.message}` : String(e)).replace(/\s+/g, ' ').slice(0, 300)
 
 const nullBodyStatus = (status: number): boolean => [204, 205, 304].includes(status)
@@ -100,11 +100,25 @@ const decodeQueryPart = (part: string): string => {
   }
 }
 
+/** The operation `tc` exercises, on a client over `transport`: a function from its input to
+ * what the client method resolves to — or why there is none. */
+export const operationOf = (
+  gen: GeneratedModule,
+  tc: ComplianceCase,
+  transport: unknown,
+): ((input: unknown) => Promise<unknown>) | string => {
+  const Client = gen[`${tc.service}Client`] as ClientClass | undefined
+  if (Client === undefined) return `no ${tc.service}Client export`
+  const client = new Client(transport, transport)
+  const method = client[lowerFirst(tc.operation)]
+  if (typeof method !== 'function') return `no ${lowerFirst(tc.operation)} method`
+  // Operations without input members take only `opts`.
+  return (input) => (method.length >= 2 ? method.call(client, input) : method.call(client))
+}
+
 /** Runs `tc` against the generated module; returns what didn't match (empty means it passed). */
 export const runCase = async (gen: GeneratedModule, tc: ComplianceCase): Promise<string[]> => {
   const c = tc.case
-  const Client = gen[`${tc.service}Client`] as ClientClass | undefined
-  if (Client === undefined) return [`no ${tc.service}Client export`]
 
   let sent: { url: string; init: RequestInit } | undefined
   const reply = (): Response =>
@@ -122,12 +136,8 @@ export const runCase = async (gen: GeneratedModule, tc: ComplianceCase): Promise
       return reply()
     },
   })
-  const client = new Client(transport, transport)
-  const method = client[lowerFirst(tc.operation)]
-  if (typeof method !== 'function') return [`no ${lowerFirst(tc.operation)} method`]
-  // Operations without input members take only `opts`.
-  const call = (input: unknown): Promise<unknown> =>
-    method.length >= 2 ? method.call(client, input) : method.call(client)
+  const call = operationOf(gen, tc, transport)
+  if (typeof call === 'string') return [call]
 
   if (tc.kind === 'request') {
     try {
@@ -189,7 +199,9 @@ const checkRequest = (c: HttpTestCase, sent: { url: string; init: RequestInit })
   return problems
 }
 
-const checkResponse = async (
+/** Calls the operation and compares what it returned, or the declared error it threw, with
+ * the case's `params`. */
+export const checkResponse = async (
   gen: GeneratedModule,
   tc: ComplianceCase,
   call: () => Promise<unknown>,

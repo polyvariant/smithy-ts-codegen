@@ -55,6 +55,17 @@ ThisBuild / githubWorkflowBuildPostamble ++= Seq(
   ),
 )
 
+// The generated clients against a real smithy4s server (see compliance-roundtrip/).
+// Not in `nix flake check`: it needs a JVM next to node, so it runs in the dev
+// shell, which has both.
+ThisBuild / githubWorkflowBuildPostamble += WorkflowStep.Run(
+  List(
+    "nix develop --command bash -c 'pnpm install --frozen-lockfile && pnpm --filter @polyvariant/smithy-ts-runtime run build && sbt complianceRoundTrip'"
+  ),
+  name = Some("Round-trip the compliance suites through smithy4s"),
+  cond = Some("matrix.project == 'rootJVM' && matrix.java == 'temurin@11'"),
+)
+
 val smithyVersion = "1.75.0"
 val alloyVersion = "0.3.41"
 val smithy4sVersion = "0.19.13"
@@ -152,6 +163,28 @@ lazy val complianceCodegenProject = project
       "software.amazon.smithy" % "smithy-aws-protocol-tests" % smithyVersion,
       "software.amazon.smithy" % "smithy-protocol-test-traits" % smithyVersion,
     ),
+  )
+
+// Serves the compliance suites with smithy4s's own simpleRestJson implementation
+// and runs compliance/roundtrip against it: the generated TypeScript client
+// talking to a real smithy4s server. Not published. `sbt complianceRoundTrip`.
+lazy val complianceRoundTripProject = project
+  .in(file("compliance-roundtrip"))
+  .dependsOn(complianceCodegenProject)
+  .enablePlugins(NoPublishPlugin)
+  .settings(
+    name := "smithy-ts-codegen-compliance-roundtrip",
+    commonSettings,
+    libraryDependencies ++= Seq(
+      "com.disneystreaming.smithy4s" %% "smithy4s-dynamic" % smithy4sVersion,
+      "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % smithy4sVersion,
+      // CanonicalSmithyDecoder / EqSchemaVisitor: how smithy4s itself reads and compares a
+      // compliance case's `params`.
+      "com.disneystreaming.smithy4s" %% "smithy4s-compliance-tests" % smithy4sVersion,
+      "org.http4s" %% "http4s-ember-server" % "0.23.34",
+      "org.http4s" %% "http4s-dsl" % "0.23.34",
+    ),
+    run / fork := true,
   )
 
 // An sbt AutoPlugin that exposes a `tsCodegen` task. It resolves the published
@@ -276,6 +309,15 @@ complianceCodegenCheck := Def.taskDyn {
   }
 }.value
 
+lazy val complianceRoundTrip =
+  taskKey[Unit]("Run the compliance suites' TypeScript clients against a smithy4s server")
+
+complianceRoundTrip := Def.taskDyn {
+  // As with `runMain` above, the argument string is built outside the task body.
+  val root = (ThisBuild / baseDirectory).value
+  (complianceRoundTripProject / Compile / run).toTask(s" $root")
+}.value
+
 lazy val root = tlCrossRootProject.aggregate(
   traits,
   api,
@@ -283,4 +325,5 @@ lazy val root = tlCrossRootProject.aggregate(
   cli,
   sbtPlugin,
   complianceCodegenProject,
+  complianceRoundTripProject,
 )

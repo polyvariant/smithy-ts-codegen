@@ -89,6 +89,10 @@ jobs:
         if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'
         run: nix flake check --print-build-logs
 
+      - name: Round-trip the compliance suites through smithy4s
+        if: matrix.project == 'rootJVM' && matrix.java == 'temurin@11'
+        run: nix develop --command bash -c 'pnpm install --frozen-lockfile && pnpm --filter @polyvariant/smithy-ts-runtime run build && sbt complianceRoundTrip'
+
       - name: Make target directories
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         run: mkdir -p sbt-plugin/target api/target cli/target core/target traits/target project/target
@@ -202,7 +206,7 @@ jobs:
       - name: Submit Dependencies
         uses: scalacenter/sbt-dependency-submission@v2
         with:
-          modules-ignore: smithy-ts-codegen-compliance-codegen_3 rootjs_3 rootjvm_3 rootnative_3
+          modules-ignore: smithy-ts-codegen-compliance-codegen_3 rootjs_3 rootjvm_3 rootnative_3 smithy-ts-codegen-compliance-roundtrip_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
 
   validate-steward:

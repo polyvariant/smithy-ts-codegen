@@ -908,24 +908,26 @@ object TsCodegenPlugin {
     serviceOperations(model, service).exists(opStreams(w, model, _).isStreaming)
 
   /** Emits the expression that adapts a stream of typed elements into the stream of values the
-    * transport frames — i.e. the encode half. Binary streams pass through untouched; ndjson streams
-    * are handed over as-is too (the transport does `JSON.stringify` per element), so this is a pure
-    * pass-through today, kept as a seam for future per-element encoding.
+    * transport frames — i.e. the encode half. Binary streams pass through untouched; a JSON stream
+    * (ndjson or server-sent events) has each element put in its wire form by the union's codec, as
+    * a unary body would be, and the transport serialises what comes out.
     */
-  private def streamEncodeExpr(info: StreamInfo, expr: String): String = {
-    val _ = info
-    expr
-  }
+  private def streamEncodeExpr(info: StreamInfo, expr: String): String =
+    info.framing match {
+      case StreamFraming.Binary  => expr
+      case j: StreamFraming.Json => s"wireMapStream($expr, encode${j.shapeName})"
+    }
 
-  /** Emits the expression that validates the transport's stream of already-framed values against
-    * the element schema. Binary streams are `Uint8Array` chunks and need no parsing; ndjson streams
-    * get the union schema applied per line, so a malformed element fails at the element, naming the
-    * operation.
+  /** Emits the expression that decodes and validates the transport's stream of already-framed
+    * values. Binary streams are `Uint8Array` chunks and need no parsing; a JSON stream gets each
+    * element decoded from its wire form and checked against the union schema, so a malformed
+    * element fails at the element, naming the operation.
     */
   private def streamDecodeExpr(info: StreamInfo, expr: String, opLabel: String): String =
     info.framing match {
       case StreamFraming.Binary  => s"$expr as AsyncIterable<Uint8Array>"
-      case j: StreamFraming.Json => s"decodeStream($expr, ${j.schemaExpr}, $opLabel)"
+      case j: StreamFraming.Json =>
+        s"decodeStream($expr, { parse: (value: unknown) => ${j.schemaExpr}.parse(decode${j.shapeName}(value)) }, $opLabel)"
     }
 
   // --------------------------------------------------------------------------
@@ -1173,6 +1175,14 @@ object TsCodegenPlugin {
       }
     }
     w.line("")
+    w.line("/** Applies `f` to each element of a stream as it is pulled. */")
+    w.line("const wireMapStream = async function* <A, B>(")
+    w.line("  source: AsyncIterable<A>,")
+    w.line("  f: (element: A) => B,")
+    w.block("): AsyncGenerator<B, void, undefined> {", "}") {
+      w.line("for await (const element of source) yield f(element)")
+    }
+    w.line("")
     w.line("/** An empty stream, used when a request that declares a streamed input")
     w.line(" * arrives without one (e.g. a mock invoked with no stream). */")
     w.line(
@@ -1343,19 +1353,21 @@ object TsCodegenPlugin {
         ),
       )
 
+      // Bound members are skipped when absent — `!= null`, so an explicit `null` (which the
+      // protocol treats as absent too) isn't sent as the string "null".
       val hasQuery = queryMembers.nonEmpty || queryParamsMember.isDefined
       if (hasQuery) {
         w.line("const query: Record<string, string | readonly string[] | undefined> = {}")
         // The map first, so a member bound with `@httpQuery` wins over a map entry of the same name.
         queryParamsMember.foreach { case (memberName, _) =>
           w.lit(
-            s"if (input.$memberName !== undefined) for (const [k, v] of Object.entries(input.$memberName)) query[k] = v"
+            s"if (input.$memberName != null) for (const [k, v] of Object.entries(input.$memberName)) query[k] = v"
           )
         }
         queryMembers.foreach { case (memberName, member) =>
           val queryName = member.expectTrait(classOf[HttpQueryTrait]).getValue
           w.lit(
-            s"if (input.$memberName !== undefined) query[${jsString(queryName)}] = ${WireCodec.queryValueExpr(model, member, s"input.$memberName")}"
+            s"if (input.$memberName != null) query[${jsString(queryName)}] = ${WireCodec.queryValueExpr(model, member, s"input.$memberName")}"
           )
         }
       }
@@ -1365,13 +1377,13 @@ object TsCodegenPlugin {
         prefixHeadersMember.foreach { case (memberName, member) =>
           val prefix = member.expectTrait(classOf[HttpPrefixHeadersTrait]).getValue
           w.lit(
-            s"if (input.$memberName !== undefined) for (const [k, v] of Object.entries(input.$memberName)) headers[${jsString(prefix)} + k] = v"
+            s"if (input.$memberName != null) for (const [k, v] of Object.entries(input.$memberName)) headers[${jsString(prefix)} + k] = v"
           )
         }
         headerMembers.foreach { case (memberName, member) =>
           val headerName = member.expectTrait(classOf[HttpHeaderTrait]).getValue
           w.lit(
-            s"if (input.$memberName !== undefined) headers[${jsString(headerName)}] = ${WireCodec.headerValueExpr(model, member, s"input.$memberName")}"
+            s"if (input.$memberName != null) headers[${jsString(headerName)}] = ${WireCodec.headerValueExpr(model, member, s"input.$memberName")}"
           )
         }
       }
@@ -1933,7 +1945,7 @@ object TsCodegenPlugin {
           .terminator
           .foreach(t => w.line(s"responseStreamTerminator: ${jsString(t)},"))
         w.line(
-          s"encodeStream: (output) => ${streamEncodeExpr(out, s"(output as Record<string, unknown>)[${jsString(out.memberName)}] as AsyncIterable<unknown>")},"
+          s"encodeStream: (output) => ${streamEncodeExpr(out, s"(output as Record<string, unknown>)[${jsString(out.memberName)}] as ${out.streamType}")},"
         )
       }
     }

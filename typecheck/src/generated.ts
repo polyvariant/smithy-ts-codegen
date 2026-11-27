@@ -614,6 +614,17 @@ export function decodeGetPersonInput(value: unknown): unknown {
   return { 'id': value['id'] ?? undefined, 'verbose': value['verbose'] ?? undefined }
 }
 
+/** `Line` as it is written in a JSON body. */
+export function encodeLine(value: Line): Record<string, unknown> {
+  return { 'text': value.text ?? undefined }
+}
+
+/** `Line` read from a JSON body; validate the result with `LineSchema`. */
+export function decodeLine(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'text': value['text'] ?? undefined }
+}
+
 /** `MeasureInput` as it is written in a JSON body. */
 export function encodeMeasureInput(value: MeasureInput): Record<string, unknown> {
   return { 'seed': value.seed == null ? undefined : BigInt(value.seed), 'offset': value.offset == null ? undefined : BigInt(value.offset), 'revision': value.revision == null ? undefined : BigInt(value.revision) }
@@ -647,6 +658,17 @@ export function decodeNotFound(value: unknown): unknown {
   return { 'message': value['message'] ?? undefined }
 }
 
+/** `NotifyInput` as it is written in a JSON body. */
+export function encodeNotifyInput(value: NotifyInput): Record<string, unknown> {
+  return { 'topic': value.topic ?? undefined }
+}
+
+/** `NotifyInput` read from a JSON body; validate the result with `NotifyInputSchema`. */
+export function decodeNotifyInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'topic': value['topic'] ?? undefined }
+}
+
 /** `PlainOutput` as it is written in a JSON body. */
 export function encodePlainOutput(value: PlainOutput): Record<string, unknown> {
   return { 'message': value.message ?? undefined }
@@ -656,6 +678,17 @@ export function encodePlainOutput(value: PlainOutput): Record<string, unknown> {
 export function decodePlainOutput(value: unknown): unknown {
   if (!wireIsRecord(value)) return value
   return { 'message': value['message'] ?? undefined }
+}
+
+/** `ReportOutput` as it is written in a JSON body. */
+export function encodeReportOutput(value: ReportOutput): Record<string, unknown> {
+  return { 'received': value.received ?? undefined }
+}
+
+/** `ReportOutput` read from a JSON body; validate the result with `ReportOutputSchema`. */
+export function decodeReportOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return { 'received': value['received'] ?? undefined }
 }
 
 /** `SearchInput` as it is written in a JSON body. */
@@ -787,6 +820,20 @@ export function decodeZone(value: unknown): unknown {
   return value
 }
 
+/** `ReportEntry` as it is written in a JSON body. */
+export function encodeReportEntry(value: ReportEntry): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['line'] !== undefined) return { 'line': encodeLine((fields['line'] as Line)) }
+  return value
+}
+
+/** `ReportEntry` read from a JSON body; validate the result with `ReportEntrySchema`. */
+export function decodeReportEntry(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['line'] !== undefined && value['line'] !== null) return { 'line': decodeLine(value['line']) }
+  return value
+}
+
 /** `MeasureOutput` as it is written in a JSON body. */
 export function encodeMeasureOutput(value: MeasureOutput): Record<string, unknown> {
   return { 'measurement': value.measurement == null ? undefined : encodeMeasurement(value.measurement), 'total': value.total == null ? undefined : BigInt(value.total) }
@@ -831,6 +878,17 @@ export function decodeGoogleRpcStatus(value: unknown): unknown {
   return { 'code': value['code'] ?? undefined, 'message': value['message'] ?? undefined, 'details': value['details'] == null ? undefined : decodeProtobufAnyList(value['details']) }
 }
 
+/** `ReportInput` as it is written in a JSON body. */
+export function encodeReportInput(_value: ReportInput): Record<string, unknown> {
+  return {}
+}
+
+/** `ReportInput` read from a JSON body; validate the result with `ReportInputSchema`. */
+export function decodeReportInput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
+}
+
 /** `FeedEvent` as it is written in a JSON body. */
 export function encodeFeedEvent(value: FeedEvent): unknown {
   const fields = value as Record<string, unknown>
@@ -858,6 +916,22 @@ export function encodeGetPersonOutput(value: GetPersonOutput): Record<string, un
 export function decodeGetPersonOutput(value: unknown): unknown {
   if (!wireIsRecord(value)) return value
   return { 'person': value['person'] == null ? undefined : decodePerson(value['person']), 'trace': value['trace'] ?? undefined, 'code': value['code'] ?? undefined }
+}
+
+/** `Notification` as it is written in a JSON body. */
+export function encodeNotification(value: Notification): unknown {
+  const fields = value as Record<string, unknown>
+  if (fields['item'] !== undefined) return { 'item': encodePerson((fields['item'] as Person)) }
+  if (fields['completed'] !== undefined) return { 'completed': encodeDone((fields['completed'] as Done)) }
+  return value
+}
+
+/** `Notification` read from a JSON body; validate the result with `NotificationSchema`. */
+export function decodeNotification(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  if (value['item'] !== undefined && value['item'] !== null) return { 'item': decodePerson(value['item']) }
+  if (value['completed'] !== undefined && value['completed'] !== null) return { 'completed': decodeDone(value['completed']) }
+  return value
 }
 
 export function encodePeople(value: People): unknown[] {
@@ -926,6 +1000,17 @@ export function encodeWatchOutput(value: WatchOutput): Record<string, unknown> {
 export function decodeWatchOutput(value: unknown): unknown {
   if (!wireIsRecord(value)) return value
   return { 'session': value['session'] ?? undefined }
+}
+
+/** `NotifyOutput` as it is written in a JSON body. */
+export function encodeNotifyOutput(_value: NotifyOutput): Record<string, unknown> {
+  return {}
+}
+
+/** `NotifyOutput` read from a JSON body; validate the result with `NotifyOutputSchema`. */
+export function decodeNotifyOutput(value: unknown): unknown {
+  if (!wireIsRecord(value)) return value
+  return {}
 }
 
 /** `SearchOutput` as it is written in a JSON body. */
@@ -1127,6 +1212,14 @@ export const decodeStream = async function* <T>(
   }
 }
 
+/** Applies `f` to each element of a stream as it is pulled. */
+const wireMapStream = async function* <A, B>(
+  source: AsyncIterable<A>,
+  f: (element: A) => B,
+): AsyncGenerator<B, void, undefined> {
+  for await (const element of source) yield f(element)
+}
+
 /** An empty stream, used when a request that declares a streamed input
  * arrives without one (e.g. a mock invoked with no stream). */
 export const emptyStream = async function* (): AsyncGenerator<never, void, undefined> {}
@@ -1184,6 +1277,12 @@ export function decodePlainOutputResponse(res: { status: number; headers: Record
   return PlainOutputSchema.parse({ 'message': body['message'] ?? undefined }) as PlainOutput
 }
 
+/** `ReportOutput` read from a response: its body, headers and status. */
+export function decodeReportOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): ReportOutput {
+  const body = wireIsRecord(res.body) ? res.body : {}
+  return ReportOutputSchema.parse({ 'received': body['received'] ?? undefined }) as ReportOutput
+}
+
 /** `SearchOutput` read from a response: its body, headers and status. */
 export function decodeSearchOutputResponse(res: { status: number; headers: Record<string, string>; body?: unknown }): SearchOutput {
   const body = wireIsRecord(res.body) ? res.body : {}
@@ -1214,7 +1313,7 @@ export class DirectoryClient {
   async getPerson(input: GetPersonInput, opts?: TransportOptions): Promise<GetPersonOutput> {
     const url = `/people/${wireEncodeLabel(String(input.id))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.verbose !== undefined) query['verbose'] = String(input.verbose)
+    if (input.verbose != null) query['verbose'] = String(input.verbose)
     const res = await this.transport.request({
       operation: 'DirectoryClient.getPerson',
       method: 'GET',
@@ -1241,9 +1340,9 @@ export class DirectoryClient {
   async measure(input: MeasureInput, opts?: TransportOptions): Promise<MeasureOutput> {
     const url = `/measurements/${wireEncodeLabel(String(input.seed))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.offset !== undefined) query['offset'] = String(input.offset)
+    if (input.offset != null) query['offset'] = String(input.offset)
     const headers: Record<string, string> = {}
-    if (input.revision !== undefined) headers['x-revision'] = String(input.revision)
+    if (input.revision != null) headers['x-revision'] = String(input.revision)
     const res = await this.transport.request({
       operation: 'DirectoryClient.measure',
       method: 'GET',
@@ -1284,7 +1383,7 @@ export class DirectoryClient {
   async putPerson(input: PutPersonInput, opts?: TransportOptions): Promise<void> {
     const url = `/people/${wireEncodeLabel(String(input.id))}`
     const headers: Record<string, string> = {}
-    if (input.ifMatch !== undefined) headers['if-match'] = String(input.ifMatch)
+    if (input.ifMatch != null) headers['if-match'] = String(input.ifMatch)
     const res = await this.transport.request({
       operation: 'DirectoryClient.putPerson',
       method: 'PUT',
@@ -1305,7 +1404,7 @@ export class DirectoryClient {
   async search(input: SearchInput, opts?: TransportOptions): Promise<SearchOutput> {
     const url = `/search`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.q !== undefined) query['q'] = String(input.q)
+    if (input.q != null) query['q'] = String(input.q)
     const res = await this.transport.request({
       operation: 'DirectoryClient.search',
       method: 'GET',
@@ -1364,7 +1463,7 @@ export class FeedClient {
       url,
       body: undefined,
       requestStreamEncoding: 'ndjson',
-      stream: input.incoming,
+      stream: wireMapStream(input.incoming, encodeFeedEvent),
       responseStreamEncoding: 'ndjson',
       options: opts,
     })
@@ -1373,7 +1472,7 @@ export class FeedClient {
         throw new MissingStreamError('FeedClient.echo')
       }
       const raw: Record<string, unknown> = {}
-      raw['outgoing'] = decodeStream(res.stream, FeedEventSchema, 'FeedClient.echo')
+      raw['outgoing'] = decodeStream(res.stream, { parse: (value: unknown) => FeedEventSchema.parse(decodeFeedEvent(value)) }, 'FeedClient.echo')
       return raw as EchoOutput
     }
     if (res.status === 404) {
@@ -1392,7 +1491,7 @@ export class FeedClient {
       operation: 'FeedClient.notify',
       method: 'POST',
       url,
-      body: { topic: input.topic },
+      body: { 'topic': input.topic ?? undefined },
       responseStreamEncoding: 'sse',
       responseStreamTerminator: '[DONE]',
       options: opts,
@@ -1402,11 +1501,11 @@ export class FeedClient {
         throw new MissingStreamError('FeedClient.notify')
       }
       const raw: Record<string, unknown> = {}
-      raw['notifications'] = decodeStream(res.stream, NotificationSchema, 'FeedClient.notify')
+      raw['notifications'] = decodeStream(res.stream, { parse: (value: unknown) => NotificationSchema.parse(decodeNotification(value)) }, 'FeedClient.notify')
       return raw as NotifyOutput
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('FeedClient.notify', res.status, res.body, res.headers)
   }
@@ -1442,14 +1541,14 @@ export class FeedClient {
       url,
       body: undefined,
       requestStreamEncoding: 'sse',
-      stream: input.entries,
+      stream: wireMapStream(input.entries, encodeReportEntry),
       options: opts,
     })
     if (res.status >= 200 && res.status < 300) {
-      return ReportOutputSchema.parse(res.body)
+      return decodeReportOutputResponse(res)
     }
     if (res.status === 404) {
-      throw new NotFoundError(NotFoundSchema.parse(res.body))
+      throw new NotFoundError(decodeNotFoundResponse(res))
     }
     throw new UnexpectedResponseError('FeedClient.report', res.status, res.body, res.headers)
   }
@@ -1485,7 +1584,7 @@ export class FeedClient {
   async watch(input: WatchInput, opts?: TransportOptions): Promise<WatchOutput> {
     const url = `/watch/${wireEncodeLabel(String(input.id))}`
     const query: Record<string, string | readonly string[] | undefined> = {}
-    if (input.since !== undefined) query['since'] = wireDateTime(input.since)
+    if (input.since != null) query['since'] = wireDateTime(input.since)
     const res = await this.streamTransport.requestStream({
       operation: 'FeedClient.watch',
       method: 'GET',
@@ -1503,7 +1602,7 @@ export class FeedClient {
       if (res.headers['x-session'] !== undefined) {
         raw['session'] = z.string().parse(res.headers['x-session'])
       }
-      raw['events'] = decodeStream(res.stream, FeedEventSchema, 'FeedClient.watch')
+      raw['events'] = decodeStream(res.stream, { parse: (value: unknown) => FeedEventSchema.parse(decodeFeedEvent(value)) }, 'FeedClient.watch')
       return raw as WatchOutput
     }
     if (res.status === 404) {
@@ -1817,12 +1916,12 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
         const decoded = EchoInputSchema.parse(raw)
         return {
           ...decoded,
-          incoming: decodeStream((req.stream ?? emptyStream()), FeedEventSchema, 'Echo'),
+          incoming: decodeStream((req.stream ?? emptyStream()), { parse: (value: unknown) => FeedEventSchema.parse(decodeFeedEvent(value)) }, 'Echo'),
         }
       },
       encodeBody: () => undefined,
       responseStreamEncoding: 'ndjson',
-      encodeStream: (output) => (output as Record<string, unknown>)['outgoing'] as AsyncIterable<unknown>,
+      encodeStream: (output) => wireMapStream((output as Record<string, unknown>)['outgoing'] as AsyncIterable<FeedEvent>, encodeFeedEvent),
     },
     {
       key: 'notify',
@@ -1830,14 +1929,14 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
       segments: [{ literal: 'notify' }],
       decodeInput: (req) => {
         const raw: Record<string, unknown> = {}
-        const body = (req.body ?? {}) as Record<string, unknown>
-        raw['topic'] = body['topic']
+        const body = wireIsRecord(req.body) ? req.body : {}
+        raw['topic'] = body['topic'] ?? undefined
         return NotifyInputSchema.parse(raw) as NotifyInput
       },
       encodeBody: () => undefined,
       responseStreamEncoding: 'sse',
       responseStreamTerminator: '[DONE]',
-      encodeStream: (output) => (output as Record<string, unknown>)['notifications'] as AsyncIterable<unknown>,
+      encodeStream: (output) => wireMapStream((output as Record<string, unknown>)['notifications'] as AsyncIterable<Notification>, encodeNotification),
     },
     {
       key: 'plain',
@@ -1855,10 +1954,10 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
         const decoded = ReportInputSchema.parse(raw)
         return {
           ...decoded,
-          entries: decodeStream((req.stream ?? emptyStream()), ReportEntrySchema, 'Report'),
+          entries: decodeStream((req.stream ?? emptyStream()), { parse: (value: unknown) => ReportEntrySchema.parse(decodeReportEntry(value)) }, 'Report'),
         }
       },
-      encodeBody: (output) => output,
+      encodeBody: (output) => { const o = output as ReportOutput; return { 'received': o.received ?? undefined } },
     },
     {
       key: 'upload',
@@ -1889,7 +1988,7 @@ export const FeedMock: MockServiceDescriptor<FeedHandlers> = {
       },
       encodeBody: () => undefined,
       responseStreamEncoding: 'ndjson',
-      encodeStream: (output) => (output as Record<string, unknown>)['events'] as AsyncIterable<unknown>,
+      encodeStream: (output) => wireMapStream((output as Record<string, unknown>)['events'] as AsyncIterable<FeedEvent>, encodeFeedEvent),
     },
   ],
 }
