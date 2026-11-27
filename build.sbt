@@ -204,7 +204,7 @@ lazy val sbtPlugin = project
     name := "sbt-smithy-ts-codegen",
     scalaVersion := scala212,
     crossScalaVersions := Seq(scala212),
-    libraryDependencies += "io.get-coursier" % "interface" % "1.0.30",
+    libraryDependencies += "io.get-coursier" % "interface" % "1.0.31",
     buildInfoPackage := "org.polyvariant.smithy.ts.sbt",
     buildInfoKeys := Seq[BuildInfoKey](
       "smithyTsCodegenVersion" -> version.value,
